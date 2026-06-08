@@ -16,9 +16,23 @@ Optional:
 
 ```txt
 OPENAI_MODEL=gpt-5.2
+GOOGLE_CLIENT_ID=
 ```
 
 Set `OPENAI_API_KEY` in the Vercel dashboard under Project Settings -> Environment Variables. Do not commit real keys to this repo.
+
+To enable Google Docs sync, create a Google OAuth Web Client ID and add it as `GOOGLE_CLIENT_ID` in Vercel. In Google Cloud, add your Vercel URL as an Authorized JavaScript origin, for example:
+
+```txt
+https://your-site.vercel.app
+```
+
+The app requests these Google scopes only when you click Connect Google:
+
+```txt
+https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/documents
+```
 
 ## Run Locally
 
@@ -45,3 +59,4 @@ Without `OPENAI_API_KEY`, the app still runs and saves sermons locally. Coach an
 - Finished-sermon review.
 - `.txt`, `.md`, and `.docx` upload support.
 - Server-side OpenAI calls so the API key is never exposed to the browser.
+- Optional Google Docs link per sermon with delayed auto-sync from the app into the linked doc.

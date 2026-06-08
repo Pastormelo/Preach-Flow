@@ -90,6 +90,14 @@ async function handleApi(req, res, pathname) {
       model: MODEL,
       provider: "openai",
       docx: Boolean(JSZip),
+      googleDocs: Boolean(process.env.GOOGLE_CLIENT_ID),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/config") {
+    sendJson(res, 200, {
+      googleClientId: process.env.GOOGLE_CLIENT_ID || "",
     });
     return;
   }

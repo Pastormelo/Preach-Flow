@@ -20,6 +20,24 @@ Do not commit the real key to this project.
 4. Import the GitHub repository.
 5. In the Vercel project settings, add `OPENAI_API_KEY` for Production and Preview.
 6. Deploy.
+
+## Google Docs Sync
+
+Google Docs sync also needs a public Google OAuth Client ID:
+
+```txt
+GOOGLE_CLIENT_ID
+```
+
+Create it in Google Cloud as an OAuth **Web application** client. Add your deployed Vercel URL as an **Authorized JavaScript origin**, for example:
+
+```txt
+https://your-site.vercel.app
+```
+
+Then add the Client ID to Vercel under Project Settings -> Environment Variables and redeploy. This is not a secret, but it must match the deployed origin.
+
+Preach Flow creates one Google Doc per sermon and writes a fresh sermon snapshot into it after edits. Edits made directly in Google Docs may be replaced by the next Preach Flow sync.
 7. Visit `https://your-project.vercel.app/api/status`.
 8. Confirm it returns `"configured": true`.
 
