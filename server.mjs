@@ -90,6 +90,8 @@ async function handleApi(req, res, pathname) {
       provider: "openai",
       docx: Boolean(JSZip),
       googleDocs: Boolean(process.env.GOOGLE_CLIENT_ID),
+      auth: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+      database: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
     });
     return;
   }
@@ -97,6 +99,8 @@ async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/config") {
     sendJson(res, 200, {
       googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+      supabaseUrl: process.env.SUPABASE_URL || "",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
     });
     return;
   }

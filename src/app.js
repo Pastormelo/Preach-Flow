@@ -1,5 +1,6 @@
 const STORE_KEY = "pulpitos:web:v1";
 const OPENAI_KEY_STORE = "preach-flow:openai-api-key:v1";
+const SUPABASE_SCRIPT = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/documents",
@@ -348,9 +349,12 @@ let bannerTimer = null;
 let googleSyncTimer = null;
 let googleTokenClient = null;
 let googleSyncPaused = false;
+let cloudSyncTimer = null;
+let cloudSyncPaused = false;
 
 const ui = {
   showNew: false,
+  showAuth: false,
   banner: "",
   loading: false,
   reviewLoading: false,
@@ -362,6 +366,15 @@ const ui = {
   openAIKeyInput: "",
   openai: {
     hasKey: Boolean(localStorage.getItem(OPENAI_KEY_STORE)),
+  },
+  auth: {
+    configured: false,
+    client: null,
+    user: null,
+    emailInput: "",
+    loading: false,
+    status: "Saved on this device",
+    statusKey: "neutral",
   },
   google: {
     clientId: "",
@@ -410,20 +423,40 @@ function loadState() {
 }
 
 function saveState() {
+  const snapshot = stateSnapshot();
   localStorage.setItem(
     STORE_KEY,
-    JSON.stringify({
-      sermons: state.sermons,
-      activeId: state.activeId,
-      view: state.view,
-      query: state.query,
-      filter: state.filter,
-      reviewMeta: state.reviewMeta,
-      reviewText: state.reviewText,
-      google: state.google,
-    }),
+    JSON.stringify(snapshot),
   );
   if (!googleSyncPaused) scheduleGoogleSync();
+  if (!cloudSyncPaused) scheduleCloudSync();
+}
+
+function stateSnapshot() {
+  return {
+    sermons: state.sermons,
+    activeId: state.activeId,
+    view: state.view,
+    query: state.query,
+    filter: state.filter,
+    reviewMeta: state.reviewMeta,
+    reviewText: state.reviewText,
+    google: state.google,
+  };
+}
+
+function applyStateSnapshot(snapshot) {
+  state.sermons = Array.isArray(snapshot?.sermons) ? snapshot.sermons.map(normalizeSermon) : [];
+  state.activeId = snapshot?.activeId || state.sermons[0]?.id || null;
+  if (state.activeId && !state.sermons.some((sermon) => sermon.id === state.activeId)) {
+    state.activeId = state.sermons[0]?.id || null;
+  }
+  state.view = snapshot?.view || "workspace";
+  state.query = snapshot?.query || "";
+  state.filter = snapshot?.filter || "all";
+  state.reviewMeta = snapshot?.reviewMeta || { passage: "", title: "" };
+  state.reviewText = snapshot?.reviewText || "";
+  state.google = snapshot?.google || { autoSync: true };
 }
 
 function normalizeSermon(sermon) {
@@ -565,6 +598,7 @@ function render() {
       ${renderTopbar(active)}
       <main class="app-main">
         ${ui.banner ? `<div class="banner">${escapeHtml(ui.banner)}</div>` : ""}
+        ${ui.showAuth ? renderAuthPanel() : ""}
         ${ui.showOpenAIKey ? renderOpenAIKeyPanel() : ""}
         ${renderMain(active)}
       </main>
@@ -579,6 +613,12 @@ function render() {
 function renderTopbar(active) {
   const status = ui.openai.hasKey ? "ready" : "missing";
   const statusLabel = ui.openai.hasKey ? "Coach key added" : "Add OpenAI key";
+  const authLabel = ui.auth.user
+    ? `Signed in: ${ui.auth.user.email || "Account"}`
+    : ui.auth.configured
+      ? "Sign in"
+      : "Local save only";
+  const authKey = ui.auth.user ? "ready" : ui.auth.configured ? "neutral" : "missing";
 
   return `
     <header class="topbar">
@@ -590,6 +630,7 @@ function renderTopbar(active) {
         </div>
       </div>
       <div class="top-actions">
+        <button class="status-line status-button" data-action="auth-panel" title="${attr(authLabel)}"><i class="status-dot ${authKey}"></i>${escapeHtml(authLabel)}</button>
         <button class="status-line status-button" data-action="openai-key" title="${attr(statusLabel)}"><i class="status-dot ${status}"></i>${escapeHtml(statusLabel)}</button>
         ${
           state.sermons.length
@@ -611,6 +652,61 @@ function renderTopbar(active) {
         <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
       </div>
     </header>
+  `;
+}
+
+function renderAuthPanel() {
+  if (!ui.auth.configured) {
+    return `
+      <section class="panel panel-pad key-panel">
+        <div>
+          <span class="eyebrow">Account</span>
+          <h2 class="title">Login and cloud save need setup</h2>
+        </div>
+        <p class="subtle">Preach Flow is saving on this device. Add Supabase credentials in Vercel to enable accounts and database-backed progress sync.</p>
+        <div class="action-row">
+          <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
+        </div>
+        <p class="helper-text">Required Vercel variables: <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code>.</p>
+      </section>
+    `;
+  }
+
+  if (ui.auth.user) {
+    return `
+      <section class="panel panel-pad key-panel">
+        <div>
+          <span class="eyebrow">Account</span>
+          <h2 class="title">Signed in</h2>
+        </div>
+        <p class="subtle">${escapeHtml(ui.auth.user.email || "Your account")} is syncing sermons to the Preach Flow database.</p>
+        <p class="meta-line">${escapeHtml(ui.auth.status)}</p>
+        <div class="action-row">
+          <button class="btn btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+          <button class="btn" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
+          <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel panel-pad key-panel">
+      <div>
+        <span class="eyebrow">Account</span>
+        <h2 class="title">Sign in to save across devices</h2>
+      </div>
+      <p class="subtle">Enter your email and Preach Flow will send a secure magic link. Once signed in, your sermons and notes sync to your private database row.</p>
+      <div class="field">
+        <label for="auth-email">Email</label>
+        <input id="auth-email" class="input" type="email" data-action="auth-email-input" value="${attr(ui.auth.emailInput)}" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="action-row">
+        <button class="btn btn-primary" data-action="send-magic-link" ${ui.auth.loading ? "disabled" : ""}>Send magic link</button>
+        <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
+      </div>
+      <p class="helper-text">${escapeHtml(ui.auth.status)}</p>
+    </section>
   `;
 }
 
@@ -1527,10 +1623,205 @@ async function loadGoogleConfig() {
       ? "Google Docs ready to connect"
       : "Add GOOGLE_CLIENT_ID in Vercel";
     ui.google.statusKey = ui.google.configured ? "neutral" : "missing";
+    await initSupabase(data);
   } catch {
     ui.google.configured = false;
     ui.google.status = "Google Docs config unavailable";
     ui.google.statusKey = "missing";
+    ui.auth.configured = false;
+    ui.auth.status = "Login config unavailable";
+    ui.auth.statusKey = "missing";
+  }
+  render();
+}
+
+function loadSupabaseScript() {
+  if (window.supabase?.createClient) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const existing = document.querySelector("script[data-supabase]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true), { once: true });
+      existing.addEventListener("error", () => resolve(false), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = SUPABASE_SCRIPT;
+    script.async = true;
+    script.defer = true;
+    script.dataset.supabase = "true";
+    script.addEventListener("load", () => resolve(true), { once: true });
+    script.addEventListener("error", () => resolve(false), { once: true });
+    document.head.append(script);
+  });
+}
+
+async function initSupabase(config) {
+  ui.auth.configured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
+  if (!ui.auth.configured) {
+    ui.auth.status = "Saved on this device";
+    ui.auth.statusKey = "missing";
+    return;
+  }
+
+  const loaded = await loadSupabaseScript();
+  if (!loaded || !window.supabase?.createClient) {
+    ui.auth.configured = false;
+    ui.auth.status = "Could not load login service";
+    ui.auth.statusKey = "missing";
+    return;
+  }
+
+  ui.auth.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+
+  const { data } = await ui.auth.client.auth.getSession();
+  ui.auth.user = data.session?.user || null;
+  ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Sign in to sync across devices";
+  ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
+
+  ui.auth.client.auth.onAuthStateChange((_event, session) => {
+    ui.auth.user = session?.user || null;
+    ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Signed out. Saving on this device.";
+    ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
+    render();
+    if (ui.auth.user) loadCloudState();
+  });
+
+  if (ui.auth.user) await loadCloudState();
+}
+
+async function sendMagicLink() {
+  const email = ui.auth.emailInput.trim();
+  if (!email || !ui.auth.client) {
+    showBanner("Enter your email first.");
+    return;
+  }
+
+  ui.auth.loading = true;
+  ui.auth.status = "Sending magic link...";
+  render();
+
+  const { error } = await ui.auth.client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.origin + window.location.pathname,
+    },
+  });
+
+  ui.auth.loading = false;
+  if (error) {
+    ui.auth.status = error.message || "Could not send magic link.";
+    ui.auth.statusKey = "missing";
+    showBanner("Could not send magic link.");
+  } else {
+    ui.auth.status = "Check your email for the sign-in link.";
+    ui.auth.statusKey = "ready";
+    showBanner("Magic link sent.");
+  }
+  render();
+}
+
+async function signOut() {
+  if (!ui.auth.client) return;
+  ui.auth.loading = true;
+  render();
+  await ui.auth.client.auth.signOut();
+  ui.auth.user = null;
+  ui.auth.loading = false;
+  ui.auth.status = "Signed out. Saving on this device.";
+  ui.auth.statusKey = "neutral";
+  showBanner("Signed out.");
+  render();
+}
+
+async function loadCloudState() {
+  if (!ui.auth.client || !ui.auth.user) return;
+
+  ui.auth.loading = true;
+  ui.auth.status = "Loading cloud progress...";
+  ui.auth.statusKey = "syncing";
+  render();
+
+  const { data, error } = await ui.auth.client
+    .from("preach_flow_user_state")
+    .select("app_state, updated_at")
+    .eq("user_id", ui.auth.user.id)
+    .maybeSingle();
+
+  if (error) {
+    ui.auth.loading = false;
+    ui.auth.status = error.message || "Could not load cloud progress.";
+    ui.auth.statusKey = "missing";
+    render();
+    return;
+  }
+
+  if (data?.app_state && hasCloudContent(data.app_state)) {
+    cloudSyncPaused = true;
+    applyStateSnapshot(data.app_state);
+    saveState();
+    cloudSyncPaused = false;
+    ui.auth.status = `Cloud progress loaded${data.updated_at ? ` ${formatTime(data.updated_at)}` : ""}.`;
+    ui.auth.statusKey = "ready";
+  } else {
+    await saveCloudState({ announce: false });
+    ui.auth.status = "Local progress copied to cloud.";
+    ui.auth.statusKey = "ready";
+  }
+
+  ui.auth.loading = false;
+  render();
+}
+
+function hasCloudContent(snapshot) {
+  return Boolean(
+    snapshot?.sermons?.length ||
+      snapshot?.reviewText ||
+      snapshot?.reviewMeta?.passage ||
+      snapshot?.reviewMeta?.title,
+  );
+}
+
+function scheduleCloudSync() {
+  clearTimeout(cloudSyncTimer);
+  if (!ui.auth.client || !ui.auth.user) return;
+
+  cloudSyncTimer = setTimeout(() => {
+    saveCloudState({ background: true });
+  }, 1400);
+}
+
+async function saveCloudState(options = {}) {
+  if (!ui.auth.client || !ui.auth.user) return;
+
+  ui.auth.status = "Saving to cloud...";
+  ui.auth.statusKey = "syncing";
+  if (!options.background) render();
+
+  const updatedAt = new Date().toISOString();
+  const { error } = await ui.auth.client.from("preach_flow_user_state").upsert(
+    {
+      user_id: ui.auth.user.id,
+      app_state: stateSnapshot(),
+      updated_at: updatedAt,
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    ui.auth.status = error.message || "Cloud save failed.";
+    ui.auth.statusKey = "missing";
+    if (!options.background) showBanner("Cloud save failed.");
+  } else {
+    ui.auth.status = `Saved to cloud ${formatTime(updatedAt)}.`;
+    ui.auth.statusKey = "ready";
+    if (options.announce) showBanner("Saved to cloud.");
   }
   render();
 }
@@ -1865,6 +2156,23 @@ document.addEventListener("click", (event) => {
     ui.showOpenAIKey = false;
     render();
   }
+  if (action === "auth-panel") {
+    ui.showAuth = true;
+    render();
+  }
+  if (action === "close-auth-panel") {
+    ui.showAuth = false;
+    render();
+  }
+  if (action === "send-magic-link") {
+    sendMagicLink();
+  }
+  if (action === "sign-out") {
+    signOut();
+  }
+  if (action === "cloud-sync-now") {
+    saveCloudState({ announce: true });
+  }
   if (action === "google-connect") {
     ensureGoogleToken();
   }
@@ -1907,6 +2215,9 @@ document.addEventListener("input", (event) => {
   }
   if (action === "openai-key-input") {
     ui.openAIKeyInput = target.value;
+  }
+  if (action === "auth-email-input") {
+    ui.auth.emailInput = target.value;
   }
   if (action === "phase-note") {
     const active = getActive();

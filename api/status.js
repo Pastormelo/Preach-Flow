@@ -12,5 +12,7 @@ module.exports = async function handler(req, res) {
     provider: "openai",
     docx: true,
     googleDocs: Boolean(process.env.GOOGLE_CLIENT_ID),
+    auth: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+    database: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
   });
 };

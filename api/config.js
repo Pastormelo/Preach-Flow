@@ -6,5 +6,7 @@ module.exports = async function handler(req, res) {
 
   res.status(200).json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+    supabaseUrl: process.env.SUPABASE_URL || "",
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
   });
 };

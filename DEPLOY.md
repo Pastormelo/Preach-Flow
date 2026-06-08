@@ -6,6 +6,32 @@ Preach Flow is ready to deploy to Vercel.
 
 Preach Flow uses a bring-your-own-key model. Do **not** add your personal OpenAI API key to Vercel for a public deployment. Each visitor adds their own OpenAI API key inside the app, and their usage bills to their own OpenAI Platform account.
 
+## Supabase Login and Database
+
+1. Create a Supabase project.
+2. Open Supabase -> SQL Editor.
+3. Run the SQL from `supabase/schema.sql`.
+4. Open Supabase -> Project Settings -> API.
+5. Copy the Project URL into Vercel as:
+
+```txt
+SUPABASE_URL
+```
+
+6. Copy the anon public key into Vercel as:
+
+```txt
+SUPABASE_ANON_KEY
+```
+
+7. In Supabase -> Authentication -> URL Configuration, set your Vercel site URL as the Site URL, for example:
+
+```txt
+https://your-site.vercel.app
+```
+
+8. Add the same URL to Redirect URLs so magic-link login returns to Preach Flow.
+
 ## Option 1: Vercel Dashboard + GitHub
 
 1. Create a new private GitHub repository.
@@ -41,6 +67,7 @@ api/
 public/
 src/
 assets/
+supabase/
 index.html
 package.json
 vercel.json
@@ -62,4 +89,4 @@ vercel --prod
 
 The hosted URL no longer depends on your Terminal app. The AI coach runs through Vercel API functions.
 
-Sermons are still stored in the browser's `localStorage`. Add authentication and a database if you want sermons to sync across devices or users.
+Sermons save instantly in the browser and sync to the signed-in user's Supabase row. If Supabase is not configured or the user is signed out, Preach Flow still saves on the current device.
