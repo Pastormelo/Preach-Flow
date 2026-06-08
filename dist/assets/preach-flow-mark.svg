@@ -1,12 +1,43 @@
-<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Preach Flow mark">
-  <rect x="8" y="8" width="80" height="80" rx="20" fill="#101817"/>
-  <path d="M25 30.5C34.2 28 42.2 30.4 48 35.3C53.8 30.4 61.8 28 71 30.5V62.5C61.8 60 53.8 62.4 48 67.3C42.2 62.4 34.2 60 25 62.5V30.5Z" fill="#F7F2EA"/>
-  <path d="M48 35.3V67.3" stroke="#101817" stroke-width="3" stroke-linecap="round"/>
-  <path d="M32 40.5C36.5 40.1 40.2 41 43.3 43.1" stroke="#101817" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M63.8 40.5C59.3 40.1 55.7 41 52.7 43.1" stroke="#101817" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M32 49.5C36.4 49.1 40.2 50 43.3 52.1" stroke="#C98B46" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M63.8 49.5C59.4 49.1 55.7 50 52.7 52.1" stroke="#C98B46" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M48 20V12" stroke="#C98B46" stroke-width="4" stroke-linecap="round"/>
-  <path d="M64.5 25.4L70 19.9" stroke="#C98B46" stroke-width="4" stroke-linecap="round"/>
-  <path d="M31.5 25.4L26 19.9" stroke="#C98B46" stroke-width="4" stroke-linecap="round"/>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Preach Flow mark">
+  <defs>
+    <linearGradient id="paper" x1="31" y1="27" x2="98" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8EA"/>
+      <stop offset="1" stop-color="#F1DDC1"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="41" y1="20" x2="91" y2="106" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB14A"/>
+      <stop offset=".52" stop-color="#F47A22"/>
+      <stop offset="1" stop-color="#A94512"/>
+    </linearGradient>
+    <filter id="shadow" x="13" y="10" width="102" height="108" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#0A0A0A" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <circle cx="64" cy="64" r="58" fill="#070707"/>
+  <circle cx="64" cy="64" r="52.5" stroke="url(#orange)" stroke-width="3"/>
+  <circle cx="64" cy="64" r="45.5" fill="#12100D" stroke="#F4C56A" stroke-opacity=".5"/>
+  <g opacity=".58" stroke="#F4C56A" stroke-width="1.3" stroke-linecap="round">
+    <path d="M64 25v17"/>
+    <path d="M51.4 28.2l4.5 15.6"/>
+    <path d="M76.6 28.2l-4.5 15.6"/>
+    <path d="M39.7 38.1l11.5 11.5"/>
+    <path d="M88.3 38.1L76.8 49.6"/>
+    <path d="M31.8 51.2l15.6 4.4"/>
+    <path d="M96.2 51.2l-15.6 4.4"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M30 55.4c12-3.3 23-.4 34 8.5 11-8.9 22-11.8 34-8.5v34.9C86 87 75 89.9 64 98.8 53 89.9 42 87 30 90.3V55.4Z" fill="url(#paper)"/>
+    <path d="M64 63.9v34.9" stroke="#090909" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M40.2 65.6c6.2-.8 11.6.3 16.1 3.3" stroke="#090909" stroke-width="2.7" stroke-linecap="round"/>
+    <path d="M87.8 65.6c-6.2-.8-11.6.3-16.1 3.3" stroke="#090909" stroke-width="2.7" stroke-linecap="round"/>
+    <path d="M40.2 75.1c6.2-.8 11.6.3 16.1 3.3" stroke="#C27022" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M87.8 75.1c-6.2-.8-11.6.3-16.1 3.3" stroke="#C27022" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M40.2 83.8c6.2-.8 11.6.3 16.1 3.3" stroke="#090909" stroke-opacity=".55" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M87.8 83.8c-6.2-.8-11.6.3-16.1 3.3" stroke="#090909" stroke-opacity=".55" stroke-width="2.3" stroke-linecap="round"/>
+  </g>
+  <path d="M57.9 40.5c0-4.2 2.7-7.7 6.1-7.7s6.1 3.5 6.1 7.7v13.8c0 4.2-2.7 7.7-6.1 7.7s-6.1-3.5-6.1-7.7V40.5Z" fill="#FFF2D9" stroke="#070707" stroke-width="3"/>
+  <path d="M55.2 45.1h17.6M55.2 51h17.6" stroke="#070707" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M50.8 50.2v3.1c0 7.3 5.9 13.2 13.2 13.2s13.2-5.9 13.2-13.2v-3.1M64 66.5v10.7" stroke="#FFF2D9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M57.2 77.2h13.6" stroke="#FFF2D9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M55.6 105.5h16.8M64 97.1v16.8" stroke="url(#orange)" stroke-width="4.5" stroke-linecap="round"/>
 </svg>

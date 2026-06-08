@@ -1,25 +1,32 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700;800;900&display=swap");
+
 :root {
   color-scheme: light;
-  --bg: #f7f4ee;
-  --bg-2: #edf4f1;
-  --ink: #151719;
-  --muted: #696f70;
-  --panel: rgba(255, 255, 255, 0.88);
-  --panel-solid: #ffffff;
-  --panel-2: #f1eee8;
-  --panel-3: #eef6f2;
-  --line: #e4ded2;
-  --line-strong: #c9bfae;
-  --accent: #0f6b60;
-  --accent-dark: #0b4d46;
-  --gold: #c98b46;
-  --amber: #a96820;
+  --bg: #f5eee2;
+  --bg-2: #17130f;
+  --ink: #14100c;
+  --muted: #746b60;
+  --panel: rgba(255, 250, 241, 0.9);
+  --panel-solid: #fffaf1;
+  --panel-2: #efe2cf;
+  --panel-3: #fff0dd;
+  --line: #e4d2ba;
+  --line-strong: #c19b6b;
+  --accent: #f47a22;
+  --accent-dark: #9a3c10;
+  --gold: #c99743;
+  --amber: #c27022;
   --rose: #b4505d;
   --blue: #2d6fa8;
-  --green: #2f7356;
+  --green: #2f7046;
   --danger: #9f1d1d;
-  --shadow: 0 22px 64px -48px rgba(20, 21, 18, 0.52);
-  --shadow-soft: 0 14px 34px -28px rgba(20, 21, 18, 0.34);
+  --black: #070707;
+  --charcoal: #18110c;
+  --paper: #fff7e8;
+  --font-ui: "Inter Tight", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --shadow: 0 26px 70px -48px rgba(20, 13, 8, 0.74);
+  --shadow-soft: 0 16px 38px -30px rgba(20, 13, 8, 0.42);
 }
 
 * {
@@ -33,12 +40,12 @@ html {
 body {
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(247, 244, 238, 0.58) 28%, rgba(237, 244, 241, 0.72) 100%),
+    radial-gradient(circle at 12% 0%, rgba(244, 122, 34, 0.18), transparent 31%),
+    radial-gradient(circle at 92% 12%, rgba(201, 151, 67, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 250, 241, 0.94) 0%, rgba(245, 238, 226, 0.9) 46%, rgba(235, 222, 203, 0.8) 100%),
     var(--bg);
   color: var(--ink);
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: var(--font-ui);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -59,8 +66,8 @@ button {
   display: flex;
   flex-direction: column;
   background:
-    linear-gradient(180deg, rgba(16, 24, 23, 0.035), transparent 220px),
-    linear-gradient(90deg, rgba(201, 139, 70, 0.08), rgba(15, 107, 96, 0.06));
+    linear-gradient(180deg, rgba(7, 7, 7, 0.09), transparent 270px),
+    linear-gradient(90deg, rgba(244, 122, 34, 0.12), rgba(7, 7, 7, 0.04), rgba(201, 151, 67, 0.1));
 }
 
 .topbar {
@@ -71,11 +78,14 @@ button {
   grid-template-columns: minmax(210px, 1fr) auto;
   gap: 16px;
   align-items: center;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.82);
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(244, 122, 34, 0.24);
+  background:
+    linear-gradient(90deg, rgba(7, 7, 7, 0.96), rgba(28, 18, 12, 0.94)),
+    var(--black);
+  color: var(--paper);
   backdrop-filter: blur(18px);
-  box-shadow: 0 16px 38px -34px rgba(21, 23, 25, 0.45);
+  box-shadow: 0 22px 54px -38px rgba(7, 7, 7, 0.82);
 }
 
 .brand {
@@ -85,12 +95,39 @@ button {
   gap: 11px;
 }
 
+.brand-mark-button,
+.brand-text {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.brand-mark-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.brand-mark-button:focus-visible,
+.brand-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.brand-text:hover .brand-name span,
+.brand-mark-button:hover + .brand-text .brand-kicker {
+  color: #ffc36f;
+}
+
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   object-fit: contain;
   flex: 0 0 auto;
-  filter: drop-shadow(0 10px 14px rgba(21, 23, 25, 0.12));
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.38));
 }
 
 .brand-text {
@@ -98,21 +135,24 @@ button {
 }
 
 .brand-name {
-  font-size: 24px;
-  font-weight: 850;
-  line-height: 1;
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 31px;
+  font-weight: 400;
+  line-height: 0.95;
   letter-spacing: 0;
 }
 
 .brand-name span {
-  color: var(--accent-dark);
+  color: #ff9d38;
 }
 
 .brand-kicker {
-  margin-top: 3px;
-  color: var(--muted);
+  margin-top: 5px;
+  color: rgba(255, 247, 232, 0.68);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .top-actions {
@@ -123,6 +163,25 @@ button {
   flex-wrap: wrap;
 }
 
+.top-actions .btn,
+.top-actions .select {
+  border-color: rgba(244, 122, 34, 0.28);
+  background: rgba(255, 247, 232, 0.08);
+  color: rgba(255, 247, 232, 0.88);
+}
+
+.top-actions .btn:hover,
+.top-actions .select:hover {
+  border-color: var(--accent);
+  color: #fff7e8;
+}
+
+.top-actions .btn-primary {
+  border-color: rgba(255, 157, 56, 0.62);
+  background: linear-gradient(135deg, #f47a22, #a94512);
+  color: #170b04;
+}
+
 .top-actions .select {
   max-width: min(44vw, 520px);
 }
@@ -130,7 +189,7 @@ button {
 .app-main {
   width: min(1500px, 100%);
   margin: 0 auto;
-  padding: 22px 24px 34px;
+  padding: 26px 24px 38px;
 }
 
 .workspace-grid {
@@ -153,9 +212,11 @@ button {
 }
 
 .panel {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(193, 155, 107, 0.42);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), var(--panel));
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.98), rgba(255, 246, 232, 0.9)),
+    var(--panel);
   box-shadow: var(--shadow);
 }
 
@@ -174,18 +235,19 @@ button {
 .eyebrow {
   display: block;
   margin-bottom: 4px;
-  color: #7d6a51;
+  color: #a34b15;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .title {
   margin: 0;
-  font-size: 28px;
-  font-weight: 820;
-  line-height: 1.12;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.02;
   letter-spacing: 0;
 }
 
@@ -204,15 +266,15 @@ button {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid rgba(193, 155, 107, 0.68);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 250, 241, 0.92);
   color: var(--ink);
   padding: 8px 12px;
   cursor: pointer;
   font-weight: 700;
   text-decoration: none;
-  box-shadow: 0 8px 18px -16px rgba(21, 23, 25, 0.45);
+  box-shadow: 0 10px 22px -18px rgba(20, 13, 8, 0.58);
   transition:
     transform 120ms ease,
     border-color 120ms ease,
@@ -233,14 +295,18 @@ button {
 }
 
 .btn-primary {
-  border-color: #111817;
-  background: #111817;
+  border-color: var(--black);
+  background:
+    linear-gradient(135deg, #0a0a0a, #1b1009 58%, #3b1608),
+    var(--black);
   color: white;
 }
 
 .btn-primary:hover {
-  border-color: var(--accent-dark);
-  background: var(--accent-dark);
+  border-color: var(--accent);
+  background:
+    linear-gradient(135deg, #0a0a0a, #281306 55%, #9a3c10),
+    var(--black);
 }
 
 .btn-ghost {
@@ -259,9 +325,9 @@ button {
 }
 
 .nav-btn.active {
-  border-color: rgba(15, 107, 96, 0.28);
-  color: var(--accent-dark);
-  background: var(--panel-3);
+  border-color: rgba(244, 122, 34, 0.54);
+  color: #fff3df;
+  background: rgba(244, 122, 34, 0.18);
 }
 
 .field {
@@ -283,9 +349,9 @@ button {
 .textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(193, 155, 107, 0.44);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 250, 241, 0.9);
   color: var(--ink);
   padding: 9px 10px;
   outline: none;
@@ -301,8 +367,8 @@ button {
 .select:focus,
 .textarea:focus {
   border-color: var(--accent);
-  background: white;
-  box-shadow: 0 0 0 3px rgba(15, 107, 96, 0.13);
+  background: #fffdf8;
+  box-shadow: 0 0 0 3px rgba(244, 122, 34, 0.16);
 }
 
 .form-grid {
@@ -351,16 +417,16 @@ button {
 .progress {
   height: 8px;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(193, 155, 107, 0.44);
   border-radius: 999px;
-  background: #e9e2d8;
+  background: #ead9bf;
 }
 
 .progress span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--gold));
+  background: linear-gradient(90deg, #070707, var(--accent), var(--gold));
 }
 
 .badge {
@@ -401,7 +467,7 @@ button {
   justify-content: space-between;
   gap: 10px;
   margin: 8px 0 6px;
-  color: var(--accent);
+  color: var(--accent-dark);
   font-size: 13px;
   font-weight: 800;
 }
@@ -433,12 +499,12 @@ button {
 }
 
 .phase-row:hover {
-  background: rgba(15, 107, 96, 0.07);
+  background: rgba(244, 122, 34, 0.09);
 }
 
 .phase-row.active {
   background: var(--panel-3);
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent), 0 10px 24px -22px rgba(20, 13, 8, 0.48);
   font-weight: 800;
 }
 
@@ -462,9 +528,9 @@ button {
 .phase-focus {
   margin: 0;
   color: #242826;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  line-height: 1.6;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.35;
 }
 
 .todo-list {
@@ -505,8 +571,8 @@ button {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(247, 244, 238, 0.58)),
-    #fbfaf7;
+    linear-gradient(180deg, rgba(255, 250, 241, 0.78), rgba(246, 232, 210, 0.48)),
+    #fbf4e9;
 }
 
 .message-list {
@@ -537,18 +603,19 @@ button {
   overflow-wrap: anywhere;
   border-radius: 8px;
   padding: 11px 13px;
+  border: 1px solid rgba(193, 155, 107, 0.34);
   box-shadow: var(--shadow-soft);
 }
 
 .message.user .bubble {
-  background: #111817;
+  border-color: #070707;
+  background: linear-gradient(135deg, #070707, #20120a);
   color: white;
 }
 
 .message.coach .bubble,
 .message.review .bubble {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 250, 241, 0.94);
 }
 
 .divider {
@@ -596,14 +663,15 @@ button {
   gap: 18px;
   padding: clamp(24px, 4vw, 42px);
   background:
-    linear-gradient(135deg, #101817 0%, #1b2c28 58%, #3d3328 145%),
-    #101817;
+    radial-gradient(circle at 78% 18%, rgba(244, 122, 34, 0.4), transparent 28%),
+    linear-gradient(135deg, #070707 0%, #16100c 55%, #54200c 145%),
+    #070707;
   color: white;
 }
 
 .empty-hero img {
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   object-fit: contain;
 }
 
@@ -613,7 +681,7 @@ button {
 
 .empty-hero .title {
   color: white;
-  font-size: 42px;
+  font-size: 56px;
 }
 
 .empty-hero p {
@@ -633,12 +701,16 @@ button {
   gap: 8px;
   padding: 16px;
   align-content: start;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 235, 0.78));
+  background:
+    linear-gradient(180deg, rgba(255, 250, 241, 0.98), rgba(243, 225, 199, 0.74));
 }
 
 .quick-card h3 {
   margin: 0;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1.05;
 }
 
 .quick-card p {
@@ -691,14 +763,14 @@ button {
 
 .segment {
   height: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(193, 155, 107, 0.5);
   border-radius: 999px;
   background: var(--panel-2);
 }
 
 .segment.done {
   border-color: var(--accent);
-  background: linear-gradient(90deg, var(--accent), var(--gold));
+  background: linear-gradient(90deg, #070707, var(--accent), var(--gold));
 }
 
 .note-rail {
@@ -716,7 +788,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(238, 246, 242, 0.84), rgba(255, 255, 255, 0.9)),
+    linear-gradient(180deg, rgba(255, 240, 221, 0.88), rgba(255, 250, 241, 0.93)),
     var(--panel-solid);
   padding: 14px;
 }
@@ -724,9 +796,10 @@ button {
 .mini-title {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 18px;
-  font-weight: 820;
-  line-height: 1.18;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1.05;
   letter-spacing: 0;
 }
 
@@ -806,7 +879,7 @@ button {
   margin: 0 auto 14px;
   border: 1px solid #dec393;
   border-radius: 8px;
-  background: #fff7ea;
+  background: #fff3df;
   color: #4a3420;
   padding: 12px 14px;
   font-family: Georgia, "Times New Roman", serif;
@@ -817,10 +890,10 @@ button {
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(244, 122, 34, 0.28);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: var(--muted);
+  background: rgba(255, 247, 232, 0.08);
+  color: rgba(255, 247, 232, 0.78);
   font-size: 13px;
   font-weight: 700;
   padding: 6px 10px;
@@ -832,7 +905,7 @@ button {
 
 .status-button:hover {
   border-color: var(--accent);
-  color: var(--accent-dark);
+  color: #fff7e8;
 }
 
 .status-dot {
@@ -856,7 +929,7 @@ button {
   max-width: 900px;
   margin: 0 auto 18px;
   background:
-    linear-gradient(135deg, rgba(238, 246, 242, 0.9), rgba(255, 255, 255, 0.96)),
+    linear-gradient(135deg, rgba(255, 240, 221, 0.93), rgba(255, 250, 241, 0.97)),
     var(--panel-solid);
 }
 

@@ -623,11 +623,13 @@ function renderTopbar(active) {
   return `
     <header class="topbar">
       <div class="brand">
-        <img class="brand-mark" src="./assets/preach-flow-mark.svg" alt="" />
-        <div class="brand-text">
+        <button class="brand-mark-button" type="button" data-view="pipeline" aria-label="Open sermon pipeline">
+          <img class="brand-mark" src="./assets/preach-flow-mark.svg" alt="" />
+        </button>
+        <button class="brand-text" type="button" data-action="new-sermon" aria-label="Start a new sermon">
           <div class="brand-name">Preach <span>Flow</span></div>
           <div class="brand-kicker">From text to pulpit with clarity.</div>
-        </div>
+        </button>
       </div>
       <div class="top-actions">
         <button class="status-line status-button" data-action="auth-panel" title="${attr(authLabel)}"><i class="status-dot ${authKey}"></i>${escapeHtml(authLabel)}</button>
@@ -1922,7 +1924,7 @@ async function createGoogleDoc() {
   render();
 
   try {
-    const title = `Preach Flow - ${active.passage || active.title || "Untitled sermon"}`;
+    const title = googleDocTitle(active);
     const doc = await googleFetch("https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink", {
       method: "POST",
       body: JSON.stringify({
@@ -1952,16 +1954,71 @@ async function createGoogleDoc() {
   }
 }
 
+function googleDocTitle(sermon) {
+  const passage = sermon?.passage || "Untitled sermon";
+  const title = sermon?.title ? ` - ${sermon.title}` : "";
+  return `Preach Flow | ${passage}${title}`;
+}
+
 function buildGoogleDocText(sermon) {
   const updated = new Date().toLocaleString();
-  return [
-    "Preach Flow",
-    `Synced: ${updated}`,
+  const status = sermonStatus(sermon);
+  const lines = [
+    googleDocTitle(sermon),
     "",
-    exportMarkdown(sermon),
+    `Synced from Preach Flow: ${updated}`,
+    "This document is organized from the notes inside the Preach Flow app.",
+    "Edits made directly in Google Docs may be replaced on the next sync.",
     "",
-    "Note: Preach Flow sync writes this document from the app. Edits made directly in Google Docs may be replaced on the next sync.",
-  ].join("\n");
+    "SERMON OVERVIEW",
+    "",
+    `Passage: ${sermon.passage || "-"}`,
+    `Title: ${sermon.title || "-"}`,
+    `Series: ${sermon.series || "-"}`,
+    `Date: ${sermon.date ? fmtDate(sermon.date) : "-"}`,
+    `Length: ${sermon.length || "-"} minutes`,
+    `Deliverable: ${sermon.format || "-"}`,
+    `Status: ${status.label}`,
+    `Progress: ${sermon.completed.length}/${PHASES.length} phases`,
+    "",
+    "PREPARATION NOTES",
+    "",
+  ];
+
+  for (const [blockIndex, block] of BLOCKS.entries()) {
+    lines.push(block.label.toUpperCase());
+    lines.push(`Target window: ${block.when}`);
+    lines.push("");
+
+    for (const phase of PHASES.filter((item) => item.block === blockIndex)) {
+      const done = sermon.completed.includes(phase.id);
+      const note = sermon.notes[phase.id]?.trim();
+      lines.push(`${done ? "[x]" : "[ ]"} ${phase.name}`);
+      lines.push(`Focus: ${phase.focus}`);
+      lines.push("Notes:");
+      lines.push(note || "(No notes yet.)");
+      lines.push("");
+    }
+  }
+
+  if (sermon.thread.length) {
+    lines.push("COACH THREAD");
+    lines.push("");
+    for (const message of sermon.thread) {
+      if (message.role === "meta") {
+        lines.push(message.content.toUpperCase(), "");
+      }
+      if (message.role === "user") {
+        lines.push("You:", message.content, "");
+      }
+      if (message.role === "assistant") {
+        lines.push("Coach:", message.content, "");
+      }
+    }
+  }
+
+  lines.push("END OF PREACH FLOW SYNC");
+  return lines.join("\n").replace(/\n{4,}/g, "\n\n\n");
 }
 
 async function replaceGoogleDocText(docId, text) {
