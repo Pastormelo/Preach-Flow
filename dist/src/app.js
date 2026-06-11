@@ -355,6 +355,7 @@ let cloudSyncPaused = false;
 const ui = {
   showNew: false,
   showAuth: false,
+  showCoach: false,
   banner: "",
   loading: false,
   reviewLoading: false,
@@ -593,6 +594,7 @@ function loadingDots() {
 
 function render() {
   const active = getActive();
+  const focus = captureFocus();
   app.innerHTML = `
     <div class="app-shell">
       ${renderTopbar(active)}
@@ -604,9 +606,34 @@ function render() {
       </main>
     </div>
   `;
+  restoreFocus(focus);
   requestAnimationFrame(() => {
     const thread = document.querySelector("[data-thread]");
     if (thread) thread.scrollTop = thread.scrollHeight;
+  });
+}
+
+function captureFocus() {
+  const element = document.activeElement;
+  if (!element || !element.dataset?.action) return null;
+  return {
+    action: element.dataset.action,
+    phase: element.dataset.phase || "",
+    start: typeof element.selectionStart === "number" ? element.selectionStart : null,
+    end: typeof element.selectionEnd === "number" ? element.selectionEnd : null,
+  };
+}
+
+function restoreFocus(focus) {
+  if (!focus) return;
+  requestAnimationFrame(() => {
+    const selector = `[data-action="${focus.action}"]${focus.phase ? `[data-phase="${focus.phase}"]` : ""}`;
+    const element = document.querySelector(selector);
+    if (!element) return;
+    element.focus({ preventScroll: true });
+    if (focus.start !== null && typeof element.setSelectionRange === "function") {
+      element.setSelectionRange(focus.start, focus.end ?? focus.start);
+    }
   });
 }
 
@@ -632,7 +659,7 @@ function renderTopbar(active) {
         </button>
       </div>
       <div class="top-actions">
-        <button class="status-line status-button" data-action="auth-panel" title="${attr(authLabel)}"><i class="status-dot ${authKey}"></i>${escapeHtml(authLabel)}</button>
+        <button class="status-line status-button" data-action="auth-panel" data-auth-status title="${attr(authLabel)}"><i class="status-dot ${authKey}"></i>${escapeHtml(authLabel)}</button>
         <button class="status-line status-button" data-action="openai-key" title="${attr(statusLabel)}"><i class="status-dot ${status}"></i>${escapeHtml(statusLabel)}</button>
         ${
           state.sermons.length
@@ -676,13 +703,12 @@ function renderAuthPanel() {
 
   if (ui.auth.user) {
     return `
-      <section class="panel panel-pad key-panel">
-        <div>
+      <section class="panel panel-pad key-panel auth-panel-compact">
+        <div class="auth-compact-copy">
           <span class="eyebrow">Account</span>
-          <h2 class="title">Signed in</h2>
+          <h2 class="mini-title">Signed in as ${escapeHtml(ui.auth.user.email || "your account")}</h2>
         </div>
-        <p class="subtle">${escapeHtml(ui.auth.user.email || "Your account")} is syncing sermons to the Preach Flow database.</p>
-        <p class="meta-line">${escapeHtml(ui.auth.status)}</p>
+        <p class="meta-line" data-auth-panel-status>${escapeHtml(ui.auth.status)}</p>
         <div class="action-row">
           <button class="btn btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
           <button class="btn" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
@@ -930,11 +956,14 @@ function renderWorkspace(active) {
         ${renderClock(active)}
         ${renderWorkflow(active, phase)}
       </aside>
-      <div class="stack">
+      <div class="stack workspace-writing">
         ${renderPhasePanel(active, phase)}
-        ${phase.devotional ? renderDevotionalPanel(phase) : renderConversation(active)}
+        ${renderNotes(active, phase)}
       </div>
-      ${renderNotes(active, phase)}
+      <aside class="stack workspace-tools">
+        ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
+        ${renderGoogleDocsPanel(active)}
+      </aside>
     </section>
   `;
 }
@@ -1106,14 +1135,33 @@ function renderDevotionalPanel(phase) {
   `;
 }
 
+function renderCoachDock(active) {
+  if (!ui.showCoach) {
+    const lastCoach = [...active.thread].reverse().find((message) => message.role === "assistant");
+    return `
+      <section class="panel panel-pad stack coach-dock">
+        <div>
+          <span class="eyebrow">Coach</span>
+          <h2 class="title">Ask when ready</h2>
+        </div>
+        <p class="subtle">Keep your writing space clear. Open the coach when you want feedback, orientation, or help with the current step.</p>
+        ${lastCoach ? `<p class="coach-preview">${escapeHtml(lastCoach.content.slice(0, 170))}${lastCoach.content.length > 170 ? "..." : ""}</p>` : ""}
+        <button class="btn btn-primary" data-action="open-coach">Open coach</button>
+      </section>
+    `;
+  }
+  return renderConversation(active);
+}
+
 function renderConversation(active) {
   return `
-    <section class="panel">
+    <section class="panel coach-panel">
       <div class="panel-pad section-head">
         <div>
           <span class="eyebrow">Coach</span>
           <h2 class="title">Feedback thread</h2>
         </div>
+        <button class="btn btn-ghost" data-action="close-coach">Close</button>
       </div>
       <div class="thread" data-thread>
         <div class="message-list">
@@ -1151,22 +1199,51 @@ function renderMessage(message) {
 }
 
 function renderNotes(active, phase) {
+  const noteValue = getPhaseNoteValue(active, phase);
   return `
-    <aside class="panel panel-pad stack note-rail">
+    <section class="panel panel-pad stack note-rail writing-panel">
       <div>
-        <span class="eyebrow">Notes</span>
+        <span class="eyebrow">Write here</span>
         <h2 class="title">${escapeHtml(phase.name)}</h2>
+        <p class="note-guide">Use this box for the work of the current step. The prompts below are already arranged for this phase, and they sync into the matching Google Doc section.</p>
       </div>
-      <textarea class="textarea" data-action="phase-note" data-phase="${attr(phase.id)}" placeholder="Capture your own work for this phase.">${escapeHtml(
-        active.notes[phase.id] || "",
-      )}</textarea>
+      <div class="note-toolbar" aria-label="Note formatting">
+        <button class="btn" type="button" data-action="format-note" data-format="bold">Bold</button>
+        <button class="btn" type="button" data-action="format-note" data-format="bullet">Bullets</button>
+        <button class="btn" type="button" data-action="format-note" data-format="heading">Heading</button>
+      </div>
+      <textarea class="textarea note-editor" data-action="phase-note" data-phase="${attr(phase.id)}" placeholder="Write your notes for this step here.">${escapeHtml(noteValue)}</textarea>
       <div class="action-row">
         <button class="btn" data-action="export-active">Export sermon</button>
         <button class="btn" data-action="copy-active">Copy</button>
       </div>
-      ${renderGoogleDocsPanel(active)}
-    </aside>
+    </section>
   `;
+}
+
+function getPhaseNoteValue(active, phase) {
+  return Object.prototype.hasOwnProperty.call(active.notes, phase.id)
+    ? active.notes[phase.id]
+    : phaseNoteTemplate(phase);
+}
+
+function phaseNoteTemplate(phase) {
+  const lines = [
+    `# ${phase.name}`,
+    "",
+    "What I should be doing in this step:",
+    `- ${phase.focus}`,
+    "",
+    "Work through these prompts:",
+    ...phase.doItems.map((item) => `- ${item}`),
+    "",
+    "My notes:",
+    "",
+  ];
+  if (phase.actions?.length) {
+    lines.splice(lines.length - 2, 0, "Helpful coach actions available:", ...phase.actions.map((action) => `- ${action.label}`), "");
+  }
+  return lines.join("\n");
 }
 
 function renderGoogleDocsPanel(active) {
@@ -1528,7 +1605,7 @@ function exportMarkdown(sermon) {
     for (const phase of PHASES.filter((item) => item.block === BLOCKS.indexOf(block))) {
       const done = sermon.completed.includes(phase.id) ? "done" : "open";
       lines.push(`- [${done === "done" ? "x" : " "}] ${phase.name}`);
-      const note = sermon.notes[phase.id]?.trim();
+      const note = getPhaseNoteValue(sermon, phase).trim();
       if (note) {
         lines.push("");
         lines.push(note);
@@ -1802,8 +1879,7 @@ function scheduleCloudSync() {
 async function saveCloudState(options = {}) {
   if (!ui.auth.client || !ui.auth.user) return;
 
-  ui.auth.status = "Saving to cloud...";
-  ui.auth.statusKey = "syncing";
+  setAuthStatus("Saving to cloud...", "syncing");
   if (!options.background) render();
 
   const updatedAt = new Date().toISOString();
@@ -1817,15 +1893,30 @@ async function saveCloudState(options = {}) {
   );
 
   if (error) {
-    ui.auth.status = error.message || "Cloud save failed.";
-    ui.auth.statusKey = "missing";
+    setAuthStatus(error.message || "Cloud save failed.", "missing");
     if (!options.background) showBanner("Cloud save failed.");
   } else {
-    ui.auth.status = `Saved to cloud ${formatTime(updatedAt)}.`;
-    ui.auth.statusKey = "ready";
+    setAuthStatus(`Saved to cloud ${formatTime(updatedAt)}.`, "ready");
     if (options.announce) showBanner("Saved to cloud.");
   }
-  render();
+  if (!options.background || options.announce) render();
+}
+
+function setAuthStatus(message, key = "neutral") {
+  ui.auth.status = message;
+  ui.auth.statusKey = key;
+  const button = document.querySelector("[data-auth-status]");
+  if (!button) return;
+  const label = ui.auth.user
+    ? `Signed in: ${ui.auth.user.email || "Account"}`
+    : ui.auth.configured
+      ? "Sign in"
+      : "Local save only";
+  const dotKey = ui.auth.user ? "ready" : ui.auth.configured ? "neutral" : "missing";
+  button.title = label;
+  button.innerHTML = `<i class="status-dot ${dotKey}"></i>${escapeHtml(label)}`;
+  const panelStatus = document.querySelector("[data-auth-panel-status]");
+  if (panelStatus) panelStatus.textContent = message;
 }
 
 function loadGoogleScript() {
@@ -1992,7 +2083,7 @@ function buildGoogleDocText(sermon) {
 
     for (const phase of PHASES.filter((item) => item.block === blockIndex)) {
       const done = sermon.completed.includes(phase.id);
-      const note = sermon.notes[phase.id]?.trim();
+      const note = getPhaseNoteValue(sermon, phase).trim();
       lines.push(`${done ? "[x]" : "[ ]"} ${phase.name}`);
       lines.push(`Focus: ${phase.focus}`);
       lines.push("Notes:");
@@ -2105,6 +2196,48 @@ function setGoogleStatus(message, key = "neutral") {
   if (dot) dot.className = `google-status-dot ${key}`;
 }
 
+function insertNoteFormatting(format) {
+  const editor = document.querySelector('[data-action="phase-note"]');
+  const active = getActive();
+  if (!editor || !active) return;
+
+  const start = editor.selectionStart ?? editor.value.length;
+  const end = editor.selectionEnd ?? start;
+  const selected = editor.value.slice(start, end);
+  let replacement = selected;
+  let cursorStart = start;
+  let cursorEnd = end;
+
+  if (format === "bold") {
+    replacement = `**${selected || "important thought"}**`;
+    cursorStart = start + 2;
+    cursorEnd = start + replacement.length - 2;
+  }
+  if (format === "bullet") {
+    const text = selected || "First point\nSecond point";
+    replacement = text
+      .split("\n")
+      .map((line) => (line.trim().startsWith("- ") ? line : `- ${line}`))
+      .join("\n");
+    cursorStart = start + replacement.length;
+    cursorEnd = cursorStart;
+  }
+  if (format === "heading") {
+    replacement = `## ${selected || "Section heading"}`;
+    cursorStart = start + 3;
+    cursorEnd = start + replacement.length;
+  }
+
+  editor.value = `${editor.value.slice(0, start)}${replacement}${editor.value.slice(end)}`;
+  active.notes[editor.dataset.phase] = editor.value;
+  active.updatedAt = new Date().toISOString();
+  saveState();
+  editor.focus();
+  if (typeof editor.setSelectionRange === "function") {
+    editor.setSelectionRange(cursorStart, cursorEnd);
+  }
+}
+
 function slug(value) {
   return (value || "sermon")
     .toLowerCase()
@@ -2186,6 +2319,17 @@ document.addEventListener("click", (event) => {
   if (action === "clear-composer") {
     ui.composer = "";
     render();
+  }
+  if (action === "open-coach") {
+    ui.showCoach = true;
+    render();
+  }
+  if (action === "close-coach") {
+    ui.showCoach = false;
+    render();
+  }
+  if (action === "format-note") {
+    insertNoteFormatting(target.dataset.format);
   }
   if (action === "delete-sermon") {
     deleteActive();
