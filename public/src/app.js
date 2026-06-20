@@ -356,6 +356,13 @@ const ui = {
   showNew: false,
   showAuth: false,
   showCoach: false,
+  journalEditingId: "",
+  journalDraft: {
+    sermonId: "",
+    phaseId: "",
+    title: "",
+    body: "",
+  },
   banner: "",
   loading: false,
   reviewLoading: false,
@@ -395,6 +402,7 @@ if (!state.filter) state.filter = "all";
 if (!state.reviewMeta) state.reviewMeta = { passage: "", title: "" };
 if (!state.reviewText) state.reviewText = "";
 if (!state.google) state.google = { autoSync: true };
+if (!Array.isArray(state.journalEntries)) state.journalEntries = [];
 
 function loadState() {
   try {
@@ -408,6 +416,7 @@ function loadState() {
       reviewMeta: parsed.reviewMeta || { passage: "", title: "" },
       reviewText: parsed.reviewText || "",
       google: parsed.google || { autoSync: true },
+      journalEntries: Array.isArray(parsed.journalEntries) ? parsed.journalEntries.map(normalizeJournalEntry) : [],
     };
   } catch {
     return {
@@ -419,6 +428,7 @@ function loadState() {
       reviewMeta: { passage: "", title: "" },
       reviewText: "",
       google: { autoSync: true },
+      journalEntries: [],
     };
   }
 }
@@ -443,6 +453,7 @@ function stateSnapshot() {
     reviewMeta: state.reviewMeta,
     reviewText: state.reviewText,
     google: state.google,
+    journalEntries: state.journalEntries,
   };
 }
 
@@ -458,6 +469,7 @@ function applyStateSnapshot(snapshot) {
   state.reviewMeta = snapshot?.reviewMeta || { passage: "", title: "" };
   state.reviewText = snapshot?.reviewText || "";
   state.google = snapshot?.google || { autoSync: true };
+  state.journalEntries = Array.isArray(snapshot?.journalEntries) ? snapshot.journalEntries.map(normalizeJournalEntry) : [];
 }
 
 function normalizeSermon(sermon) {
@@ -484,6 +496,19 @@ function normalizeSermon(sermon) {
         : null,
     createdAt: sermon.createdAt || new Date().toISOString(),
     updatedAt: sermon.updatedAt || new Date().toISOString(),
+  };
+}
+
+function normalizeJournalEntry(entry) {
+  const now = new Date().toISOString();
+  return {
+    id: entry.id || genId(),
+    sermonId: entry.sermonId || "",
+    phaseId: entry.phaseId || "",
+    title: entry.title || "",
+    body: entry.body || "",
+    createdAt: entry.createdAt || now,
+    updatedAt: entry.updatedAt || entry.createdAt || now,
   };
 }
 
@@ -677,6 +702,7 @@ function renderTopbar(active) {
         }
         <button class="btn nav-btn ${state.view === "workspace" ? "active" : ""}" data-view="workspace">Workspace</button>
         <button class="btn nav-btn ${state.view === "pipeline" ? "active" : ""}" data-view="pipeline">Pipeline</button>
+        <button class="btn nav-btn ${state.view === "journal" ? "active" : ""}" data-view="journal">Journal</button>
         <button class="btn nav-btn ${state.view === "review" ? "active" : ""}" data-view="review">Review</button>
         <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
       </div>
@@ -763,6 +789,7 @@ function renderOpenAIKeyPanel() {
 function renderMain(active) {
   if (ui.showNew) return renderNewSermon();
   if (state.view === "pipeline") return renderPipeline();
+  if (state.view === "journal") return renderJournal(active);
   if (state.view === "review") return renderReview();
   if (active) return renderWorkspace(active);
   return renderNewSermon();
@@ -962,6 +989,7 @@ function renderWorkspace(active) {
       </div>
       <aside class="stack workspace-tools">
         ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
+        ${renderQuickJournal(active, phase)}
         ${renderGoogleDocsPanel(active)}
       </aside>
     </section>
@@ -1207,11 +1235,7 @@ function renderNotes(active, phase) {
         <h2 class="title">${escapeHtml(phase.name)}</h2>
         <p class="note-guide">Use this box for the work of the current step. The prompts below are already arranged for this phase, and they sync into the matching Google Doc section.</p>
       </div>
-      <div class="note-toolbar" aria-label="Note formatting">
-        <button class="btn" type="button" data-action="format-note" data-format="bold">Bold</button>
-        <button class="btn" type="button" data-action="format-note" data-format="bullet">Bullets</button>
-        <button class="btn" type="button" data-action="format-note" data-format="heading">Heading</button>
-      </div>
+      ${renderFormatToolbar("phase-note")}
       <textarea class="textarea note-editor" data-action="phase-note" data-phase="${attr(phase.id)}" placeholder="Write your notes for this step here.">${escapeHtml(noteValue)}</textarea>
       <div class="action-row">
         <button class="btn" data-action="export-active">Export sermon</button>
@@ -1301,6 +1325,295 @@ function renderGoogleDocsPanel(active) {
           : `<p class="helper-text">Set <code>GOOGLE_CLIENT_ID</code> in Vercel to enable Google Docs sync.</p>`
       }
     </div>
+  `;
+}
+
+function renderFormatToolbar(target, compact = false) {
+  return `
+    <div class="note-toolbar ${compact ? "compact-toolbar" : ""}" aria-label="Text formatting">
+      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="bold" title="Bold selected text"><strong>B</strong></button>
+      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="italic" title="Italic selected text"><em>I</em></button>
+      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="bullet" title="Turn selected lines into bullets">Bullets</button>
+      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="heading" title="Make selected text a heading">Heading</button>
+    </div>
+  `;
+}
+
+function renderQuickJournal(active, phase) {
+  return `
+    <section class="panel panel-pad stack journal-quick">
+      <div>
+        <span class="eyebrow">Journal</span>
+        <h2 class="title">Quick note</h2>
+      </div>
+      <p class="subtle">Capture a thought without leaving this step. It will be filed under this sermon and section.</p>
+      <input class="input" data-action="journal-quick-title" value="${attr(ui.journalDraft.title)}" placeholder="Optional note title" />
+      ${renderFormatToolbar("journal-quick", true)}
+      <textarea class="textarea journal-mini-editor" data-action="journal-quick-body" placeholder="Jot a note, prayer, illustration, question, or application...">${escapeHtml(ui.journalDraft.body)}</textarea>
+      <div class="action-row compact-actions">
+        <button class="btn btn-primary" data-action="save-quick-journal" ${ui.journalDraft.body.trim() ? "" : "disabled"}>Save note</button>
+        <button class="btn" data-view="journal">Open journal</button>
+      </div>
+      <p class="helper-text">Filed under ${escapeHtml(active.passage || "Current sermon")} / ${escapeHtml(phase.name)}.</p>
+    </section>
+  `;
+}
+
+function renderJournal(active) {
+  const editing = ui.journalEditingId
+    ? state.journalEntries.find((entry) => entry.id === ui.journalEditingId)
+    : null;
+  const draft = ui.journalDraft;
+  const selectedSermonId = draft.sermonId || active?.id || "";
+  const selectedPhaseId = draft.phaseId || active?.activePhase || "general";
+  const grouped = groupJournalEntries();
+
+  return `
+    <section class="journal-view">
+      <div class="journal-hero">
+        <span class="eyebrow">Journal</span>
+        <h1 class="journal-title">Notes filed by sermon and section.</h1>
+        <p>Use this for stray ideas, prayers, illustrations, questions, research fragments, and applications. Notes are saved with your app state and organized automatically by course and workflow section.</p>
+      </div>
+      <div class="journal-layout">
+        <form class="panel panel-pad stack journal-editor-panel" data-form="journal-entry">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">${editing ? "Edit note" : "New note"}</span>
+              <h2 class="title">${editing ? escapeHtml(editing.title || "Untitled note") : "Capture a note"}</h2>
+            </div>
+            ${editing ? `<button class="btn btn-ghost" type="button" data-action="cancel-journal-edit">Cancel</button>` : ""}
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="journal-sermon">Course / sermon</label>
+              <select id="journal-sermon" class="select" data-action="journal-draft-sermon">
+                <option value="">General journal</option>
+                ${state.sermons
+                  .map(
+                    (sermon) =>
+                      `<option value="${attr(sermon.id)}" ${sermon.id === selectedSermonId ? "selected" : ""}>${escapeHtml(journalSermonLabel(sermon))}</option>`,
+                  )
+                  .join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="journal-section">Section</label>
+              <select id="journal-section" class="select" data-action="journal-draft-phase">
+                <option value="general" ${selectedPhaseId === "general" ? "selected" : ""}>General</option>
+                ${PHASES.map(
+                  (phase) => `<option value="${attr(phase.id)}" ${phase.id === selectedPhaseId ? "selected" : ""}>${escapeHtml(phase.name)}</option>`,
+                ).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="journal-title">Title</label>
+            <input id="journal-title" class="input" data-action="journal-draft-title" value="${attr(draft.title || "")}" placeholder="Question, idea, prayer, illustration..." />
+          </div>
+          ${renderFormatToolbar("journal-main")}
+          <textarea id="journal-body" class="textarea note-editor journal-editor" data-action="journal-draft-body" placeholder="Write a note. Use Bold, Italic, Bullets, or Heading above.">${escapeHtml(draft.body || "")}</textarea>
+          <div class="action-row">
+            <button class="btn btn-primary" type="submit" ${draft.body?.trim() ? "" : "disabled"}>${editing ? "Update note" : "Save note"}</button>
+            <button class="btn" type="button" data-action="clear-journal-draft">Clear</button>
+          </div>
+        </form>
+        <aside class="journal-library stack">
+          ${grouped.length ? grouped.map(renderJournalGroup).join("") : renderEmptyJournal()}
+        </aside>
+      </div>
+    </section>
+  `;
+}
+
+function journalSermonLabel(sermon) {
+  return `${sermon.passage || "Untitled sermon"}${sermon.title ? ` - ${sermon.title}` : ""}`;
+}
+
+function journalCourseLabel(sermonId) {
+  const sermon = state.sermons.find((item) => item.id === sermonId);
+  return sermon ? journalSermonLabel(sermon) : "General journal";
+}
+
+function journalSectionLabel(phaseId) {
+  return PHASES.find((phase) => phase.id === phaseId)?.name || "General";
+}
+
+function groupJournalEntries() {
+  const sorted = [...state.journalEntries].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const courseMap = new Map();
+  for (const entry of sorted) {
+    const courseKey = entry.sermonId || "general";
+    if (!courseMap.has(courseKey)) {
+      courseMap.set(courseKey, {
+        key: courseKey,
+        label: journalCourseLabel(entry.sermonId),
+        entries: [],
+        sectionMap: new Map(),
+      });
+    }
+    const course = courseMap.get(courseKey);
+    course.entries.push(entry);
+    const sectionKey = entry.phaseId || "general";
+    if (!course.sectionMap.has(sectionKey)) {
+      course.sectionMap.set(sectionKey, {
+        key: sectionKey,
+        label: journalSectionLabel(entry.phaseId),
+        entries: [],
+      });
+    }
+    course.sectionMap.get(sectionKey).entries.push(entry);
+  }
+
+  return [...courseMap.values()].map((course) => ({
+    ...course,
+    sections: [...course.sectionMap.values()],
+  }));
+}
+
+function resetJournalDraft() {
+  ui.journalEditingId = "";
+  ui.journalDraft = {
+    sermonId: "",
+    phaseId: "",
+    title: "",
+    body: "",
+  };
+}
+
+function saveJournalEntry(overrides = {}) {
+  const now = new Date().toISOString();
+  const selectedSermon = document.querySelector('[data-action="journal-draft-sermon"]')?.value || "";
+  const selectedPhase = document.querySelector('[data-action="journal-draft-phase"]')?.value || "";
+  const draft = {
+    ...ui.journalDraft,
+    sermonId: ui.journalDraft.sermonId || selectedSermon,
+    phaseId: ui.journalDraft.phaseId || selectedPhase,
+    ...overrides,
+  };
+  const body = (draft.body || "").trim();
+  if (!body) {
+    showBanner("Write a journal note first.");
+    return;
+  }
+  const title = (draft.title || firstLine(body) || "Untitled note").trim();
+
+  if (ui.journalEditingId) {
+    state.journalEntries = state.journalEntries.map((entry) =>
+      entry.id === ui.journalEditingId
+        ? normalizeJournalEntry({
+            ...entry,
+            sermonId: draft.sermonId || "",
+            phaseId: draft.phaseId || "general",
+            title,
+            body,
+            updatedAt: now,
+          })
+        : entry,
+    );
+    showBanner("Journal note updated.");
+  } else {
+    state.journalEntries.unshift(
+      normalizeJournalEntry({
+        id: genId(),
+        sermonId: draft.sermonId || "",
+        phaseId: draft.phaseId || "general",
+        title,
+        body,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+    showBanner("Journal note saved.");
+  }
+
+  resetJournalDraft();
+  saveState();
+  render();
+}
+
+function firstLine(value) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.replace(/^#+\s*/, "").replace(/^\-\s*/, "").trim())
+    .find(Boolean);
+}
+
+function editJournalEntry(entryId) {
+  const entry = state.journalEntries.find((item) => item.id === entryId);
+  if (!entry) return;
+  ui.journalEditingId = entry.id;
+  ui.journalDraft = {
+    sermonId: entry.sermonId || "",
+    phaseId: entry.phaseId || "general",
+    title: entry.title || "",
+    body: entry.body || "",
+  };
+  state.view = "journal";
+  render();
+}
+
+function deleteJournalEntry(entryId) {
+  const entry = state.journalEntries.find((item) => item.id === entryId);
+  if (!entry) return;
+  const ok = confirm(`Delete "${entry.title || "this journal note"}"?`);
+  if (!ok) return;
+  state.journalEntries = state.journalEntries.filter((item) => item.id !== entryId);
+  if (ui.journalEditingId === entryId) resetJournalDraft();
+  saveState();
+  showBanner("Journal note deleted.");
+  render();
+}
+
+function renderJournalGroup(group) {
+  return `
+    <section class="panel panel-pad journal-group">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Course</span>
+          <h2 class="mini-title">${escapeHtml(group.label)}</h2>
+        </div>
+        <span class="badge neutral">${group.entries.length}</span>
+      </div>
+      ${group.sections
+        .map(
+          (section) => `
+            <div class="journal-section">
+              <div class="block-label">${escapeHtml(section.label)}<span>${section.entries.length} notes</span></div>
+              <div class="journal-entry-list">
+                ${section.entries.map(renderJournalEntryCard).join("")}
+              </div>
+            </div>
+          `,
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderJournalEntryCard(entry) {
+  return `
+    <article class="journal-entry-card">
+      <div>
+        <h3>${escapeHtml(entry.title || "Untitled note")}</h3>
+        <p>${escapeHtml(entry.body.slice(0, 220))}${entry.body.length > 220 ? "..." : ""}</p>
+        <div class="meta-line">Updated ${formatTime(entry.updatedAt)}</div>
+      </div>
+      <div class="entry-actions">
+        <button class="btn" data-action="edit-journal-entry" data-entry="${attr(entry.id)}">Edit</button>
+        <button class="btn btn-danger" data-action="delete-journal-entry" data-entry="${attr(entry.id)}">Delete</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderEmptyJournal() {
+  return `
+    <section class="panel panel-pad stack journal-empty">
+      <span class="eyebrow">No notes yet</span>
+      <h2 class="title">Start with a thought from today’s prep.</h2>
+      <p class="subtle">Journal notes will appear here grouped by sermon and section.</p>
+    </section>
   `;
 }
 
@@ -1861,6 +2174,7 @@ async function loadCloudState() {
 function hasCloudContent(snapshot) {
   return Boolean(
     snapshot?.sermons?.length ||
+      snapshot?.journalEntries?.length ||
       snapshot?.reviewText ||
       snapshot?.reviewMeta?.passage ||
       snapshot?.reviewMeta?.title,
@@ -2196,10 +2510,9 @@ function setGoogleStatus(message, key = "neutral") {
   if (dot) dot.className = `google-status-dot ${key}`;
 }
 
-function insertNoteFormatting(format) {
-  const editor = document.querySelector('[data-action="phase-note"]');
-  const active = getActive();
-  if (!editor || !active) return;
+function formatEditor(targetKey, format) {
+  const editor = getFormattingEditor(targetKey);
+  if (!editor) return;
 
   const start = editor.selectionStart ?? editor.value.length;
   const end = editor.selectionEnd ?? start;
@@ -2212,6 +2525,11 @@ function insertNoteFormatting(format) {
     replacement = `**${selected || "important thought"}**`;
     cursorStart = start + 2;
     cursorEnd = start + replacement.length - 2;
+  }
+  if (format === "italic") {
+    replacement = `_${selected || "emphasis"}_`;
+    cursorStart = start + 1;
+    cursorEnd = start + replacement.length - 1;
   }
   if (format === "bullet") {
     const text = selected || "First point\nSecond point";
@@ -2229,13 +2547,34 @@ function insertNoteFormatting(format) {
   }
 
   editor.value = `${editor.value.slice(0, start)}${replacement}${editor.value.slice(end)}`;
-  active.notes[editor.dataset.phase] = editor.value;
-  active.updatedAt = new Date().toISOString();
-  saveState();
+  persistFormattedEditorValue(targetKey, editor);
   editor.focus();
   if (typeof editor.setSelectionRange === "function") {
     editor.setSelectionRange(cursorStart, cursorEnd);
   }
+}
+
+function getFormattingEditor(targetKey) {
+  if (targetKey === "phase-note") return document.querySelector('[data-action="phase-note"]');
+  if (targetKey === "journal-quick") return document.querySelector('[data-action="journal-quick-body"]');
+  if (targetKey === "journal-main") return document.querySelector('[data-action="journal-draft-body"]');
+  return null;
+}
+
+function persistFormattedEditorValue(targetKey, editor) {
+  if (targetKey === "phase-note") {
+    const active = getActive();
+    if (!active) return;
+    active.notes[editor.dataset.phase] = editor.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    return;
+  }
+  ui.journalDraft.body = editor.value;
+  const submit = document.querySelector('form[data-form="journal-entry"] button[type="submit"]');
+  if (submit) submit.disabled = !ui.journalDraft.body.trim();
+  const quickSubmit = document.querySelector('[data-action="save-quick-journal"]');
+  if (quickSubmit) quickSubmit.disabled = !ui.journalDraft.body.trim();
 }
 
 function slug(value) {
@@ -2328,8 +2667,30 @@ document.addEventListener("click", (event) => {
     ui.showCoach = false;
     render();
   }
-  if (action === "format-note") {
-    insertNoteFormatting(target.dataset.format);
+  if (action === "format-text") {
+    formatEditor(target.dataset.target, target.dataset.format);
+  }
+  if (action === "save-quick-journal") {
+    const active = getActive();
+    const phase = getPhase(active);
+    saveJournalEntry({
+      sermonId: active?.id || "",
+      phaseId: phase?.id || "general",
+    });
+  }
+  if (action === "edit-journal-entry") {
+    editJournalEntry(target.dataset.entry);
+  }
+  if (action === "delete-journal-entry") {
+    deleteJournalEntry(target.dataset.entry);
+  }
+  if (action === "cancel-journal-edit") {
+    resetJournalDraft();
+    render();
+  }
+  if (action === "clear-journal-draft") {
+    resetJournalDraft();
+    render();
   }
   if (action === "delete-sermon") {
     deleteActive();
@@ -2404,6 +2765,7 @@ document.addEventListener("submit", (event) => {
   if (form.dataset.form === "new-sermon") addSermon(form);
   if (form.dataset.form === "sermon-details") saveDetails(form);
   if (form.dataset.form === "review-sermon") reviewSermon();
+  if (form.dataset.form === "journal-entry") saveJournalEntry();
 });
 
 document.addEventListener("input", (event) => {
@@ -2442,6 +2804,16 @@ document.addEventListener("input", (event) => {
     state.reviewMeta[target.dataset.field] = target.value;
     saveState();
   }
+  if (action === "journal-quick-title" || action === "journal-draft-title") {
+    ui.journalDraft.title = target.value;
+  }
+  if (action === "journal-quick-body" || action === "journal-draft-body") {
+    ui.journalDraft.body = target.value;
+    const submit = document.querySelector('form[data-form="journal-entry"] button[type="submit"]');
+    if (submit) submit.disabled = !ui.journalDraft.body.trim();
+    const quickSubmit = document.querySelector('[data-action="save-quick-journal"]');
+    if (quickSubmit) quickSubmit.disabled = !ui.journalDraft.body.trim();
+  }
 });
 
 document.addEventListener("change", (event) => {
@@ -2465,6 +2837,18 @@ document.addEventListener("change", (event) => {
     state.google = { ...(state.google || {}), autoSync: target.checked };
     saveState();
     setGoogleStatus(target.checked ? "Auto-sync enabled" : "Auto-sync paused", target.checked ? "ready" : "neutral");
+  }
+  if (action === "journal-draft-sermon") {
+    ui.journalDraft.sermonId = target.value;
+  }
+  if (action === "journal-draft-phase") {
+    ui.journalDraft.phaseId = target.value;
+  }
+});
+
+document.addEventListener("mousedown", (event) => {
+  if (event.target.closest('[data-action="format-text"]')) {
+    event.preventDefault();
   }
 });
 
