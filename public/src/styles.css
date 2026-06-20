@@ -214,7 +214,7 @@ button {
   color: #7d6a51;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -311,7 +311,7 @@ button {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -374,7 +374,7 @@ button {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -565,7 +565,7 @@ button {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -1145,7 +1145,7 @@ button {
 .brand-kicker {
   color: #86868b;
   font-size: 11px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 .top-actions {
@@ -1189,12 +1189,12 @@ button {
   color: #86868b;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
 }
 
 .title {
   color: #111111;
-  font-size: clamp(24px, 2vw, 34px);
+  font-size: 30px;
   font-weight: 780;
   line-height: 1.05;
 }
@@ -1311,7 +1311,7 @@ button {
 .metric dt {
   color: #86868b;
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
 }
 
 .metric {
@@ -1484,7 +1484,7 @@ button {
 }
 
 .empty-hero .title {
-  font-size: clamp(40px, 5vw, 72px);
+  font-size: 58px;
   letter-spacing: 0;
 }
 
@@ -1621,7 +1621,7 @@ body {
 
 .brand-name {
   color: #000000;
-  font-size: clamp(28px, 3.2vw, 48px);
+  font-size: 36px;
   font-weight: 950;
   line-height: 0.9;
   text-transform: uppercase;
@@ -1703,7 +1703,7 @@ body {
 
 .title {
   color: #000000;
-  font-size: clamp(27px, 2.7vw, 44px);
+  font-size: 34px;
   font-weight: 950;
   line-height: 0.95;
   text-transform: uppercase;
@@ -1994,7 +1994,7 @@ body {
 
 .journal-title {
   margin: 0;
-  font-size: clamp(42px, 6vw, 92px);
+  font-size: 68px;
   font-weight: 950;
   line-height: 0.9;
   text-transform: uppercase;
@@ -2184,10 +2184,10 @@ body {
 
 .brand-name {
   color: #ffffff;
-  font-size: clamp(26px, 3vw, 40px);
+  font-size: 32px;
   font-weight: 950;
   line-height: 0.92;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   text-transform: none;
 }
 
@@ -2200,7 +2200,7 @@ body {
   color: rgba(255, 255, 255, 0.66);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -2252,7 +2252,7 @@ body {
   color: #8b3cff;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -2266,10 +2266,10 @@ body {
 
 .title {
   color: #15121f;
-  font-size: clamp(26px, 2.4vw, 40px);
+  font-size: 32px;
   font-weight: 900;
   line-height: 1.02;
-  letter-spacing: -0.045em;
+  letter-spacing: 0;
   text-transform: none;
 }
 
@@ -2570,10 +2570,10 @@ body {
 
 .journal-title {
   margin: 0;
-  font-size: clamp(42px, 6vw, 88px);
+  font-size: 64px;
   font-weight: 950;
   line-height: 0.9;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   text-transform: none;
 }
 
@@ -2670,5 +2670,617 @@ body {
 
   .journal-entry-card {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Engadget-inspired clean editorial refresh */
+:root {
+  --bg: #f5f5f5;
+  --bg-2: #ececec;
+  --ink: #0a0a0a;
+  --muted: #696969;
+  --panel: #ffffff;
+  --panel-solid: #ffffff;
+  --panel-2: #f2f2f2;
+  --panel-3: #fafafa;
+  --line: #dddddd;
+  --line-strong: #b8b8b8;
+  --accent: #e00034;
+  --accent-dark: #b80029;
+  --gold: #111111;
+  --amber: #e00034;
+  --rose: #e00034;
+  --blue: #111111;
+  --green: #16764f;
+  --danger: #b42318;
+  --shadow: none;
+  --shadow-soft: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  letter-spacing: 0;
+}
+
+.app-shell,
+.app-shell * {
+  letter-spacing: 0;
+}
+
+.app-shell {
+  background: var(--bg);
+}
+
+.topbar {
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: 18px;
+  border-bottom: 1px solid #111111;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+  backdrop-filter: blur(14px);
+}
+
+.topbar::before,
+.topbar::after,
+.app-shell::before,
+.app-shell::after,
+.panel::before,
+.panel::after,
+.empty-hero::before,
+.journal-hero::before {
+  display: none;
+}
+
+.brand {
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.brand-name,
+.title,
+.mini-title,
+.journal-title {
+  color: var(--ink);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.brand-name {
+  font-size: 24px;
+  font-weight: 920;
+}
+
+.brand-name span,
+.eyebrow {
+  color: var(--accent);
+}
+
+.brand-kicker {
+  color: #5f5f5f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.top-actions {
+  gap: 6px;
+}
+
+.top-actions .select {
+  max-width: 360px;
+}
+
+.app-main {
+  width: min(1440px, 100%);
+  padding: 18px 22px 32px;
+}
+
+.workspace-grid {
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(220px, 270px);
+  gap: 14px;
+}
+
+.workspace-writing {
+  gap: 12px;
+}
+
+.workspace-tools {
+  gap: 12px;
+}
+
+.panel,
+.sermon-card,
+.google-docs-box,
+.quick-card,
+.key-panel,
+.auth-panel-compact {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.panel-pad {
+  padding: 16px;
+}
+
+.section-head {
+  margin-bottom: 10px;
+}
+
+.eyebrow {
+  margin-bottom: 5px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.mini-title {
+  font-weight: 880;
+}
+
+.subtle,
+.meta-line,
+.helper-text,
+.note-guide {
+  color: var(--muted);
+}
+
+.btn,
+.input,
+.select,
+.textarea,
+.status-line,
+.doc-link {
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.input,
+.select,
+.textarea {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.textarea,
+.rich-note-editor {
+  border-radius: 10px;
+}
+
+.btn {
+  min-height: 38px;
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  color: #111111;
+  font-weight: 850;
+}
+
+.btn:hover,
+.nav-btn:hover,
+.status-button:hover {
+  border-color: #111111;
+  background: #f4f4f4;
+  transform: none;
+}
+
+.btn-primary,
+.nav-btn.active {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.btn-danger {
+  border-color: rgba(180, 35, 24, 0.28);
+  color: var(--danger);
+}
+
+.status-line {
+  border: 1px solid #d8d8d8;
+  background: #ffffff;
+  color: #111111;
+}
+
+.status-dot.ready,
+.google-status-dot.ready {
+  background: var(--green);
+}
+
+.status-dot.missing,
+.google-status-dot.missing {
+  background: var(--accent);
+}
+
+.nav-btn {
+  padding-inline: 14px;
+}
+
+.metric dd {
+  color: #111111;
+}
+
+.progress,
+.segment {
+  background: #e9e9e9;
+}
+
+.progress span,
+.segment.done {
+  border-color: #111111;
+  background: #111111;
+}
+
+.badge {
+  border-radius: 999px;
+  border-color: #d8d8d8;
+  background: #ffffff;
+  color: #111111;
+}
+
+.badge.behind,
+.badge.missing {
+  border-color: rgba(224, 0, 52, 0.25);
+  background: rgba(224, 0, 52, 0.08);
+  color: #9d0024;
+}
+
+.badge.ahead,
+.badge.on-track,
+.badge.ready {
+  border-color: rgba(22, 118, 79, 0.24);
+  background: rgba(22, 118, 79, 0.08);
+  color: #0f5e3e;
+}
+
+.phase-list {
+  gap: 5px;
+}
+
+.phase-row {
+  border-radius: 8px;
+  border-color: transparent;
+  background: #ffffff;
+}
+
+.phase-row:hover {
+  border-color: #cccccc;
+  background: #f7f7f7;
+}
+
+.phase-row.active {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.phase-row.active .phase-focus,
+.phase-row.active .meta-line {
+  color: #ffffff;
+}
+
+.phase-dot {
+  background: #f0f0f0;
+  color: #111111;
+}
+
+.phase-row.active .phase-dot,
+.phase-dot.done {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #111111;
+}
+
+.phase-focus {
+  color: #111111;
+  font-size: 16px;
+  font-weight: 760;
+  line-height: 1.5;
+}
+
+.todo-list li {
+  padding-block: 5px;
+}
+
+.todo-list li::before {
+  background: var(--accent);
+}
+
+.writing-panel {
+  border-color: #111111;
+  background: #ffffff;
+}
+
+.note-guide {
+  max-width: 680px;
+  font-size: 14px;
+}
+
+.focus-note-list {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-note-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.focus-note-head h3 {
+  margin: 0;
+  color: #111111;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.22;
+  letter-spacing: 0;
+}
+
+.note-toolbar {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  border: 1px solid #d7d7d7;
+  border-radius: 999px;
+  background: #f3f3f3;
+  padding: 5px;
+}
+
+.note-toolbar .btn,
+.format-btn {
+  min-width: 36px;
+  min-height: 30px;
+  border-radius: 999px;
+  border-color: transparent;
+  background: transparent;
+  padding: 5px 10px;
+}
+
+.format-btn:hover {
+  background: #ffffff;
+  border-color: #cfcfcf;
+}
+
+.rich-note-editor {
+  min-height: clamp(140px, 18vh, 260px);
+  border: 1px solid #d2d2d2;
+  background: #fbfbfb;
+  color: #111111;
+  padding: 14px;
+  font-size: 16px;
+  line-height: 1.65;
+  outline: none;
+}
+
+.rich-note-editor:focus {
+  border-color: #111111;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.08);
+}
+
+.rich-note-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #8a8a8a;
+}
+
+.rich-note-editor ul,
+.workflow-note-body ul {
+  margin: 8px 0;
+  padding-left: 1.25rem;
+}
+
+.rich-note-editor li,
+.workflow-note-body li {
+  margin: 4px 0;
+}
+
+.coach-dock,
+.coach-panel,
+.google-docs-box {
+  background: #ffffff;
+}
+
+.coach-preview {
+  border-left-color: var(--accent);
+}
+
+.thread {
+  border-color: var(--line);
+  background: #f7f7f7;
+}
+
+.bubble {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.message.user .bubble {
+  background: #111111;
+  color: #ffffff;
+}
+
+.message.coach .bubble,
+.message.review .bubble {
+  border: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.banner {
+  border: 1px solid #d8d8d8;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111111;
+}
+
+.empty-hero,
+.journal-hero {
+  border: 1px solid #111111;
+  border-radius: 12px;
+  background: #111111;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.empty-hero .title,
+.journal-hero .journal-title,
+.empty-hero .eyebrow,
+.journal-hero .eyebrow {
+  color: #ffffff;
+}
+
+.journal-hero p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.journal-title {
+  font-size: 58px;
+  font-weight: 950;
+  line-height: 0.96;
+}
+
+.journal-layout,
+.notes-library-layout {
+  display: block;
+}
+
+.journal-library,
+.notes-library {
+  display: grid;
+  gap: 14px;
+}
+
+.workflow-note-group {
+  display: grid;
+  gap: 16px;
+}
+
+.journal-section,
+.workflow-note-section {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 14px;
+}
+
+.workflow-phase-notes {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.workflow-phase-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-phase-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.workflow-note-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-note-card {
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.workflow-note-card h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 880;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.workflow-note-body {
+  color: #222222;
+  line-height: 1.62;
+}
+
+.auth-panel-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.auth-panel-compact .mini-title {
+  font-size: 16px;
+}
+
+.sermon-card:hover {
+  border-color: #111111;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  }
+
+  .workspace-tools {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-grid,
+  .workspace-tools {
+    grid-template-columns: 1fr;
+    grid-column: auto;
+  }
+
+  .top-actions {
+    justify-content: flex-start;
+  }
+
+  .top-actions > * {
+    max-width: 100%;
+  }
+
+  .note-toolbar {
+    width: 100%;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .journal-title {
+    font-size: 36px;
+  }
+
+  .focus-note-head h3 {
+    font-size: 18px;
   }
 }
