@@ -3284,3 +3284,630 @@ body {
     font-size: 18px;
   }
 }
+
+/* Claude dark canvas + Replit workspace refresh */
+:root {
+  color-scheme: dark;
+  --bg: #151412;
+  --bg-2: #1a1815;
+  --ink: #f4efe6;
+  --muted: #aaa39a;
+  --panel: #1f1d1a;
+  --panel-solid: #211f1c;
+  --panel-2: #292722;
+  --panel-3: #171613;
+  --line: #36322c;
+  --line-strong: #524b42;
+  --accent: #d97757;
+  --accent-dark: #f0a07f;
+  --gold: #d97757;
+  --amber: #d97757;
+  --rose: #d97757;
+  --blue: #8aa4ff;
+  --green: #72d39f;
+  --danger: #ff7d69;
+  --shadow: 0 24px 80px -56px rgba(0, 0, 0, 0.9);
+  --shadow-soft: 0 14px 42px -34px rgba(0, 0, 0, 0.86);
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(217, 119, 87, 0.11), transparent 28rem),
+    radial-gradient(circle at 88% 10%, rgba(138, 164, 255, 0.07), transparent 24rem),
+    linear-gradient(180deg, #191714 0%, var(--bg) 42%, #11100e 100%);
+  color: var(--ink);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  letter-spacing: 0;
+}
+
+.app-shell,
+.app-shell * {
+  letter-spacing: 0;
+}
+
+.app-shell {
+  background: transparent;
+}
+
+.topbar {
+  grid-template-columns: minmax(230px, 1fr) auto;
+  gap: 14px;
+  border-bottom: 1px solid rgba(244, 239, 230, 0.1);
+  background: rgba(24, 22, 19, 0.9);
+  box-shadow: 0 14px 48px -36px rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(18px);
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(244, 239, 230, 0.16);
+  border-radius: 12px;
+  background: #24211d;
+}
+
+.brand-name,
+.title,
+.mini-title,
+.journal-title {
+  color: var(--ink);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.brand-name {
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.brand-name span,
+.eyebrow {
+  color: var(--accent-dark);
+}
+
+.brand-kicker {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-main {
+  width: min(1480px, 100%);
+  padding: 18px 20px 34px;
+}
+
+.workspace-grid {
+  grid-template-columns: minmax(245px, 290px) minmax(0, 1fr) minmax(240px, 300px);
+  gap: 14px;
+}
+
+.workspace-writing,
+.workspace-tools,
+.stack {
+  gap: 12px;
+}
+
+.panel,
+.sermon-card,
+.google-docs-box,
+.quick-card,
+.key-panel,
+.auth-panel-compact,
+.workflow-note-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(36, 33, 29, 0.96), rgba(30, 28, 25, 0.96));
+  box-shadow: var(--shadow-soft);
+}
+
+.panel-pad {
+  padding: 16px;
+}
+
+.section-head {
+  margin-bottom: 10px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.eyebrow::before {
+  display: none;
+}
+
+.title {
+  font-size: 27px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+.mini-title {
+  font-size: 18px;
+  font-weight: 720;
+}
+
+.subtle,
+.meta-line,
+.helper-text,
+.note-guide,
+.phase-focus {
+  color: var(--muted);
+}
+
+.phase-focus {
+  font-size: 15px;
+  font-weight: 480;
+  line-height: 1.58;
+}
+
+.btn,
+.input,
+.select,
+.textarea,
+.status-line,
+.doc-link {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.btn,
+.status-line,
+.input,
+.select,
+.textarea {
+  border: 1px solid var(--line);
+  background: #24211d;
+  color: var(--ink);
+}
+
+.btn {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-weight: 650;
+}
+
+.btn:hover,
+.nav-btn:hover,
+.status-button:hover {
+  border-color: var(--line-strong);
+  background: #2c2924;
+  transform: none;
+}
+
+.btn-primary,
+.nav-btn.active {
+  border-color: rgba(217, 119, 87, 0.56);
+  background: #d97757;
+  color: #17120f;
+}
+
+.btn-danger {
+  border-color: rgba(255, 125, 105, 0.32);
+  background: rgba(255, 125, 105, 0.08);
+  color: var(--danger);
+}
+
+.input,
+.select,
+.textarea {
+  background: #191815;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: rgba(217, 119, 87, 0.72);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.12);
+}
+
+.status-line {
+  background: #1d1b18;
+  color: var(--muted);
+}
+
+.status-dot.ready,
+.google-status-dot.ready {
+  background: var(--green);
+}
+
+.status-dot.missing,
+.google-status-dot.missing {
+  background: var(--accent);
+}
+
+.progress,
+.segment {
+  border-color: rgba(244, 239, 230, 0.06);
+  background: #141310;
+}
+
+.progress span,
+.segment.done {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.metric dd,
+.metric dt {
+  color: var(--ink);
+}
+
+.badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #191815;
+  color: var(--muted);
+}
+
+.badge.behind,
+.badge.missing {
+  border-color: rgba(255, 125, 105, 0.28);
+  background: rgba(255, 125, 105, 0.08);
+  color: #ffb2a4;
+}
+
+.badge.ahead,
+.badge.on-track,
+.badge.ready {
+  border-color: rgba(114, 211, 159, 0.28);
+  background: rgba(114, 211, 159, 0.08);
+  color: #9ce8bc;
+}
+
+.phase-block {
+  margin-top: 12px;
+}
+
+.block-label {
+  color: var(--muted);
+}
+
+.block-label span {
+  color: #7f786f;
+}
+
+.phase-list {
+  gap: 5px;
+}
+
+.phase-row {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.phase-row:hover {
+  border-color: var(--line);
+  background: #24211d;
+  color: var(--ink);
+}
+
+.phase-row.active {
+  border-color: rgba(217, 119, 87, 0.4);
+  background: rgba(217, 119, 87, 0.12);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.phase-dot {
+  border-color: var(--line);
+  background: #141310;
+  color: var(--muted);
+}
+
+.phase-row.active .phase-dot,
+.phase-dot.done {
+  border-color: rgba(114, 211, 159, 0.3);
+  background: rgba(114, 211, 159, 0.14);
+  color: var(--green);
+}
+
+.phase-workbench {
+  display: grid;
+  gap: 16px;
+  border-color: rgba(244, 239, 230, 0.14);
+  background:
+    linear-gradient(180deg, rgba(36, 33, 29, 0.98), rgba(24, 23, 20, 0.98)),
+    var(--panel);
+}
+
+.workbench-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workbench-header .title {
+  font-size: 34px;
+}
+
+.workbench-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workbench-focus-list {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-note-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #1a1815;
+  padding: 14px;
+}
+
+.focus-note-card.focus-done {
+  border-color: rgba(114, 211, 159, 0.28);
+  background: linear-gradient(180deg, rgba(29, 48, 37, 0.38), #1a1815);
+}
+
+.focus-note-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focus-note-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 720;
+  line-height: 1.32;
+}
+
+.focus-state {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #24211d;
+  color: var(--muted);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.focus-done .focus-state {
+  border-color: rgba(114, 211, 159, 0.3);
+  background: rgba(114, 211, 159, 0.12);
+  color: #9ce8bc;
+}
+
+.note-toolbar {
+  display: inline-flex;
+  width: fit-content;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #24211d;
+  padding: 4px;
+}
+
+.note-toolbar .btn,
+.format-btn {
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 9px;
+}
+
+.format-btn:hover {
+  border-color: var(--line);
+  background: #302d28;
+  color: var(--ink);
+}
+
+.rich-note-editor {
+  min-height: 170px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #12110f;
+  color: var(--ink);
+  padding: 14px;
+  font-size: 15px;
+  line-height: 1.66;
+  outline: none;
+}
+
+.rich-note-editor:focus {
+  border-color: rgba(217, 119, 87, 0.72);
+  background: #161411;
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.12);
+}
+
+.rich-note-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #766f66;
+}
+
+.rich-note-editor ul,
+.workflow-note-body ul {
+  margin: 8px 0;
+  padding-left: 1.25rem;
+}
+
+.rich-note-editor li,
+.workflow-note-body li {
+  margin: 4px 0;
+}
+
+.focus-note-footer,
+.workbench-complete-row,
+.workbench-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.focus-note-footer {
+  justify-content: flex-end;
+}
+
+.focus-complete-btn {
+  min-height: 34px;
+}
+
+.workbench-complete-row {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.coach-dock,
+.coach-panel,
+.google-docs-box {
+  background: linear-gradient(180deg, rgba(33, 31, 28, 0.96), rgba(25, 24, 21, 0.96));
+}
+
+.thread {
+  border-color: var(--line);
+  background: #151412;
+}
+
+.bubble {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.message.user .bubble {
+  background: #d97757;
+  color: #17120f;
+}
+
+.message.coach .bubble,
+.message.review .bubble {
+  border: 1px solid var(--line);
+  background: #24211d;
+  color: var(--ink);
+}
+
+.banner {
+  border: 1px solid rgba(217, 119, 87, 0.32);
+  border-radius: 12px;
+  background: rgba(217, 119, 87, 0.12);
+  color: #ffd1bf;
+}
+
+.empty-hero,
+.journal-hero {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #24211d, #1a1815);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+
+.empty-hero .title,
+.journal-hero .journal-title,
+.empty-hero .eyebrow,
+.journal-hero .eyebrow {
+  color: var(--ink);
+}
+
+.journal-hero p {
+  color: var(--muted);
+}
+
+.journal-title {
+  font-size: 44px;
+  font-weight: 760;
+  line-height: 1.04;
+}
+
+.workflow-note-card {
+  background: #1a1815;
+}
+
+.workflow-note-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-note-card h4 {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.workflow-note-body {
+  color: var(--muted);
+}
+
+.sermon-card:hover {
+  border-color: rgba(217, 119, 87, 0.36);
+  transform: none;
+  box-shadow: var(--shadow-soft);
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+  }
+
+  .workspace-tools {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-grid,
+  .workspace-tools {
+    grid-template-columns: 1fr;
+    grid-column: auto;
+  }
+
+  .workbench-header {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench-status,
+  .workbench-complete-row,
+  .focus-note-footer {
+    justify-content: flex-start;
+  }
+
+  .workbench-header .title,
+  .title {
+    font-size: 24px;
+  }
+
+  .journal-title {
+    font-size: 32px;
+  }
+
+  .note-toolbar {
+    width: 100%;
+  }
+}

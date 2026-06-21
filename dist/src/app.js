@@ -482,6 +482,7 @@ function normalizeSermon(sermon) {
     length: sermon.length || "40",
     format: sermon.format || "Full manuscript",
     completed: Array.isArray(sermon.completed) ? sermon.completed : [],
+    focusCompleted: sermon.focusCompleted && typeof sermon.focusCompleted === "object" ? sermon.focusCompleted : {},
     activePhase: sermon.activePhase || "plan",
     thread: Array.isArray(sermon.thread) ? sermon.thread : [],
     notes: sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {},
@@ -1022,7 +1023,6 @@ function renderWorkspace(active) {
       </aside>
       <div class="stack workspace-writing">
         ${renderPhasePanel(active, phase)}
-        ${renderNotes(active, phase)}
       </div>
       <aside class="stack workspace-tools">
         ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
@@ -1150,22 +1150,26 @@ function renderWorkflow(active, currentPhase) {
 function renderPhasePanel(active, phase) {
   const phaseIndex = PHASES.findIndex((item) => item.id === phase.id);
   const complete = active.completed.includes(phase.id);
+  const doneCount = getPhaseFocusItems(active, phase).filter((item) => item.done).length;
   return `
-    <section class="panel panel-pad">
-      <div class="section-head">
+    <section class="panel panel-pad phase-workbench">
+      <div class="workbench-header">
         <div>
           <span class="eyebrow">Step ${phaseIndex + 1} of ${PHASES.length} - ${escapeHtml(BLOCKS[phase.block].label)}</span>
           <h1 class="title">${escapeHtml(phase.name)}</h1>
+          <p class="phase-focus">${escapeHtml(phase.focus)}</p>
         </div>
-        ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
+        <div class="workbench-status">
+          ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
+          <span class="badge neutral">${doneCount}/${phase.doItems.length} focus points</span>
+        </div>
       </div>
-      <p class="phase-focus">${escapeHtml(phase.focus)}</p>
-      <ul class="todo-list">
-        ${phase.doItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-      </ul>
+      <div class="focus-note-list workbench-focus-list">
+        ${phase.doItems.map((item, index) => renderFocusNoteCard(active, phase, item, index)).join("")}
+      </div>
       ${
         phase.actions
-          ? `<div class="action-row">${phase.actions
+          ? `<div class="action-row workbench-coach-actions">${phase.actions
               .map(
                 (action, index) =>
                   `<button class="btn" data-action="phase-action" data-action-index="${index}" ${ui.loading ? "disabled" : ""}>${escapeHtml(action.label)}</button>`,
@@ -1173,9 +1177,11 @@ function renderPhasePanel(active, phase) {
               .join("")}</div>`
           : ""
       }
-      <div class="action-row">
+      <div class="action-row workbench-complete-row">
+        <button class="btn" data-action="export-active">Export sermon</button>
+        <button class="btn" data-action="copy-active">Copy</button>
         <button class="btn ${complete ? "" : "btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
-          ${complete ? "Completed - undo" : "Mark complete"}
+          ${complete ? "Phase complete - undo" : "Mark phase complete"}
         </button>
       </div>
     </section>
@@ -1185,10 +1191,10 @@ function renderPhasePanel(active, phase) {
 function renderDevotionalPanel(phase) {
   if (phase.id !== "heart") {
     return `
-      <section class="panel panel-pad">
-        <span class="eyebrow">Private work</span>
-        <p class="phase-focus">This phase is between you and the Lord. Capture notes in the rail when you want to keep them with the sermon.</p>
-      </section>
+	      <section class="panel panel-pad">
+	        <span class="eyebrow">Private work</span>
+	        <p class="phase-focus">This phase is between you and the Lord. Capture what needs to be kept inside the focus boxes for this step.</p>
+	      </section>
     `;
   }
   return `
@@ -1262,35 +1268,18 @@ function renderMessage(message) {
   `;
 }
 
-function renderNotes(active, phase) {
-  return `
-    <section class="panel panel-pad stack note-rail writing-panel">
-      <div>
-        <span class="eyebrow">Notes</span>
-        <h2 class="title">${escapeHtml(phase.name)}</h2>
-        <p class="note-guide">Work through one focus point at a time. Each box saves automatically, syncs to Google Docs, and appears in the Notes library.</p>
-      </div>
-      <div class="focus-note-list">
-        ${phase.doItems.map((item, index) => renderFocusNoteCard(active, phase, item, index)).join("")}
-      </div>
-      <div class="action-row">
-        <button class="btn" data-action="export-active">Export sermon</button>
-        <button class="btn" data-action="copy-active">Copy</button>
-      </div>
-    </section>
-  `;
-}
-
 function renderFocusNoteCard(active, phase, item, index) {
   const key = noteItemKey(phase.id, index);
   const value = getFocusNote(active, phase.id, index);
+  const done = isFocusComplete(active, key);
   return `
-    <article class="focus-note-card">
+    <article class="focus-note-card ${done ? "focus-done" : ""}">
       <div class="focus-note-head">
         <div>
           <span class="eyebrow">Focus ${index + 1}</span>
           <h3>${escapeHtml(item)}</h3>
         </div>
+        <span class="focus-state">${done ? "Done" : "Open"}</span>
       </div>
       ${renderRichToolbar(key)}
       <div
@@ -1302,6 +1291,11 @@ function renderFocusNoteCard(active, phase, item, index) {
         data-index="${index}"
         data-placeholder="Type notes for this focus point..."
       >${sanitizeRichHtml(value)}</div>
+      <div class="focus-note-footer">
+        <button class="btn focus-complete-btn ${done ? "" : "btn-primary"}" data-action="toggle-focus-complete" data-note-key="${attr(key)}">
+          ${done ? "Focus complete - undo" : "Mark focus complete"}
+        </button>
+      </div>
     </article>
   `;
 }
@@ -1325,14 +1319,21 @@ function getFocusNote(active, phaseId, index) {
   return active?.notes?.[key] || "";
 }
 
+function isFocusComplete(sermon, noteKey) {
+  return Boolean(sermon?.focusCompleted?.[noteKey]);
+}
+
 function getPhaseFocusItems(sermon, phase) {
   return phase.doItems.map((prompt, index) => {
+    const key = noteItemKey(phase.id, index);
     const html = getFocusNote(sermon, phase.id, index);
     return {
+      key,
       index,
       prompt,
       html,
       text: richHtmlToText(html),
+      done: isFocusComplete(sermon, key),
     };
   });
 }
@@ -1341,7 +1342,7 @@ function getPhaseFocusNotesText(sermon, phase, includeEmpty = false) {
   const lines = [];
   for (const item of getPhaseFocusItems(sermon, phase)) {
     if (!includeEmpty && !item.text) continue;
-    lines.push(`${item.index + 1}. ${item.prompt}`);
+    lines.push(`${item.done ? "[x]" : "[ ]"} ${item.index + 1}. ${item.prompt}`);
     lines.push(item.text || "(No notes yet.)");
     lines.push("");
   }
@@ -1513,8 +1514,11 @@ function renderWorkflowPhaseNotes(sermon, phaseGroup) {
 
 function renderWorkflowNoteCard(note) {
   return `
-    <article class="workflow-note-card">
-      <span class="eyebrow">Focus ${note.index + 1}</span>
+    <article class="workflow-note-card ${note.done ? "focus-done" : ""}">
+      <div class="workflow-note-card-head">
+        <span class="eyebrow">Focus ${note.index + 1}</span>
+        <span class="focus-state">${note.done ? "Done" : "Open"}</span>
+      </div>
       <h4>${escapeHtml(note.prompt)}</h4>
       <div class="workflow-note-body">${sanitizeRichHtml(note.html)}</div>
     </article>
@@ -1839,6 +1843,19 @@ function toggleComplete(phaseId) {
     showBanner(phase.enc);
   }
   updateActive(patch);
+  render();
+}
+
+function toggleFocusComplete(noteKey) {
+  const active = getActive();
+  if (!active || !noteKey) return;
+  const focusCompleted = { ...(active.focusCompleted || {}) };
+  if (focusCompleted[noteKey]) {
+    delete focusCompleted[noteKey];
+  } else {
+    focusCompleted[noteKey] = true;
+  }
+  updateActive({ focusCompleted });
   render();
 }
 
@@ -2767,6 +2784,9 @@ document.addEventListener("click", (event) => {
   }
   if (action === "toggle-complete") {
     toggleComplete(target.dataset.phase);
+  }
+  if (action === "toggle-focus-complete") {
+    toggleFocusComplete(target.dataset.noteKey);
   }
   if (action === "phase-action") {
     tapPhaseAction(Number(target.dataset.actionIndex));
