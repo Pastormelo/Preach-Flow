@@ -2113,8 +2113,8 @@ body {
   --panel-3: #fff1f7;
   --line: rgba(35, 17, 64, 0.12);
   --line-strong: rgba(35, 17, 64, 0.22);
-  --accent: #ff2e88;
-  --accent-dark: #7918f2;
+  --accent: #ff953e;
+  --accent-dark: #ffb76b;
   --gold: #ff7a18;
   --amber: #ff7a18;
   --green: #19b57a;
@@ -2163,7 +2163,7 @@ body {
   right: clamp(16px, 2.3vw, 34px);
   bottom: 0;
   height: 2px;
-  background: linear-gradient(90deg, #ff7a18, #ff2e88, #7918f2);
+  background: linear-gradient(90deg, #ff953e, #ffb76b, #20242a);
 }
 
 .brand {
@@ -2249,7 +2249,7 @@ body {
 .field-label,
 .metric dt,
 .message .who {
-  color: #8b3cff;
+  color: #f4fbfe;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0;
@@ -2261,7 +2261,7 @@ body {
   height: 6px;
   margin-right: 8px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #ff7a18, #ff2e88);
+  background: linear-gradient(90deg, #ff953e, #ffb76b);
 }
 
 .title {
@@ -2319,7 +2319,7 @@ body {
 .btn-primary,
 .btn-primary:hover {
   border-color: transparent;
-  background: linear-gradient(135deg, #ff7a18, #ff2e88 48%, #7918f2);
+  background: linear-gradient(135deg, #ff953e, #ffb76b 48%, #20242a);
   color: #ffffff;
 }
 
@@ -2330,7 +2330,7 @@ body {
 
 .nav-btn.active {
   border-color: transparent;
-  background: linear-gradient(135deg, #ff7a18, #ff2e88 55%, #7918f2);
+  background: linear-gradient(135deg, #ff953e, #ffb76b 55%, #20242a);
   color: #ffffff;
   box-shadow: 0 18px 34px -24px rgba(255, 46, 136, 0.55);
 }
@@ -2383,7 +2383,7 @@ body {
 
 .progress span,
 .segment.done {
-  background: linear-gradient(90deg, #ff7a18, #ff2e88, #7918f2);
+  background: linear-gradient(90deg, #ff953e, #ffb76b, #20242a);
 }
 
 .badge,
@@ -2397,7 +2397,7 @@ body {
 }
 
 .badge.behind {
-  background: #ff2e88;
+  background: #ff953e;
 }
 
 .block-label {
@@ -2419,7 +2419,7 @@ body {
   border-color: rgba(255, 46, 136, 0.2);
   background: linear-gradient(135deg, rgba(255, 122, 24, 0.14), rgba(255, 46, 136, 0.13));
   color: #15121f;
-  box-shadow: inset 4px 0 0 #ff2e88;
+  box-shadow: inset 4px 0 0 #ff953e;
 }
 
 .phase-dot,
@@ -2432,7 +2432,7 @@ body {
 .phase-row.active .phase-dot,
 .phase-dot.done {
   border-color: transparent;
-  background: linear-gradient(135deg, #ff7a18, #ff2e88);
+  background: linear-gradient(135deg, #ff953e, #ffb76b);
   color: #ffffff;
 }
 
@@ -2445,7 +2445,7 @@ body {
 
 .todo-list li::before {
   border-radius: 999px;
-  background: linear-gradient(135deg, #ff7a18, #ff2e88);
+  background: linear-gradient(135deg, #ff953e, #ffb76b);
 }
 
 .writing-panel {
@@ -2514,7 +2514,7 @@ body {
   border-radius: 30px;
   background:
     radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.2), transparent 13rem),
-    linear-gradient(135deg, #ff7a18, #ff2e88 48%, #7918f2);
+    linear-gradient(135deg, #ff953e, #ffb76b 48%, #20242a);
   color: #ffffff;
   box-shadow: 0 30px 80px -54px rgba(121, 24, 242, 0.62);
 }
@@ -3303,8 +3303,8 @@ body {
   --gold: #d97757;
   --amber: #d97757;
   --rose: #d97757;
-  --blue: #8aa4ff;
-  --green: #72d39f;
+  --blue: #ff953e;
+  --green: #ff953e;
   --danger: #ff7d69;
   --shadow: 0 24px 80px -56px rgba(0, 0, 0, 0.9);
   --shadow-soft: 0 14px 42px -34px rgba(0, 0, 0, 0.86);
@@ -3952,6 +3952,19 @@ body {
   letter-spacing: 0;
 }
 
+::selection {
+  background: rgba(255, 149, 62, 0.72);
+  color: #090a0d;
+}
+
+.rich-note-editor::selection,
+.rich-note-editor *::selection,
+.textarea::selection,
+.input::selection {
+  background: rgba(255, 149, 62, 0.78);
+  color: #090a0d;
+}
+
 .app-shell,
 .app-shell * {
   letter-spacing: 0;
@@ -4006,8 +4019,13 @@ body {
 }
 
 .workspace-grid {
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(250px, 310px);
-  gap: 14px;
+  grid-template-columns: minmax(270px, 330px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.workspace-sidebar {
+  min-width: 0;
 }
 
 .panel,
@@ -4033,6 +4051,13 @@ body {
   font-size: 11px;
   font-weight: 750;
   text-transform: uppercase;
+}
+
+.field label,
+.field-label,
+.metric dt,
+.message .who {
+  color: var(--ink);
 }
 
 .title {
@@ -4205,7 +4230,7 @@ body {
 }
 
 .workbench-header .title {
-  font-size: 34px;
+  font-size: 36px;
 }
 
 .workbench-status {
@@ -4307,6 +4332,44 @@ body {
   background: var(--panel);
 }
 
+.google-docs-box .section-head {
+  align-items: flex-start;
+}
+
+.google-docs-box.google-docs-connected {
+  gap: 10px;
+}
+
+.google-docs-box.google-docs-connected .section-head {
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.google-docs-box.google-docs-connected .mini-title {
+  font-size: 16px;
+}
+
+.google-docs-box.google-docs-connected .meta-line {
+  font-size: 13px;
+}
+
+.google-docs-box.google-docs-connected .toggle-row {
+  font-size: 13px;
+}
+
+.google-docs-box.google-docs-connected .compact-actions {
+  gap: 8px;
+}
+
+.google-docs-box.google-docs-connected .btn {
+  min-height: 34px;
+}
+
+.doc-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+
 .thread,
 .message.coach .bubble,
 .message.review .bubble {
@@ -4375,7 +4438,7 @@ body {
 
 @media (max-width: 1180px) {
   .workspace-grid {
-    grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+    grid-template-columns: minmax(245px, 300px) minmax(0, 1fr);
   }
 
   .workspace-tools {
@@ -4385,6 +4448,7 @@ body {
 
 @media (max-width: 860px) {
   .workspace-grid,
+  .workspace-sidebar,
   .workspace-tools,
   .workbench-header {
     grid-template-columns: 1fr;

@@ -1013,23 +1013,21 @@ function renderSermonCard(sermon) {
 function renderWorkspace(active) {
   const phase = getPhase(active);
   return `
-    <section class="workspace-grid">
-      <aside class="stack">
-        ${renderSermonSummary(active)}
-        ${renderSermonDetails(active)}
-        ${renderClock(active)}
-        ${renderWorkflow(active, phase)}
-      </aside>
-      <div class="stack workspace-writing">
-        ${renderPhasePanel(active, phase)}
-      </div>
-      <aside class="stack workspace-tools">
-        ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
-        ${renderGoogleDocsPanel(active)}
-      </aside>
-    </section>
-  `;
-}
+	    <section class="workspace-grid">
+	      <aside class="stack workspace-sidebar">
+	        ${renderSermonSummary(active)}
+	        ${renderSermonDetails(active)}
+	        ${renderClock(active)}
+	        ${renderWorkflow(active, phase)}
+	        ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
+	        ${renderGoogleDocsPanel(active)}
+	      </aside>
+	      <div class="stack workspace-writing">
+	        ${renderPhasePanel(active, phase)}
+	      </div>
+	    </section>
+	  `;
+	}
 
 function renderSermonSummary(active) {
   const status = sermonStatus(active);
@@ -1374,31 +1372,32 @@ function renderGoogleDocsPanel(active) {
       ? connected
         ? "Connect a Google Doc to this sermon"
         : "Connect Google to create a Doc"
-      : "Add GOOGLE_CLIENT_ID in Vercel";
+	      : "Add GOOGLE_CLIENT_ID in Vercel";
+  const connectedClass = doc?.id ? "google-docs-connected" : "";
+  const title = doc?.id ? "Docs sync" : "Live sermon doc";
 
-  return `
-    <div class="google-docs-box">
-      <div class="section-head">
-        <div>
-          <span class="eyebrow">Google Docs</span>
-          <h3 class="mini-title">${doc?.title ? escapeHtml(doc.title) : "Live sermon doc"}</h3>
-        </div>
-        <span class="google-status-dot ${attr(ui.google.statusKey || "neutral")}" data-google-dot></span>
-      </div>
-      <p class="meta-line" data-google-status>${escapeHtml(status)}</p>
-      ${
-        doc?.url
-          ? `<a class="doc-link" href="${attr(doc.url)}" target="_blank" rel="noopener">Open linked Google Doc</a>`
-          : ""
-      }
-      <label class="toggle-row">
-        <input type="checkbox" data-action="google-autosync" ${autoSync ? "checked" : ""} ${doc?.id ? "" : "disabled"} />
-        <span>Auto-sync after edits</span>
-      </label>
-      <div class="action-row compact-actions">
-        ${
-          configured && !connected
-            ? `<button class="btn" data-action="google-connect" ${ui.google.loading ? "disabled" : ""}>Connect Google</button>`
+	  return `
+	    <div class="google-docs-box ${connectedClass}">
+	      <div class="section-head">
+	        <div>
+	          <span class="eyebrow">Google Docs</span>
+	          <h3 class="mini-title">${escapeHtml(title)}</h3>
+	        </div>
+	      </div>
+	      <p class="meta-line" data-google-status>${escapeHtml(status)}</p>
+	      <label class="toggle-row">
+	        <input type="checkbox" data-action="google-autosync" ${autoSync ? "checked" : ""} ${doc?.id ? "" : "disabled"} />
+	        <span>Auto-sync after edits</span>
+	      </label>
+	      <div class="action-row compact-actions">
+	        ${
+	          doc?.url
+	            ? `<a class="btn doc-link" href="${attr(doc.url)}" target="_blank" rel="noopener">Open Doc</a>`
+	            : ""
+	        }
+	        ${
+	          configured && !connected
+	            ? `<button class="btn" data-action="google-connect" ${ui.google.loading ? "disabled" : ""}>Connect Google</button>`
             : ""
         }
         ${
