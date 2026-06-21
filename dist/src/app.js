@@ -482,7 +482,6 @@ function normalizeSermon(sermon) {
     length: sermon.length || "40",
     format: sermon.format || "Full manuscript",
     completed: Array.isArray(sermon.completed) ? sermon.completed : [],
-    focusCompleted: sermon.focusCompleted && typeof sermon.focusCompleted === "object" ? sermon.focusCompleted : {},
     activePhase: sermon.activePhase || "plan",
     thread: Array.isArray(sermon.thread) ? sermon.thread : [],
     notes: sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {},
@@ -1150,7 +1149,6 @@ function renderWorkflow(active, currentPhase) {
 function renderPhasePanel(active, phase) {
   const phaseIndex = PHASES.findIndex((item) => item.id === phase.id);
   const complete = active.completed.includes(phase.id);
-  const doneCount = getPhaseFocusItems(active, phase).filter((item) => item.done).length;
   return `
     <section class="panel panel-pad phase-workbench">
       <div class="workbench-header">
@@ -1161,7 +1159,7 @@ function renderPhasePanel(active, phase) {
         </div>
         <div class="workbench-status">
           ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
-          <span class="badge neutral">${doneCount}/${phase.doItems.length} focus points</span>
+          <span class="badge neutral">${phase.doItems.length} focus points</span>
         </div>
       </div>
       <div class="focus-note-list workbench-focus-list">
@@ -1271,15 +1269,13 @@ function renderMessage(message) {
 function renderFocusNoteCard(active, phase, item, index) {
   const key = noteItemKey(phase.id, index);
   const value = getFocusNote(active, phase.id, index);
-  const done = isFocusComplete(active, key);
   return `
-    <article class="focus-note-card ${done ? "focus-done" : ""}">
+    <article class="focus-note-card">
       <div class="focus-note-head">
         <div>
           <span class="eyebrow">Focus ${index + 1}</span>
           <h3>${escapeHtml(item)}</h3>
         </div>
-        <span class="focus-state">${done ? "Done" : "Open"}</span>
       </div>
       ${renderRichToolbar(key)}
       <div
@@ -1291,11 +1287,6 @@ function renderFocusNoteCard(active, phase, item, index) {
         data-index="${index}"
         data-placeholder="Type notes for this focus point..."
       >${sanitizeRichHtml(value)}</div>
-      <div class="focus-note-footer">
-        <button class="btn focus-complete-btn ${done ? "" : "btn-primary"}" data-action="toggle-focus-complete" data-note-key="${attr(key)}">
-          ${done ? "Focus complete - undo" : "Mark focus complete"}
-        </button>
-      </div>
     </article>
   `;
 }
@@ -1319,10 +1310,6 @@ function getFocusNote(active, phaseId, index) {
   return active?.notes?.[key] || "";
 }
 
-function isFocusComplete(sermon, noteKey) {
-  return Boolean(sermon?.focusCompleted?.[noteKey]);
-}
-
 function getPhaseFocusItems(sermon, phase) {
   return phase.doItems.map((prompt, index) => {
     const key = noteItemKey(phase.id, index);
@@ -1333,7 +1320,6 @@ function getPhaseFocusItems(sermon, phase) {
       prompt,
       html,
       text: richHtmlToText(html),
-      done: isFocusComplete(sermon, key),
     };
   });
 }
@@ -1342,7 +1328,7 @@ function getPhaseFocusNotesText(sermon, phase, includeEmpty = false) {
   const lines = [];
   for (const item of getPhaseFocusItems(sermon, phase)) {
     if (!includeEmpty && !item.text) continue;
-    lines.push(`${item.done ? "[x]" : "[ ]"} ${item.index + 1}. ${item.prompt}`);
+    lines.push(`${item.index + 1}. ${item.prompt}`);
     lines.push(item.text || "(No notes yet.)");
     lines.push("");
   }
@@ -1514,10 +1500,9 @@ function renderWorkflowPhaseNotes(sermon, phaseGroup) {
 
 function renderWorkflowNoteCard(note) {
   return `
-    <article class="workflow-note-card ${note.done ? "focus-done" : ""}">
+    <article class="workflow-note-card">
       <div class="workflow-note-card-head">
         <span class="eyebrow">Focus ${note.index + 1}</span>
-        <span class="focus-state">${note.done ? "Done" : "Open"}</span>
       </div>
       <h4>${escapeHtml(note.prompt)}</h4>
       <div class="workflow-note-body">${sanitizeRichHtml(note.html)}</div>
@@ -1843,19 +1828,6 @@ function toggleComplete(phaseId) {
     showBanner(phase.enc);
   }
   updateActive(patch);
-  render();
-}
-
-function toggleFocusComplete(noteKey) {
-  const active = getActive();
-  if (!active || !noteKey) return;
-  const focusCompleted = { ...(active.focusCompleted || {}) };
-  if (focusCompleted[noteKey]) {
-    delete focusCompleted[noteKey];
-  } else {
-    focusCompleted[noteKey] = true;
-  }
-  updateActive({ focusCompleted });
   render();
 }
 
@@ -2784,9 +2756,6 @@ document.addEventListener("click", (event) => {
   }
   if (action === "toggle-complete") {
     toggleComplete(target.dataset.phase);
-  }
-  if (action === "toggle-focus-complete") {
-    toggleFocusComplete(target.dataset.noteKey);
   }
   if (action === "phase-action") {
     tapPhaseAction(Number(target.dataset.actionIndex));

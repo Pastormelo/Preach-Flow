@@ -3660,11 +3660,6 @@ body {
   padding: 14px;
 }
 
-.focus-note-card.focus-done {
-  border-color: rgba(114, 211, 159, 0.28);
-  background: linear-gradient(180deg, rgba(29, 48, 37, 0.38), #1a1815);
-}
-
 .focus-note-head {
   display: flex;
   align-items: start;
@@ -3678,23 +3673,6 @@ body {
   font-size: 19px;
   font-weight: 720;
   line-height: 1.32;
-}
-
-.focus-state {
-  flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #24211d;
-  color: var(--muted);
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.focus-done .focus-state {
-  border-color: rgba(114, 211, 159, 0.3);
-  background: rgba(114, 211, 159, 0.12);
-  color: #9ce8bc;
 }
 
 .note-toolbar {
@@ -3765,14 +3743,6 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-}
-
-.focus-note-footer {
-  justify-content: flex-end;
-}
-
-.focus-complete-btn {
-  min-height: 34px;
 }
 
 .workbench-complete-row {
@@ -3895,6 +3865,534 @@ body {
   .workbench-status,
   .workbench-complete-row,
   .focus-note-footer {
+    justify-content: flex-start;
+  }
+
+  .workbench-header .title,
+  .title {
+    font-size: 24px;
+  }
+
+  .journal-title {
+    font-size: 32px;
+  }
+
+  .note-toolbar {
+    width: 100%;
+  }
+}
+
+/* One Family simple orange + black refresh */
+@font-face {
+  font-family: "OFC Montserrat";
+  src: url("../assets/fonts/Montserrat-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OFC Montserrat";
+  src: url("../assets/fonts/Montserrat-SemiBold.ttf") format("truetype");
+  font-weight: 650;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OFC Montserrat";
+  src: url("../assets/fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 750;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OFC Montserrat";
+  src: url("../assets/fonts/Montserrat-ExtraBold.ttf") format("truetype");
+  font-weight: 850;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #090a0d;
+  --bg-2: #11141a;
+  --ink: #f4fbfe;
+  --muted: #a8b0b8;
+  --panel: #20242a;
+  --panel-solid: #20242a;
+  --panel-2: #2b3139;
+  --panel-3: #15191f;
+  --line: rgba(244, 251, 254, 0.12);
+  --line-strong: rgba(255, 149, 62, 0.54);
+  --accent: #ff953e;
+  --accent-dark: #ffb76b;
+  --gold: #ff953e;
+  --amber: #ff953e;
+  --rose: #ff953e;
+  --blue: #ff953e;
+  --green: #ff953e;
+  --danger: #ffb76b;
+  --shadow: none;
+  --shadow-soft: none;
+}
+
+html,
+body {
+  background: var(--bg);
+}
+
+body {
+  color: var(--ink);
+  font-family:
+    "OFC Montserrat", Montserrat, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+.app-shell,
+.app-shell * {
+  letter-spacing: 0;
+}
+
+.app-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 149, 62, 0.06), transparent 180px),
+    var(--bg);
+}
+
+.topbar {
+  border-bottom: 1px solid rgba(255, 149, 62, 0.22);
+  background: rgba(9, 10, 13, 0.94);
+  box-shadow: none;
+}
+
+.brand {
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 149, 62, 0.32);
+  border-radius: 12px;
+  background: var(--panel);
+  filter: none;
+}
+
+.brand-name {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.brand-name span,
+.eyebrow {
+  color: var(--accent);
+}
+
+.brand-kicker {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.app-main {
+  width: min(1480px, 100%);
+  padding: 18px 22px 34px;
+}
+
+.workspace-grid {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(250px, 310px);
+  gap: 14px;
+}
+
+.panel,
+.sermon-card,
+.google-docs-box,
+.quick-card,
+.key-panel,
+.auth-panel-compact,
+.workflow-note-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.panel-pad {
+  padding: 17px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.title {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 850;
+  line-height: 1.08;
+}
+
+.mini-title {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.subtle,
+.meta-line,
+.helper-text,
+.note-guide,
+.phase-focus,
+.block-label,
+.block-label span {
+  color: var(--muted);
+}
+
+.phase-focus {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.62;
+}
+
+.btn,
+.input,
+.select,
+.textarea,
+.status-line,
+.doc-link {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.btn,
+.status-line,
+.input,
+.select,
+.textarea {
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--ink);
+}
+
+.btn {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-weight: 650;
+}
+
+.btn:hover,
+.nav-btn:hover,
+.status-button:hover,
+.format-btn:hover {
+  border-color: rgba(255, 149, 62, 0.45);
+  background: #252b33;
+  color: var(--ink);
+  transform: none;
+}
+
+.btn-primary,
+.nav-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #090a0d;
+}
+
+.btn-danger {
+  border-color: rgba(255, 149, 62, 0.34);
+  background: transparent;
+  color: var(--accent-dark);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 149, 62, 0.14);
+}
+
+.status-line {
+  color: var(--muted);
+}
+
+.status-dot.ready,
+.status-dot.missing,
+.google-status-dot.ready,
+.google-status-dot.missing,
+.google-status-dot.syncing {
+  background: var(--accent);
+}
+
+.progress,
+.segment {
+  border-color: transparent;
+  background: #11141a;
+}
+
+.progress span,
+.segment.done {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.metric dd,
+.metric dt {
+  color: var(--ink);
+}
+
+.badge,
+.badge.behind,
+.badge.missing,
+.badge.ahead,
+.badge.on-track,
+.badge.ready {
+  border: 1px solid rgba(255, 149, 62, 0.24);
+  background: rgba(255, 149, 62, 0.1);
+  color: var(--accent-dark);
+}
+
+.phase-row {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.phase-row:hover {
+  border-color: var(--line);
+  background: #252b33;
+  color: var(--ink);
+}
+
+.phase-row.active {
+  border-color: rgba(255, 149, 62, 0.42);
+  background: rgba(255, 149, 62, 0.12);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.phase-dot,
+.phase-row.active .phase-dot,
+.phase-dot.done {
+  border-color: rgba(244, 251, 254, 0.14);
+  background: #11141a;
+  color: var(--accent);
+}
+
+.phase-workbench {
+  display: grid;
+  gap: 16px;
+  border-color: rgba(255, 149, 62, 0.24);
+  background: var(--panel);
+}
+
+.workbench-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.workbench-header .title {
+  font-size: 34px;
+}
+
+.workbench-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workbench-focus-list {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-note-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #15191f;
+  padding: 14px;
+}
+
+.focus-note-head {
+  display: block;
+}
+
+.focus-note-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.32;
+}
+
+.note-toolbar {
+  display: inline-flex;
+  width: fit-content;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-3);
+  padding: 4px;
+}
+
+.note-toolbar .btn,
+.format-btn {
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 9px;
+}
+
+.rich-note-editor {
+  min-height: 170px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #090a0d;
+  color: var(--ink);
+  padding: 14px;
+  font-size: 15px;
+  line-height: 1.66;
+  outline: none;
+}
+
+.rich-note-editor:focus {
+  border-color: var(--accent);
+  background: #0f1217;
+  box-shadow: 0 0 0 3px rgba(255, 149, 62, 0.14);
+}
+
+.rich-note-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #747f8b;
+}
+
+.workbench-complete-row,
+.workbench-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workbench-complete-row {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.coach-dock,
+.coach-panel,
+.google-docs-box,
+.thread,
+.message.coach .bubble,
+.message.review .bubble {
+  background: var(--panel);
+}
+
+.thread,
+.message.coach .bubble,
+.message.review .bubble {
+  border-color: var(--line);
+}
+
+.message.user .bubble {
+  background: var(--accent);
+  color: #090a0d;
+}
+
+.bubble {
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.banner {
+  border: 1px solid rgba(255, 149, 62, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 149, 62, 0.11);
+  color: var(--accent-dark);
+}
+
+.empty-hero,
+.journal-hero {
+  border: 1px solid rgba(255, 149, 62, 0.24);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.empty-hero .title,
+.journal-hero .journal-title,
+.empty-hero .eyebrow,
+.journal-hero .eyebrow {
+  color: var(--ink);
+}
+
+.journal-hero p,
+.workflow-note-body {
+  color: var(--muted);
+}
+
+.journal-title {
+  color: var(--ink);
+  font-size: 42px;
+  font-weight: 850;
+  line-height: 1.05;
+}
+
+.workflow-note-card {
+  background: #15191f;
+}
+
+.workflow-note-card h4 {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.sermon-card:hover {
+  border-color: rgba(255, 149, 62, 0.36);
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  }
+
+  .workspace-tools {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 860px) {
+  .workspace-grid,
+  .workspace-tools,
+  .workbench-header {
+    grid-template-columns: 1fr;
+    grid-column: auto;
+  }
+
+  .workbench-status,
+  .workbench-complete-row {
     justify-content: flex-start;
   }
 

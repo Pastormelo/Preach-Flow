@@ -529,6 +529,35 @@ function attr(value) {
   return escapeHtml(value);
 }
 
+function sanitizeRichHtml(value) {
+  const template = document.createElement("template");
+  template.innerHTML = String(value || "");
+  const allowed = new Set(["B", "STRONG", "I", "EM", "UL", "OL", "LI", "DIV", "P", "BR"]);
+  for (const node of [...template.content.querySelectorAll("*")]) {
+    if (!allowed.has(node.tagName)) {
+      node.replaceWith(...node.childNodes);
+      continue;
+    }
+    for (const attrNode of [...node.attributes]) {
+      node.removeAttribute(attrNode.name);
+    }
+  }
+  return template.innerHTML;
+}
+
+function richHtmlToText(value) {
+  const template = document.createElement("template");
+  template.innerHTML = sanitizeRichHtml(value);
+  for (const li of template.content.querySelectorAll("li")) {
+    li.prepend("- ");
+    li.append("\n");
+  }
+  for (const block of template.content.querySelectorAll("div,p,br")) {
+    block.append("\n");
+  }
+  return template.content.textContent.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function getActive() {
   return state.sermons.find((sermon) => sermon.id === state.activeId) || null;
 }
@@ -644,6 +673,7 @@ function captureFocus() {
   return {
     action: element.dataset.action,
     phase: element.dataset.phase || "",
+    noteKey: element.dataset.noteKey || "",
     start: typeof element.selectionStart === "number" ? element.selectionStart : null,
     end: typeof element.selectionEnd === "number" ? element.selectionEnd : null,
   };
@@ -652,8 +682,15 @@ function captureFocus() {
 function restoreFocus(focus) {
   if (!focus) return;
   requestAnimationFrame(() => {
-    const selector = `[data-action="${focus.action}"]${focus.phase ? `[data-phase="${focus.phase}"]` : ""}`;
-    const element = document.querySelector(selector);
+    let element = null;
+    if (focus.noteKey) {
+      element = [...document.querySelectorAll(`[data-action="${focus.action}"]`)].find(
+        (item) => item.dataset.noteKey === focus.noteKey,
+      );
+    } else {
+      const selector = `[data-action="${focus.action}"]${focus.phase ? `[data-phase="${focus.phase}"]` : ""}`;
+      element = document.querySelector(selector);
+    }
     if (!element) return;
     element.focus({ preventScroll: true });
     if (focus.start !== null && typeof element.setSelectionRange === "function") {
@@ -702,7 +739,7 @@ function renderTopbar(active) {
         }
         <button class="btn nav-btn ${state.view === "workspace" ? "active" : ""}" data-view="workspace">Workspace</button>
         <button class="btn nav-btn ${state.view === "pipeline" ? "active" : ""}" data-view="pipeline">Pipeline</button>
-        <button class="btn nav-btn ${state.view === "journal" ? "active" : ""}" data-view="journal">Journal</button>
+        <button class="btn nav-btn ${state.view === "journal" ? "active" : ""}" data-view="journal">Notes</button>
         <button class="btn nav-btn ${state.view === "review" ? "active" : ""}" data-view="review">Review</button>
         <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
       </div>
@@ -985,11 +1022,9 @@ function renderWorkspace(active) {
       </aside>
       <div class="stack workspace-writing">
         ${renderPhasePanel(active, phase)}
-        ${renderNotes(active, phase)}
       </div>
       <aside class="stack workspace-tools">
         ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
-        ${renderQuickJournal(active, phase)}
         ${renderGoogleDocsPanel(active)}
       </aside>
     </section>
@@ -1115,21 +1150,24 @@ function renderPhasePanel(active, phase) {
   const phaseIndex = PHASES.findIndex((item) => item.id === phase.id);
   const complete = active.completed.includes(phase.id);
   return `
-    <section class="panel panel-pad">
-      <div class="section-head">
+    <section class="panel panel-pad phase-workbench">
+      <div class="workbench-header">
         <div>
           <span class="eyebrow">Step ${phaseIndex + 1} of ${PHASES.length} - ${escapeHtml(BLOCKS[phase.block].label)}</span>
           <h1 class="title">${escapeHtml(phase.name)}</h1>
+          <p class="phase-focus">${escapeHtml(phase.focus)}</p>
         </div>
-        ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
+        <div class="workbench-status">
+          ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
+          <span class="badge neutral">${phase.doItems.length} focus points</span>
+        </div>
       </div>
-      <p class="phase-focus">${escapeHtml(phase.focus)}</p>
-      <ul class="todo-list">
-        ${phase.doItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-      </ul>
+      <div class="focus-note-list workbench-focus-list">
+        ${phase.doItems.map((item, index) => renderFocusNoteCard(active, phase, item, index)).join("")}
+      </div>
       ${
         phase.actions
-          ? `<div class="action-row">${phase.actions
+          ? `<div class="action-row workbench-coach-actions">${phase.actions
               .map(
                 (action, index) =>
                   `<button class="btn" data-action="phase-action" data-action-index="${index}" ${ui.loading ? "disabled" : ""}>${escapeHtml(action.label)}</button>`,
@@ -1137,9 +1175,11 @@ function renderPhasePanel(active, phase) {
               .join("")}</div>`
           : ""
       }
-      <div class="action-row">
+      <div class="action-row workbench-complete-row">
+        <button class="btn" data-action="export-active">Export sermon</button>
+        <button class="btn" data-action="copy-active">Copy</button>
         <button class="btn ${complete ? "" : "btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
-          ${complete ? "Completed - undo" : "Mark complete"}
+          ${complete ? "Phase complete - undo" : "Mark phase complete"}
         </button>
       </div>
     </section>
@@ -1149,10 +1189,10 @@ function renderPhasePanel(active, phase) {
 function renderDevotionalPanel(phase) {
   if (phase.id !== "heart") {
     return `
-      <section class="panel panel-pad">
-        <span class="eyebrow">Private work</span>
-        <p class="phase-focus">This phase is between you and the Lord. Capture notes in the rail when you want to keep them with the sermon.</p>
-      </section>
+	      <section class="panel panel-pad">
+	        <span class="eyebrow">Private work</span>
+	        <p class="phase-focus">This phase is between you and the Lord. Capture what needs to be kept inside the focus boxes for this step.</p>
+	      </section>
     `;
   }
   return `
@@ -1226,23 +1266,76 @@ function renderMessage(message) {
   `;
 }
 
-function renderNotes(active, phase) {
-  const noteValue = getPhaseNoteValue(active, phase);
+function renderFocusNoteCard(active, phase, item, index) {
+  const key = noteItemKey(phase.id, index);
+  const value = getFocusNote(active, phase.id, index);
   return `
-    <section class="panel panel-pad stack note-rail writing-panel">
-      <div>
-        <span class="eyebrow">Write here</span>
-        <h2 class="title">${escapeHtml(phase.name)}</h2>
-        <p class="note-guide">Use this box for the work of the current step. The prompts below are already arranged for this phase, and they sync into the matching Google Doc section.</p>
+    <article class="focus-note-card">
+      <div class="focus-note-head">
+        <div>
+          <span class="eyebrow">Focus ${index + 1}</span>
+          <h3>${escapeHtml(item)}</h3>
+        </div>
       </div>
-      ${renderFormatToolbar("phase-note")}
-      <textarea class="textarea note-editor" data-action="phase-note" data-phase="${attr(phase.id)}" placeholder="Write your notes for this step here.">${escapeHtml(noteValue)}</textarea>
-      <div class="action-row">
-        <button class="btn" data-action="export-active">Export sermon</button>
-        <button class="btn" data-action="copy-active">Copy</button>
-      </div>
-    </section>
+      ${renderRichToolbar(key)}
+      <div
+        class="rich-note-editor"
+        contenteditable="true"
+        data-action="rich-note"
+        data-note-key="${attr(key)}"
+        data-phase="${attr(phase.id)}"
+        data-index="${index}"
+        data-placeholder="Type notes for this focus point..."
+      >${sanitizeRichHtml(value)}</div>
+    </article>
   `;
+}
+
+function renderRichToolbar(key) {
+  return `
+    <div class="note-toolbar compact-toolbar" aria-label="Text formatting">
+      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="bold" title="Bold selected text"><strong>B</strong></button>
+      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="italic" title="Italic selected text"><em>I</em></button>
+      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="bullet" title="Turn selected lines into bullets">Bullets</button>
+    </div>
+  `;
+}
+
+function noteItemKey(phaseId, index) {
+  return `${phaseId}::${index}`;
+}
+
+function getFocusNote(active, phaseId, index) {
+  const key = noteItemKey(phaseId, index);
+  return active?.notes?.[key] || "";
+}
+
+function getPhaseFocusItems(sermon, phase) {
+  return phase.doItems.map((prompt, index) => {
+    const key = noteItemKey(phase.id, index);
+    const html = getFocusNote(sermon, phase.id, index);
+    return {
+      key,
+      index,
+      prompt,
+      html,
+      text: richHtmlToText(html),
+    };
+  });
+}
+
+function getPhaseFocusNotesText(sermon, phase, includeEmpty = false) {
+  const lines = [];
+  for (const item of getPhaseFocusItems(sermon, phase)) {
+    if (!includeEmpty && !item.text) continue;
+    lines.push(`${item.index + 1}. ${item.prompt}`);
+    lines.push(item.text || "(No notes yet.)");
+    lines.push("");
+  }
+
+  const text = lines.join("\n").trim();
+  const legacyNote = typeof sermon.notes?.[phase.id] === "string" ? sermon.notes[phase.id].trim() : "";
+  return text || legacyNote;
 }
 
 function getPhaseNoteValue(active, phase) {
@@ -1328,101 +1421,92 @@ function renderGoogleDocsPanel(active) {
   `;
 }
 
-function renderFormatToolbar(target, compact = false) {
+function renderJournal() {
+  const grouped = collectWorkflowNoteGroups();
   return `
-    <div class="note-toolbar ${compact ? "compact-toolbar" : ""}" aria-label="Text formatting">
-      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="bold" title="Bold selected text"><strong>B</strong></button>
-      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="italic" title="Italic selected text"><em>I</em></button>
-      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="bullet" title="Turn selected lines into bullets">Bullets</button>
-      <button class="btn format-btn" type="button" data-action="format-text" data-target="${attr(target)}" data-format="heading" title="Make selected text a heading">Heading</button>
+    <section class="journal-view notes-library-view">
+      <div class="journal-hero notes-library-hero">
+        <span class="eyebrow">Notes</span>
+        <h1 class="journal-title">Every focus point, filed automatically.</h1>
+        <p>The boxes in the workspace are your notes. This view gathers them by sermon, workflow section, and prompt so nothing lives in a second disconnected journal.</p>
+      </div>
+      <div class="journal-layout notes-library-layout">
+        <aside class="journal-library stack notes-library">
+          ${grouped.length ? grouped.map(renderWorkflowNoteGroup).join("") : renderEmptyJournal()}
+        </aside>
+      </div>
+    </section>
+  `;
+}
+
+function collectWorkflowNoteGroups() {
+  return state.sermons
+    .map((sermon) => {
+      const sections = BLOCKS.map((block, blockIndex) => {
+        const phases = PHASES.filter((phase) => phase.block === blockIndex)
+          .map((phase) => {
+            const notes = getPhaseFocusItems(sermon, phase).filter((note) => note.text);
+            return notes.length ? { phase, notes } : null;
+          })
+          .filter(Boolean);
+        return phases.length ? { block, phases } : null;
+      }).filter(Boolean);
+      const count = sections.reduce(
+        (total, section) => total + section.phases.reduce((phaseTotal, phase) => phaseTotal + phase.notes.length, 0),
+        0,
+      );
+      return count ? { sermon, sections, count } : null;
+    })
+    .filter(Boolean);
+}
+
+function renderWorkflowNoteGroup(group) {
+  return `
+    <section class="panel panel-pad journal-group workflow-note-group">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Sermon</span>
+          <h2 class="mini-title">${escapeHtml(journalSermonLabel(group.sermon))}</h2>
+        </div>
+        <span class="badge neutral">${group.count}</span>
+      </div>
+      ${group.sections
+        .map(
+          (section) => `
+            <div class="journal-section workflow-note-section">
+              <div class="block-label">${escapeHtml(section.block.label)}<span>${escapeHtml(section.block.when)}</span></div>
+              ${section.phases.map((phaseGroup) => renderWorkflowPhaseNotes(group.sermon, phaseGroup)).join("")}
+            </div>
+          `,
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderWorkflowPhaseNotes(sermon, phaseGroup) {
+  return `
+    <div class="workflow-phase-notes">
+      <div class="workflow-phase-head">
+        <h3>${escapeHtml(phaseGroup.phase.name)}</h3>
+        <button class="btn btn-ghost" data-action="open-note-focus" data-sermon="${attr(sermon.id)}" data-phase="${attr(phaseGroup.phase.id)}">Open</button>
+      </div>
+      <div class="workflow-note-list">
+        ${phaseGroup.notes.map((note) => renderWorkflowNoteCard(note)).join("")}
+      </div>
     </div>
   `;
 }
 
-function renderQuickJournal(active, phase) {
+function renderWorkflowNoteCard(note) {
   return `
-    <section class="panel panel-pad stack journal-quick">
-      <div>
-        <span class="eyebrow">Journal</span>
-        <h2 class="title">Quick note</h2>
+    <article class="workflow-note-card">
+      <div class="workflow-note-card-head">
+        <span class="eyebrow">Focus ${note.index + 1}</span>
       </div>
-      <p class="subtle">Capture a thought without leaving this step. It will be filed under this sermon and section.</p>
-      <input class="input" data-action="journal-quick-title" value="${attr(ui.journalDraft.title)}" placeholder="Optional note title" />
-      ${renderFormatToolbar("journal-quick", true)}
-      <textarea class="textarea journal-mini-editor" data-action="journal-quick-body" placeholder="Jot a note, prayer, illustration, question, or application...">${escapeHtml(ui.journalDraft.body)}</textarea>
-      <div class="action-row compact-actions">
-        <button class="btn btn-primary" data-action="save-quick-journal" ${ui.journalDraft.body.trim() ? "" : "disabled"}>Save note</button>
-        <button class="btn" data-view="journal">Open journal</button>
-      </div>
-      <p class="helper-text">Filed under ${escapeHtml(active.passage || "Current sermon")} / ${escapeHtml(phase.name)}.</p>
-    </section>
-  `;
-}
-
-function renderJournal(active) {
-  const editing = ui.journalEditingId
-    ? state.journalEntries.find((entry) => entry.id === ui.journalEditingId)
-    : null;
-  const draft = ui.journalDraft;
-  const selectedSermonId = draft.sermonId || active?.id || "";
-  const selectedPhaseId = draft.phaseId || active?.activePhase || "general";
-  const grouped = groupJournalEntries();
-
-  return `
-    <section class="journal-view">
-      <div class="journal-hero">
-        <span class="eyebrow">Journal</span>
-        <h1 class="journal-title">Notes filed by sermon and section.</h1>
-        <p>Use this for stray ideas, prayers, illustrations, questions, research fragments, and applications. Notes are saved with your app state and organized automatically by course and workflow section.</p>
-      </div>
-      <div class="journal-layout">
-        <form class="panel panel-pad stack journal-editor-panel" data-form="journal-entry">
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">${editing ? "Edit note" : "New note"}</span>
-              <h2 class="title">${editing ? escapeHtml(editing.title || "Untitled note") : "Capture a note"}</h2>
-            </div>
-            ${editing ? `<button class="btn btn-ghost" type="button" data-action="cancel-journal-edit">Cancel</button>` : ""}
-          </div>
-          <div class="form-grid">
-            <div class="field">
-              <label for="journal-sermon">Course / sermon</label>
-              <select id="journal-sermon" class="select" data-action="journal-draft-sermon">
-                <option value="">General journal</option>
-                ${state.sermons
-                  .map(
-                    (sermon) =>
-                      `<option value="${attr(sermon.id)}" ${sermon.id === selectedSermonId ? "selected" : ""}>${escapeHtml(journalSermonLabel(sermon))}</option>`,
-                  )
-                  .join("")}
-              </select>
-            </div>
-            <div class="field">
-              <label for="journal-section">Section</label>
-              <select id="journal-section" class="select" data-action="journal-draft-phase">
-                <option value="general" ${selectedPhaseId === "general" ? "selected" : ""}>General</option>
-                ${PHASES.map(
-                  (phase) => `<option value="${attr(phase.id)}" ${phase.id === selectedPhaseId ? "selected" : ""}>${escapeHtml(phase.name)}</option>`,
-                ).join("")}
-              </select>
-            </div>
-          </div>
-          <div class="field">
-            <label for="journal-title">Title</label>
-            <input id="journal-title" class="input" data-action="journal-draft-title" value="${attr(draft.title || "")}" placeholder="Question, idea, prayer, illustration..." />
-          </div>
-          ${renderFormatToolbar("journal-main")}
-          <textarea id="journal-body" class="textarea note-editor journal-editor" data-action="journal-draft-body" placeholder="Write a note. Use Bold, Italic, Bullets, or Heading above.">${escapeHtml(draft.body || "")}</textarea>
-          <div class="action-row">
-            <button class="btn btn-primary" type="submit" ${draft.body?.trim() ? "" : "disabled"}>${editing ? "Update note" : "Save note"}</button>
-            <button class="btn" type="button" data-action="clear-journal-draft">Clear</button>
-          </div>
-        </form>
-        <aside class="journal-library stack">
-          ${grouped.length ? grouped.map(renderJournalGroup).join("") : renderEmptyJournal()}
-        </aside>
-      </div>
-    </section>
+      <h4>${escapeHtml(note.prompt)}</h4>
+      <div class="workflow-note-body">${sanitizeRichHtml(note.html)}</div>
+    </article>
   `;
 }
 
@@ -1611,8 +1695,8 @@ function renderEmptyJournal() {
   return `
     <section class="panel panel-pad stack journal-empty">
       <span class="eyebrow">No notes yet</span>
-      <h2 class="title">Start with a thought from today’s prep.</h2>
-      <p class="subtle">Journal notes will appear here grouped by sermon and section.</p>
+      <h2 class="title">Start in a focus box.</h2>
+      <p class="subtle">Workspace notes will appear here grouped by sermon, workflow section, and focus point.</p>
     </section>
   `;
 }
@@ -1915,15 +1999,15 @@ function exportMarkdown(sermon) {
 
   for (const block of BLOCKS) {
     lines.push(`### ${block.label}`);
-    for (const phase of PHASES.filter((item) => item.block === BLOCKS.indexOf(block))) {
-      const done = sermon.completed.includes(phase.id) ? "done" : "open";
-      lines.push(`- [${done === "done" ? "x" : " "}] ${phase.name}`);
-      const note = getPhaseNoteValue(sermon, phase).trim();
-      if (note) {
-        lines.push("");
-        lines.push(note);
-        lines.push("");
-      }
+	    for (const phase of PHASES.filter((item) => item.block === BLOCKS.indexOf(block))) {
+	      const done = sermon.completed.includes(phase.id) ? "done" : "open";
+	      lines.push(`- [${done === "done" ? "x" : " "}] ${phase.name}`);
+	      const note = getPhaseFocusNotesText(sermon, phase).trim();
+	      if (note) {
+	        lines.push("");
+	        lines.push(note);
+	        lines.push("");
+	      }
     }
     lines.push("");
   }
@@ -2395,13 +2479,13 @@ function buildGoogleDocText(sermon) {
     lines.push(`Target window: ${block.when}`);
     lines.push("");
 
-    for (const phase of PHASES.filter((item) => item.block === blockIndex)) {
-      const done = sermon.completed.includes(phase.id);
-      const note = getPhaseNoteValue(sermon, phase).trim();
-      lines.push(`${done ? "[x]" : "[ ]"} ${phase.name}`);
-      lines.push(`Focus: ${phase.focus}`);
-      lines.push("Notes:");
-      lines.push(note || "(No notes yet.)");
+	    for (const phase of PHASES.filter((item) => item.block === blockIndex)) {
+	      const done = sermon.completed.includes(phase.id);
+	      const note = getPhaseFocusNotesText(sermon, phase, true).trim();
+	      lines.push(`${done ? "[x]" : "[ ]"} ${phase.name}`);
+	      lines.push(`Focus: ${phase.focus}`);
+	      lines.push("Notes:");
+	      lines.push(note || "(No notes yet.)");
       lines.push("");
     }
   }
@@ -2508,6 +2592,36 @@ function setGoogleStatus(message, key = "neutral") {
   if (label) label.textContent = message;
   const dot = document.querySelector("[data-google-dot]");
   if (dot) dot.className = `google-status-dot ${key}`;
+}
+
+function formatRichNote(noteKey, format) {
+  const editor = findRichNoteEditor(noteKey);
+  if (!editor) return;
+  editor.focus({ preventScroll: true });
+
+  const command =
+    format === "italic"
+      ? "italic"
+      : format === "bullet"
+        ? "insertUnorderedList"
+        : "bold";
+  document.execCommand(command, false, null);
+  persistRichNote(editor);
+}
+
+function findRichNoteEditor(noteKey) {
+  return [...document.querySelectorAll('[data-action="rich-note"]')].find(
+    (editor) => editor.dataset.noteKey === noteKey,
+  );
+}
+
+function persistRichNote(editor) {
+  const active = getActive();
+  if (!active || !editor.dataset.noteKey) return;
+  const clean = sanitizeRichHtml(editor.innerHTML);
+  active.notes[editor.dataset.noteKey] = richHtmlToText(clean) ? clean : "";
+  active.updatedAt = new Date().toISOString();
+  saveState();
 }
 
 function formatEditor(targetKey, format) {
@@ -2670,6 +2784,9 @@ document.addEventListener("click", (event) => {
   if (action === "format-text") {
     formatEditor(target.dataset.target, target.dataset.format);
   }
+  if (action === "format-rich") {
+    formatRichNote(target.dataset.noteKey, target.dataset.format);
+  }
   if (action === "save-quick-journal") {
     const active = getActive();
     const phase = getPhase(active);
@@ -2694,6 +2811,17 @@ document.addEventListener("click", (event) => {
   }
   if (action === "delete-sermon") {
     deleteActive();
+  }
+  if (action === "open-note-focus") {
+    const sermonId = target.dataset.sermon;
+    const phaseId = target.dataset.phase;
+    state.sermons = state.sermons.map((sermon) =>
+      sermon.id === sermonId ? { ...sermon, activePhase: phaseId, updatedAt: new Date().toISOString() } : sermon,
+    );
+    state.activeId = sermonId;
+    state.view = "workspace";
+    saveState();
+    render();
   }
   if (action === "export-active") {
     const active = getActive();
@@ -2789,6 +2917,9 @@ document.addEventListener("input", (event) => {
     active.updatedAt = new Date().toISOString();
     saveState();
   }
+  if (action === "rich-note") {
+    persistRichNote(target);
+  }
   if (action === "pipeline-query") {
     state.query = target.value;
     saveState();
@@ -2847,7 +2978,7 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-text"]')) {
+  if (event.target.closest('[data-action="format-rich"]')) {
     event.preventDefault();
   }
 });

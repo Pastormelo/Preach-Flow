@@ -1,7 +1,11 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Preach Flow mark">
-  <rect x="10" y="10" width="108" height="108" rx="24" fill="#24211D"/>
-  <rect x="10" y="10" width="108" height="108" rx="24" stroke="#5B5147" stroke-width="2"/>
-  <path d="M36 35h30c17.2 0 28.2 9.8 28.2 25.2S83.2 85 66 85H52v20H36V35Zm16 35.7h13.5c7.8 0 12.3-3.7 12.3-10.5 0-6.5-4.5-10.2-12.3-10.2H52v20.7Z" fill="#F4EFE6"/>
-  <path d="M68 95c13.4-7 22.1-18.7 26.1-35" stroke="#D97757" stroke-width="8" stroke-linecap="round"/>
-  <path d="M47 105h48" stroke="#F4EFE6" stroke-width="8" stroke-linecap="round"/>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Preach Flow logo">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#20242A"/>
+  <path d="M31 75c13-6 24-6 33 0 9-6 20-6 33 0v24c-13-6-24-6-33 0-9-6-20-6-33 0V75Z" fill="#F4FBFE"/>
+  <path d="M64 75v24" stroke="#20242A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M38 82c8-3 15-3 21 0M38 90c8-3 15-3 21 0M69 82c6-3 13-3 21 0M69 90c6-3 13-3 21 0" stroke="#20242A" stroke-width="3" stroke-linecap="round"/>
+  <path d="M64 30c9 0 16 7 16 16v13c0 9-7 16-16 16s-16-7-16-16V46c0-9 7-16 16-16Z" fill="#FF953E"/>
+  <path d="M56 45h16M56 53h16M56 61h16" stroke="#20242A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M42 57c0 12 10 22 22 22s22-10 22-22" stroke="#F4FBFE" stroke-width="6" stroke-linecap="round"/>
+  <path d="M64 79v14" stroke="#F4FBFE" stroke-width="6" stroke-linecap="round"/>
+  <path d="M30 55c8-15 21-25 38-29" stroke="#FF953E" stroke-width="7" stroke-linecap="round"/>
 </svg>
