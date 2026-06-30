@@ -1,5 +1,6 @@
 const STORE_KEY = "pulpitos:web:v1";
 const OPENAI_KEY_STORE = "preach-flow:openai-api-key:v1";
+const THEME_STORE = "preach-flow:theme:v1";
 const SUPABASE_SCRIPT = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
@@ -356,6 +357,10 @@ const ui = {
   showNew: false,
   showAuth: false,
   showCoach: false,
+  showSwitcher: false,
+  showDetails: false,
+  showGoogleDocs: false,
+  signinMode: "signin",
   journalEditingId: "",
   journalDraft: {
     sermonId: "",
@@ -380,6 +385,7 @@ const ui = {
     client: null,
     user: null,
     emailInput: "",
+    passwordInput: "",
     loading: false,
     status: "Saved on this device",
     statusKey: "neutral",
@@ -396,13 +402,27 @@ const ui = {
 };
 
 const state = loadState();
+if (!state.theme) state.theme = loadTheme();
 if (!state.view) state.view = "workspace";
 if (!state.query) state.query = "";
 if (!state.filter) state.filter = "all";
 if (!state.reviewMeta) state.reviewMeta = { passage: "", title: "" };
 if (!state.reviewText) state.reviewText = "";
+if (!state.reviewChecks || typeof state.reviewChecks !== "object") state.reviewChecks = {};
 if (!state.google) state.google = { autoSync: true };
 if (!Array.isArray(state.journalEntries)) state.journalEntries = [];
+
+function loadTheme() {
+  const stored = localStorage.getItem(THEME_STORE);
+  if (stored === "light" || stored === "dark") return stored;
+  return "light";
+}
+
+function setTheme(theme) {
+  state.theme = theme === "dark" ? "dark" : "light";
+  localStorage.setItem(THEME_STORE, state.theme);
+  render();
+}
 
 function loadState() {
   try {
@@ -415,6 +435,7 @@ function loadState() {
       filter: parsed.filter || "all",
       reviewMeta: parsed.reviewMeta || { passage: "", title: "" },
       reviewText: parsed.reviewText || "",
+      reviewChecks: parsed.reviewChecks && typeof parsed.reviewChecks === "object" ? parsed.reviewChecks : {},
       google: parsed.google || { autoSync: true },
       journalEntries: Array.isArray(parsed.journalEntries) ? parsed.journalEntries.map(normalizeJournalEntry) : [],
     };
@@ -452,6 +473,7 @@ function stateSnapshot() {
     filter: state.filter,
     reviewMeta: state.reviewMeta,
     reviewText: state.reviewText,
+    reviewChecks: state.reviewChecks,
     google: state.google,
     journalEntries: state.journalEntries,
   };
@@ -468,6 +490,7 @@ function applyStateSnapshot(snapshot) {
   state.filter = snapshot?.filter || "all";
   state.reviewMeta = snapshot?.reviewMeta || { passage: "", title: "" };
   state.reviewText = snapshot?.reviewText || "";
+  state.reviewChecks = snapshot?.reviewChecks && typeof snapshot.reviewChecks === "object" ? snapshot.reviewChecks : {};
   state.google = snapshot?.google || { autoSync: true };
   state.journalEntries = Array.isArray(snapshot?.journalEntries) ? snapshot.journalEntries.map(normalizeJournalEntry) : [];
 }
@@ -484,7 +507,8 @@ function normalizeSermon(sermon) {
     completed: Array.isArray(sermon.completed) ? sermon.completed : [],
     activePhase: sermon.activePhase || "plan",
     thread: Array.isArray(sermon.thread) ? sermon.thread : [],
-    notes: sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {},
+    notes: migratePhaseNotes(sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {}),
+    checklist: sermon.checklist && typeof sermon.checklist === "object" ? sermon.checklist : {},
     googleDoc:
       sermon.googleDoc && typeof sermon.googleDoc === "object"
         ? {
@@ -497,6 +521,30 @@ function normalizeSermon(sermon) {
     createdAt: sermon.createdAt || new Date().toISOString(),
     updatedAt: sermon.updatedAt || new Date().toISOString(),
   };
+}
+
+// The redesign uses one rich-text writing canvas per phase, stored at
+// notes[phaseId]. Earlier builds stored a note per focus item at
+// notes[`${phaseId}::${index}`]. Fold any legacy per-item notes into the
+// single per-phase note so existing work is preserved.
+function migratePhaseNotes(notes) {
+  const next = { ...notes };
+  for (const phase of PHASES) {
+    const itemKeys = Object.keys(next).filter((key) => key.startsWith(`${phase.id}::`));
+    if (!itemKeys.length) continue;
+    const existing = typeof next[phase.id] === "string" ? next[phase.id] : "";
+    const pieces = [];
+    if (existing.trim()) pieces.push(existing);
+    itemKeys
+      .sort((a, b) => Number(a.split("::")[1]) - Number(b.split("::")[1]))
+      .forEach((key) => {
+        const html = typeof next[key] === "string" ? next[key] : "";
+        if (html.trim()) pieces.push(html);
+        delete next[key];
+      });
+    if (pieces.length) next[phase.id] = pieces.join("<br>");
+  }
+  return next;
 }
 
 function normalizeJournalEntry(entry) {
@@ -643,21 +691,37 @@ function sermonStatus(sermon) {
 }
 
 function loadingDots() {
-  return '<span class="loading-dots"><i></i><i></i><i></i></span>';
+  return '<span class="pf-dots"><i></i><i></i><i></i></span>';
 }
 
 function render() {
   const active = getActive();
   const focus = captureFocus();
+  const overlays = `
+    ${ui.showAuth ? renderAuthPanel() : ""}
+    ${ui.showOpenAIKey ? renderOpenAIKeyPanel() : ""}
+    ${ui.showSwitcher ? renderSwitcherModal(active) : ""}
+    ${ui.showDetails && active ? renderDetailsModal(active) : ""}
+    ${ui.showGoogleDocs && active ? renderGoogleDocsModal(active) : ""}
+  `;
+
+  if (state.view === "signin") {
+    app.innerHTML = `
+      <div class="pf-root pf-fade" data-theme="${attr(state.theme)}">
+        ${renderSignin(active)}
+        ${overlays}
+      </div>
+    `;
+    restoreFocus(focus);
+    return;
+  }
+
   app.innerHTML = `
-    <div class="app-shell">
+    <div class="pf-root" data-theme="${attr(state.theme)}">
       ${renderTopbar(active)}
-      <main class="app-main">
-        ${ui.banner ? `<div class="banner">${escapeHtml(ui.banner)}</div>` : ""}
-        ${ui.showAuth ? renderAuthPanel() : ""}
-        ${ui.showOpenAIKey ? renderOpenAIKeyPanel() : ""}
-        ${renderMain(active)}
-      </main>
+      ${ui.banner ? `<div class="pf-banner">${escapeHtml(ui.banner)}</div>` : ""}
+      ${renderMain(active)}
+      ${overlays}
     </div>
   `;
   restoreFocus(focus);
@@ -699,127 +763,197 @@ function restoreFocus(focus) {
   });
 }
 
-function renderTopbar(active) {
-  const status = ui.openai.hasKey ? "ready" : "missing";
-  const statusLabel = ui.openai.hasKey ? "Coach key added" : "Add OpenAI key";
-  const authLabel = ui.auth.user
-    ? `Signed in: ${ui.auth.user.email || "Account"}`
-    : ui.auth.configured
-      ? "Sign in"
-      : "Local save only";
-  const authKey = ui.auth.user ? "ready" : ui.auth.configured ? "neutral" : "missing";
+const BRAND_MARK_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>`;
 
+const NAV_ITEMS = [
+  ["workspace", "Workspace"],
+  ["pipeline", "Pipeline"],
+  ["journal", "Notes"],
+  ["review", "Review"],
+];
+
+function accountInitial() {
+  const email = ui.auth.user?.email || "";
+  return email ? email.trim().charAt(0).toUpperCase() : "M";
+}
+
+function renderTopbar(active) {
+  const avatarKey = ui.auth.user ? "ready" : ui.auth.configured ? "neutral" : "missing";
   return `
-    <header class="topbar">
-      <div class="brand">
-        <button class="brand-mark-button" type="button" data-view="pipeline" aria-label="Open sermon pipeline">
-          <img class="brand-mark" src="./assets/preach-flow-mark.svg" alt="" />
+    <header class="pf-topbar">
+      <button class="pf-brand" type="button" data-view="workspace" aria-label="Preach Flow workspace">
+        <span class="pf-brand-mark">${BRAND_MARK_SVG}</span>
+        <span class="pf-brand-text">Preach <span>Flow</span></span>
+      </button>
+      <nav class="pf-nav">
+        ${NAV_ITEMS.map(
+          ([view, label]) =>
+            `<button class="pf-nav-btn ${state.view === view ? "active" : ""}" data-view="${view}">${label}</button>`,
+        ).join("")}
+      </nav>
+      <div class="pf-top-right">
+        <button class="pf-icon-btn" data-action="toggle-theme" aria-label="Toggle theme" title="Toggle light / dark">
+          ${
+            state.theme === "dark"
+              ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`
+              : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`
+          }
         </button>
-        <button class="brand-text" type="button" data-action="new-sermon" aria-label="Start a new sermon">
-          <div class="brand-name">Preach <span>Flow</span></div>
-          <div class="brand-kicker">From text to pulpit with clarity.</div>
-        </button>
-      </div>
-      <div class="top-actions">
-        <button class="status-line status-button" data-action="auth-panel" data-auth-status title="${attr(authLabel)}"><i class="status-dot ${authKey}"></i>${escapeHtml(authLabel)}</button>
-        <button class="status-line status-button" data-action="openai-key" title="${attr(statusLabel)}"><i class="status-dot ${status}"></i>${escapeHtml(statusLabel)}</button>
-        ${
-          state.sermons.length
-            ? `<select class="select" data-action="active-sermon" aria-label="Active sermon">
-                ${state.sermons
-                  .map(
-                    (sermon) =>
-                      `<option value="${attr(sermon.id)}" ${sermon.id === active?.id ? "selected" : ""}>${escapeHtml(
-                        sermon.passage || "Untitled sermon",
-                      )}${sermon.title ? ` - ${escapeHtml(sermon.title)}` : ""}</option>`,
-                  )
-                  .join("")}
-              </select>`
-            : ""
-        }
-        <button class="btn nav-btn ${state.view === "workspace" ? "active" : ""}" data-view="workspace">Workspace</button>
-        <button class="btn nav-btn ${state.view === "pipeline" ? "active" : ""}" data-view="pipeline">Pipeline</button>
-        <button class="btn nav-btn ${state.view === "journal" ? "active" : ""}" data-view="journal">Notes</button>
-        <button class="btn nav-btn ${state.view === "review" ? "active" : ""}" data-view="review">Review</button>
-        <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
+        <button class="pf-avatar" data-action="go-signin" aria-label="Account">${escapeHtml(accountInitial())}<i class="pf-avatar-dot ${avatarKey}"></i></button>
       </div>
     </header>
   `;
 }
 
 function renderAuthPanel() {
-  if (!ui.auth.configured) {
-    return `
-      <section class="panel panel-pad key-panel">
-        <div>
-          <span class="eyebrow">Account</span>
-          <h2 class="title">Login and cloud save need setup</h2>
-        </div>
-        <p class="subtle">Preach Flow is saving on this device. Add Supabase credentials in Vercel to enable accounts and database-backed progress sync.</p>
-        <div class="action-row">
-          <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
-        </div>
-        <p class="helper-text">Required Vercel variables: <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code>.</p>
-      </section>
-    `;
-  }
-
-  if (ui.auth.user) {
-    return `
-      <section class="panel panel-pad key-panel auth-panel-compact">
-        <div class="auth-compact-copy">
-          <span class="eyebrow">Account</span>
-          <h2 class="mini-title">Signed in as ${escapeHtml(ui.auth.user.email || "your account")}</h2>
-        </div>
-        <p class="meta-line" data-auth-panel-status>${escapeHtml(ui.auth.status)}</p>
-        <div class="action-row">
-          <button class="btn btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
-          <button class="btn" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
-          <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
-        </div>
-      </section>
-    `;
-  }
-
   return `
-    <section class="panel panel-pad key-panel">
-      <div>
-        <span class="eyebrow">Account</span>
-        <h2 class="title">Sign in to save across devices</h2>
+    <div class="pf-overlay" data-action="close-auth-panel" data-overlay>
+      <div class="pf-modal" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Account</span>
+          <h2 class="pf-modal-title">Account &amp; sync</h2>
+        </div>
+        ${
+          ui.auth.user
+            ? `<p class="pf-modal-text">Signed in as <strong>${escapeHtml(ui.auth.user.email || "your account")}</strong>. ${escapeHtml(ui.auth.status)}</p>
+               <div class="pf-modal-actions">
+                 <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+                 <button class="pf-btn" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
+                 <button class="pf-btn pf-btn-ghost" data-action="close-auth-panel">Close</button>
+               </div>`
+            : `<p class="pf-modal-text">Open the sign-in screen to log in with email, password, or Google.</p>
+               <div class="pf-modal-actions">
+                 <button class="pf-btn pf-btn-primary" data-action="go-signin">Open sign-in</button>
+                 <button class="pf-btn pf-btn-ghost" data-action="close-auth-panel">Close</button>
+               </div>`
+        }
       </div>
-      <p class="subtle">Enter your email and Preach Flow will send a secure magic link. Once signed in, your sermons and notes sync to your private database row.</p>
-      <div class="field">
-        <label for="auth-email">Email</label>
-        <input id="auth-email" class="input" type="email" data-action="auth-email-input" value="${attr(ui.auth.emailInput)}" placeholder="you@example.com" autocomplete="email" />
-      </div>
-      <div class="action-row">
-        <button class="btn btn-primary" data-action="send-magic-link" ${ui.auth.loading ? "disabled" : ""}>Send magic link</button>
-        <button class="btn btn-ghost" data-action="close-auth-panel">Close</button>
-      </div>
-      <p class="helper-text">${escapeHtml(ui.auth.status)}</p>
-    </section>
+    </div>
   `;
 }
 
 function renderOpenAIKeyPanel() {
   return `
-    <section class="panel panel-pad key-panel">
-      <div>
-        <span class="eyebrow">Coach Engine</span>
-        <h2 class="title">Use your own OpenAI key</h2>
+    <div class="pf-overlay" data-action="close-openai-key" data-overlay>
+      <div class="pf-modal" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Coach engine</span>
+          <h2 class="pf-modal-title">Use your own OpenAI key</h2>
+        </div>
+        <p class="pf-modal-text">Preach Flow does not use a shared server key. Each user adds their own OpenAI API key, stored only in this browser and sent over HTTPS for coach and review requests.</p>
+        <div class="pf-field">
+          <label class="pf-label" for="openai-key">OpenAI API key</label>
+          <input id="openai-key" class="pf-input" type="password" data-action="openai-key-input" value="${attr(ui.openAIKeyInput)}" placeholder="sk-proj-..." autocomplete="off" />
+        </div>
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="save-openai-key">Save key</button>
+          <button class="pf-btn" data-action="clear-openai-key">Remove key</button>
+          <button class="pf-btn pf-btn-ghost" data-action="close-openai-key">Close</button>
+        </div>
+        <p class="pf-helper">For a public app, visitors should use keys from their own OpenAI Platform accounts so usage bills to them, not to you.</p>
       </div>
-      <p class="subtle">Preach Flow does not use a shared server key. Each user adds their own OpenAI API key, stored only in this browser and sent over HTTPS for coach/review requests.</p>
-      <div class="field">
-        <label for="openai-key">OpenAI API key</label>
-        <input id="openai-key" class="input" type="password" data-action="openai-key-input" value="${attr(ui.openAIKeyInput)}" placeholder="sk-proj-..." autocomplete="off" />
+    </div>
+  `;
+}
+
+const GOOGLE_G_SVG = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>`;
+
+function renderSignin(active) {
+  if (ui.auth.user) return renderAccount(active);
+  const creating = ui.signinMode === "signup";
+  const disabled = ui.auth.loading || !ui.auth.configured;
+  return `
+    <div class="pf-signin-wrap">
+      <div class="pf-signin-inner">
+        <div style="margin-bottom:14px;">
+          ${active || state.sermons.length ? `<button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back</button>` : ""}
+        </div>
+        <div class="pf-signin-head">
+          <span class="pf-signin-mark">${BRAND_MARK_SVG.replace('width="18" height="18"', 'width="24" height="24"')}</span>
+          <h1 class="pf-signin-title">${creating ? "Create your account" : "Welcome back"}</h1>
+          <p class="pf-signin-subtitle">${creating ? "Start moving from the text to the pulpit." : "Pick up your prep right where you left it."}</p>
+        </div>
+        <div class="pf-signin-card">
+          <button class="pf-google-btn" data-action="google-signin" ${disabled ? "disabled" : ""}>
+            ${GOOGLE_G_SVG}
+            Continue with Google
+          </button>
+          <div class="pf-divider"><i></i><span>or</span><i></i></div>
+          <div class="pf-field">
+            <label class="pf-label" for="signin-email">Email</label>
+            <input id="signin-email" class="pf-input" type="email" data-action="auth-email-input" value="${attr(ui.auth.emailInput)}" placeholder="you@example.com" autocomplete="email" />
+          </div>
+          <div class="pf-field">
+            <div class="pf-label-row">
+              <label class="pf-label" for="signin-password">Password</label>
+              ${creating ? "" : `<button class="pf-forgot" data-action="forgot-password">Forgot?</button>`}
+            </div>
+            <input id="signin-password" class="pf-input" type="password" data-action="auth-password-input" value="${attr(ui.auth.passwordInput)}" placeholder="••••••••" autocomplete="${creating ? "new-password" : "current-password"}" />
+          </div>
+          <button class="pf-signin-submit" data-action="${creating ? "password-signup" : "password-signin"}" ${disabled ? "disabled" : ""}>
+            ${ui.auth.loading ? "Working…" : creating ? "Create account" : "Sign in"}
+          </button>
+          <div class="pf-signin-magic">
+            <button data-action="send-magic-link" ${disabled ? "disabled" : ""}>Prefer a one-time email link? <span>Send me a link</span></button>
+          </div>
+          ${
+            ui.auth.configured
+              ? `<p class="pf-signin-status ${attr(ui.auth.statusKey)}" data-auth-panel-status>${escapeHtml(ui.auth.status)}</p>`
+              : `<p class="pf-signin-status missing">Accounts need setup — add <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in Vercel. Your work is saved on this device meanwhile.</p>`
+          }
+        </div>
+        <p class="pf-signin-footer">
+          ${
+            creating
+              ? `Already have an account? <button data-action="signin-mode-signin">Sign in</button>`
+              : `New to Preach Flow? <button data-action="signin-mode-signup">Create an account</button>`
+          }
+        </p>
       </div>
-      <div class="action-row">
-        <button class="btn btn-primary" data-action="save-openai-key">Save key in this browser</button>
-        <button class="btn" data-action="clear-openai-key">Remove key</button>
-        <button class="btn btn-ghost" data-action="close-openai-key">Close</button>
+    </div>
+  `;
+}
+
+function renderAccount(active) {
+  return `
+    <div class="pf-signin-wrap">
+      <div class="pf-signin-inner">
+        <div style="margin-bottom:14px;">
+          <button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to workspace</button>
+        </div>
+        <div class="pf-signin-head">
+          <span class="pf-avatar" style="width:46px;height:46px;font-size:18px;margin-bottom:16px;">${escapeHtml(accountInitial())}</span>
+          <h1 class="pf-signin-title">Your account</h1>
+          <p class="pf-signin-subtitle">${escapeHtml(ui.auth.user.email || "Signed in")}</p>
+        </div>
+        <div class="pf-signin-card">
+          <div class="pf-account-row">
+            <div style="flex:1;">
+              <div class="pf-account-label">Cloud sync</div>
+              <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
+            </div>
+            <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+          </div>
+          <div class="pf-account-row">
+            <div style="flex:1;">
+              <div class="pf-account-label">Coach engine</div>
+              <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet"}</div>
+            </div>
+            <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
+          </div>
+          <div class="pf-account-row">
+            <div style="flex:1;">
+              <div class="pf-account-label">Appearance</div>
+              <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
+            </div>
+            <button class="pf-btn" data-action="toggle-theme">Toggle</button>
+          </div>
+          <div class="pf-account-actions">
+            <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
+          </div>
+        </div>
       </div>
-      <p class="helper-text">For a public app, visitors should use keys from their own OpenAI Platform accounts so usage bills to them, not to you.</p>
-    </section>
+    </div>
   `;
 }
 
@@ -865,66 +999,74 @@ function renderEmpty() {
 
 function renderNewSermon() {
   return `
-    <section class="two-col">
-      <form class="panel panel-pad stack" data-form="new-sermon">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">New sermon</span>
-            <h1 class="title">Start a sermon</h1>
-          </div>
+    <div class="pf-page pf-page-narrow pf-fade">
+      <div class="pf-page-head" style="margin-bottom:22px;">
+        <div>
+          <span class="pf-eyebrow pf-eyebrow-brand">New sermon</span>
+          <h1 class="pf-h1">Start a sermon</h1>
         </div>
-        <div class="form-grid">
-          <div class="field full-span">
-            <label for="new-passage">Passage</label>
-            <input id="new-passage" class="input" name="passage" placeholder="Ephesians 3:1-13" required />
+      </div>
+      <form class="pf-form" data-form="new-sermon">
+        <div class="pf-form-grid">
+          <div class="pf-field full">
+            <label class="pf-label" for="new-passage">Passage</label>
+            <input id="new-passage" class="pf-input" name="passage" placeholder="Ephesians 3:1-13" required />
           </div>
-          <div class="field full-span">
-            <label for="new-title">Working title</label>
-            <input id="new-title" class="input" name="title" placeholder="The Church on Display" />
+          <div class="pf-field full">
+            <label class="pf-label" for="new-title">Working title</label>
+            <input id="new-title" class="pf-input" name="title" placeholder="The Church on Display" />
           </div>
-          <div class="field">
-            <label for="new-date">Preaching date</label>
-            <input id="new-date" class="input" type="date" name="date" />
+          <div class="pf-field">
+            <label class="pf-label" for="new-date">Preaching date</label>
+            <input id="new-date" class="pf-input" type="date" name="date" />
           </div>
-          <div class="field">
-            <label for="new-length">Length</label>
-            <input id="new-length" class="input" name="length" inputmode="numeric" value="${attr(DEFAULT_DRAFT.length)}" />
+          <div class="pf-field">
+            <label class="pf-label" for="new-length">Length (min)</label>
+            <input id="new-length" class="pf-input" name="length" inputmode="numeric" value="${attr(DEFAULT_DRAFT.length)}" />
           </div>
-          <div class="field">
-            <label for="new-series">Series</label>
-            <input id="new-series" class="input" name="series" placeholder="Family Matters" />
+          <div class="pf-field">
+            <label class="pf-label" for="new-series">Series</label>
+            <input id="new-series" class="pf-input" name="series" placeholder="Family Matters" />
           </div>
-          <div class="field">
-            <label for="new-format">Deliverable</label>
-            <select id="new-format" class="select" name="format">
+          <div class="pf-field">
+            <label class="pf-label" for="new-format">Deliverable</label>
+            <select id="new-format" class="pf-select" name="format">
               <option>Full manuscript</option>
               <option>Preaching notes</option>
             </select>
           </div>
         </div>
-        <div class="action-row">
-          <button class="btn btn-primary" type="submit">Begin prep</button>
-          ${state.sermons.length ? `<button class="btn" type="button" data-action="cancel-new">Cancel</button>` : ""}
+        <div class="pf-form-actions">
+          <button class="pf-btn pf-btn-primary" type="submit">Begin prep</button>
+          ${state.sermons.length ? `<button class="pf-btn pf-btn-ghost" type="button" data-action="cancel-new">Cancel</button>` : ""}
         </div>
       </form>
-      <aside class="panel panel-pad stack">
-        <div>
-          <span class="eyebrow">Prep blocks</span>
-          <h2 class="title">Four movements</h2>
-        </div>
-        ${BLOCKS.map(
-          (block, index) => `
-            <div>
-              <div class="block-label">${index + 1}. ${escapeHtml(block.label)}<span>${escapeHtml(block.when)}</span></div>
-              <div class="meta-line">${PHASES.filter((phase) => phase.block === index)
-                .map((phase) => escapeHtml(phase.name))
-                .join(", ")}</div>
-            </div>
-          `,
-        ).join("")}
-      </aside>
-    </section>
+    </div>
   `;
+}
+
+const PIPELINE_FILTERS = [
+  ["all", "All"],
+  ["behind", "Behind"],
+  ["on-track", "On track"],
+  ["ahead", "Ahead"],
+  ["done", "Preached"],
+];
+
+function cardStatus(sermon) {
+  if (sermon.completed.length >= PHASES.length) {
+    return { key: "done", label: "Preached", days: daysUntil(sermon.date) };
+  }
+  const status = sermonStatus(sermon);
+  const labels = { "on-track": "On track", ahead: "Ahead", behind: "Behind", neutral: "No date" };
+  return { key: status.key, label: labels[status.key] || status.label, days: status.days };
+}
+
+function sermonMovementLabel(sermon) {
+  if (sermon.completed.length >= PHASES.length) return "Delivered";
+  if (!sermon.completed.length && sermon.activePhase === "plan") return "Not started";
+  const phase = PHASES.find((item) => item.id === sermon.activePhase) || PHASES[0];
+  return BLOCKS[phase.block].label;
 }
 
 function renderPipeline() {
@@ -936,7 +1078,7 @@ function renderPipeline() {
     })
     .filter((sermon) => {
       if (state.filter === "all") return true;
-      return sermonStatus(sermon).key === state.filter;
+      return cardStatus(sermon).key === state.filter;
     })
     .sort((a, b) => {
       if (!a.date && !b.date) return a.createdAt.localeCompare(b.createdAt);
@@ -946,422 +1088,453 @@ function renderPipeline() {
     });
 
   return `
-    <section>
-      <div class="section-head">
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-page-head">
         <div>
-          <span class="eyebrow">Pipeline</span>
-          <h1 class="title">Sermons in motion</h1>
+          <span class="pf-eyebrow pf-eyebrow-brand">Pipeline</span>
+          <h1 class="pf-h1">Sermons in motion</h1>
         </div>
-        <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
+        <button class="pf-btn pf-btn-primary" style="margin-left:auto;" data-action="new-sermon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          New sermon
+        </button>
       </div>
-      <div class="pipeline-tools">
-        <input class="input" data-action="pipeline-query" value="${attr(state.query)}" placeholder="Search passage, title, or series" />
-        <select class="select" data-action="pipeline-filter" aria-label="Filter sermons">
-          ${[
-            ["all", "All"],
-            ["behind", "Behind"],
-            ["on-track", "On track"],
-            ["ahead", "Ahead"],
-            ["neutral", "No date"],
-          ]
-            .map(
-              ([value, label]) =>
-                `<option value="${value}" ${state.filter === value ? "selected" : ""}>${label}</option>`,
-            )
-            .join("")}
-        </select>
-        <button class="btn" data-action="export-all">Export all</button>
+      <div class="pf-tools">
+        <div class="pf-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input data-action="pipeline-query" value="${attr(state.query)}" placeholder="Search passage, title, or series" />
+        </div>
+        <div class="pf-filter-chips">
+          ${PIPELINE_FILTERS.map(
+            ([value, label]) =>
+              `<button class="pf-chip ${state.filter === value ? "active" : ""}" data-action="pipeline-filter" data-filter="${value}">${label}</button>`,
+          ).join("")}
+          <button class="pf-btn pf-btn-ghost" data-action="export-all">Export all</button>
+        </div>
       </div>
       ${
         sermons.length
-          ? `<div class="pipeline-grid">${sermons.map(renderSermonCard).join("")}</div>`
-          : `<div class="panel panel-pad"><p class="subtle">No sermons match this view.</p></div>`
+          ? `<div class="pf-cards">${sermons.map(renderSermonCard).join("")}</div>`
+          : `<div class="pf-empty">No sermons match this view.</div>`
       }
-    </section>
+    </div>
   `;
 }
 
 function renderSermonCard(sermon) {
-  const status = sermonStatus(sermon);
-  const expected = expectedBlock(status.days);
+  const status = cardStatus(sermon);
+  const pct = progressPct(sermon);
+  const fillClass = status.key === "behind" ? "behind" : status.key === "done" ? "done" : "";
+  const daysLabel =
+    status.key === "done"
+      ? "Preached"
+      : status.days === null
+        ? "No date"
+        : status.days < 0
+          ? `${Math.abs(status.days)} days ago`
+          : `${status.days} days out`;
   return `
-    <article class="panel sermon-card" data-sermon-card="${attr(sermon.id)}" tabindex="0">
-      <div class="section-head">
-        <div>
-          <h3>${escapeHtml(sermon.passage || "Untitled sermon")}</h3>
-          <div class="meta-line">${escapeHtml(sermon.title || sermon.series || "No title")}</div>
+    <article class="pf-card" data-sermon-card="${attr(sermon.id)}" tabindex="0">
+      <div class="pf-card-top">
+        <div style="min-width:0;">
+          <h3 class="pf-card-passage">${escapeHtml(sermon.passage || "Untitled sermon")}</h3>
+          <div class="pf-card-sub">${escapeHtml(sermon.title || "Untitled")} · ${escapeHtml(sermon.series || "No series")}</div>
         </div>
-        <span class="badge ${status.key}">${escapeHtml(status.label)}</span>
+        <span class="pf-badge ${status.key}">${escapeHtml(status.label)}</span>
       </div>
-      <div class="meta-line">
-        ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date"}
-        ${status.days !== null ? ` - ${status.days} days out` : ""}
-        ${expected !== null ? ` - ${escapeHtml(BLOCKS[expected].label)}` : ""}
+      <div class="pf-card-date">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date set"} <span class="sep">·</span> ${escapeHtml(daysLabel)}
       </div>
-      <div class="segment-bar">
-        ${BLOCKS.map((_, blockIndex) => {
-          const phases = PHASES.filter((phase) => phase.block === blockIndex);
-          const done = phases.every((phase) => sermon.completed.includes(phase.id));
-          return `<span class="segment ${done ? "done" : ""}"></span>`;
-        }).join("")}
+      <div class="pf-progress-track"><div class="pf-progress-fill ${fillClass}" style="width:${pct}%;"></div></div>
+      <div class="pf-card-foot">
+        <span>${escapeHtml(sermonMovementLabel(sermon))}</span>
+        <span class="pct">${pct}%</span>
       </div>
-      <div class="meta-line">${sermon.completed.length}/${PHASES.length} phases - ${progressPct(sermon)}%</div>
     </article>
   `;
 }
 
+// ---- per-phase note + checklist storage ----
+function noteItemKey(phaseId, index) {
+  return `${phaseId}::${index}`;
+}
+
+function phaseNoteHtml(sermon, phase) {
+  const value = sermon?.notes?.[phase.id];
+  return typeof value === "string" ? value : "";
+}
+
+function phaseNoteText(sermon, phase) {
+  return richHtmlToText(phaseNoteHtml(sermon, phase));
+}
+
+function isChecked(sermon, phaseId, index) {
+  return Boolean(sermon?.checklist?.[noteItemKey(phaseId, index)]);
+}
+
+function phaseCheckCount(sermon, phase) {
+  return phase.doItems.reduce((count, _item, index) => count + (isChecked(sermon, phase.id, index) ? 1 : 0), 0);
+}
+
+// kept for export + Google Docs sync (now reads the single per-phase note)
+function getPhaseFocusNotesText(sermon, phase) {
+  return phaseNoteText(sermon, phase);
+}
+
+const SVG_CHECK = (size, stroke) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
 function renderWorkspace(active) {
   const phase = getPhase(active);
   return `
-	    <section class="workspace-grid">
-	      <aside class="stack workspace-sidebar">
-	        ${renderSermonSummary(active)}
-	        ${renderSermonDetails(active)}
-	        ${renderClock(active)}
-	        ${renderWorkflow(active, phase)}
-	        ${phase.devotional ? renderDevotionalPanel(phase) : renderCoachDock(active)}
-	        ${renderGoogleDocsPanel(active)}
-	      </aside>
-	      <div class="stack workspace-writing">
-	        ${renderPhasePanel(active, phase)}
-	      </div>
-	    </section>
-	  `;
-	}
+    <div class="pf-fade">
+      ${renderContextStrip(active, phase)}
+      <div class="pf-ws-grid">
+        ${renderRail(active, phase)}
+        ${renderCanvas(active, phase)}
+      </div>
+      ${renderCoachComposer(active, phase)}
+    </div>
+  `;
+}
 
-function renderSermonSummary(active) {
+function renderContextStrip(active, phase) {
   const status = sermonStatus(active);
-  return `
-    <section class="panel panel-pad stack">
-      <div>
-        <span class="eyebrow">Active sermon</span>
-        <h1 class="title">${escapeHtml(active.passage || "Untitled sermon")}</h1>
-        <div class="meta-line">${escapeHtml(active.title || active.series || "No title")}</div>
-      </div>
-      <div>
-        <div class="metric">
-          <dt>Progress</dt>
-          <dd>${progressPct(active)}%</dd>
-        </div>
-        <div class="progress"><span style="width: ${progressPct(active)}%"></span></div>
-      </div>
-      <span class="badge ${status.key}">${escapeHtml(status.label)}</span>
-    </section>
-  `;
-}
+  const days = status.days;
+  const daysOut = days === null ? "—" : days < 0 ? `${Math.abs(days)}` : `${days}`;
+  const daysLabel = days === null ? "no date set" : days < 0 ? "days ago" : "until Sunday";
 
-function renderSermonDetails(active) {
-  return `
-    <form class="panel panel-pad stack" data-form="sermon-details">
-      <div class="section-head">
-        <div>
-          <span class="eyebrow">Details</span>
-          <h2 class="title">Sermon file</h2>
-        </div>
-      </div>
-      <div class="field">
-        <label for="detail-passage">Passage</label>
-        <input id="detail-passage" class="input" name="passage" value="${attr(active.passage)}" required />
-      </div>
-      <div class="field">
-        <label for="detail-title">Title</label>
-        <input id="detail-title" class="input" name="title" value="${attr(active.title)}" />
-      </div>
-      <div class="field">
-        <label for="detail-series">Series</label>
-        <input id="detail-series" class="input" name="series" value="${attr(active.series)}" />
-      </div>
-      <div class="form-grid">
-        <div class="field">
-          <label for="detail-date">Date</label>
-          <input id="detail-date" class="input" type="date" name="date" value="${attr(active.date)}" />
-        </div>
-        <div class="field">
-          <label for="detail-length">Length</label>
-          <input id="detail-length" class="input" name="length" inputmode="numeric" value="${attr(active.length)}" />
-        </div>
-      </div>
-      <div class="field">
-        <label for="detail-format">Deliverable</label>
-        <select id="detail-format" class="select" name="format">
-          <option ${active.format === "Full manuscript" ? "selected" : ""}>Full manuscript</option>
-          <option ${active.format === "Preaching notes" ? "selected" : ""}>Preaching notes</option>
-        </select>
-      </div>
-      <div class="action-row">
-        <button class="btn btn-primary" type="submit">Save</button>
-        <button class="btn btn-danger" type="button" data-action="delete-sermon">Remove</button>
-      </div>
-    </form>
-  `;
-}
+  const movements = BLOCKS.map((block, bi) => {
+    const phasesInBlock = PHASES.filter((p) => p.block === bi);
+    const done = phasesInBlock.every((p) => active.completed.includes(p.id));
+    const isActive = bi === phase.block;
+    const state = isActive ? "active" : done ? "done" : "upcoming";
+    const labelState = isActive ? "active" : done ? "done" : "upcoming";
+    const connDone = bi <= phase.block && BLOCKS.slice(0, bi).every((_b, k) =>
+      PHASES.filter((p) => p.block === k).every((p) => active.completed.includes(p.id)),
+    );
+    return { block, bi, state, labelState, done: done && !isActive, conn: bi > 0, connDone };
+  });
 
-function renderClock(active) {
-  const status = sermonStatus(active);
-  const blockIndex = expectedBlock(status.days);
   return `
-    <section class="panel panel-pad stack">
-      <div>
-        <span class="eyebrow">Clock</span>
-        <h2 class="title">Timing</h2>
-      </div>
-      <dl class="metric-list">
-        <div class="metric"><dt>Days out</dt><dd>${status.days === null ? "-" : status.days}</dd></div>
-        <div class="metric"><dt>Should be in</dt><dd>${blockIndex === null ? "Set date" : escapeHtml(BLOCKS[blockIndex].label)}</dd></div>
-        <div class="metric"><dt>Done</dt><dd>${active.completed.length}/${PHASES.length}</dd></div>
-      </dl>
-      <button class="btn btn-primary" data-action="orient" ${ui.loading ? "disabled" : ""}>Orient me</button>
-    </section>
-  `;
-}
-
-function renderWorkflow(active, currentPhase) {
-  return `
-    <section class="panel panel-pad">
-      <span class="eyebrow">Workflow</span>
-      ${BLOCKS.map(
-        (block, blockIndex) => `
-          <div class="phase-block">
-            <div class="block-label">${escapeHtml(block.label)}<span>${escapeHtml(block.when)}</span></div>
-            <div class="phase-list">
-              ${PHASES.filter((phase) => phase.block === blockIndex)
-                .map((phase) => {
-                  const done = active.completed.includes(phase.id);
-                  const current = currentPhase.id === phase.id;
-                  return `
-                    <button class="phase-row ${current ? "active" : ""}" data-action="set-phase" data-phase="${attr(phase.id)}">
-                      <span class="phase-dot ${done ? "done" : ""}">${done ? "OK" : ""}</span>
-                      <span>${escapeHtml(phase.name)}</span>
-                    </button>
-                  `;
-                })
-                .join("")}
-            </div>
+    <div class="pf-context">
+      <div class="pf-context-strip">
+        <button class="pf-switcher" data-action="open-switcher">
+          <div>
+            <div class="pf-switcher-passage">${escapeHtml(active.passage || "Untitled sermon")}</div>
+            <div class="pf-switcher-sub">${escapeHtml(active.title || "Untitled")} · ${escapeHtml(active.series || "No series")}</div>
           </div>
-        `,
-      ).join("")}
-    </section>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="pf-stats">
+          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(daysOut)} days</div><div class="pf-stat-label">${escapeHtml(daysLabel)}</div></div>
+          <div class="pf-stat-div"></div>
+          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(active.length || "—")} min</div><div class="pf-stat-label">target length</div></div>
+        </div>
+      </div>
+      <div class="pf-journey">
+        ${movements
+          .map(
+            (m) => `
+              ${m.conn ? `<div class="pf-journey-conn ${m.connDone ? "done" : ""}"></div>` : ""}
+              <button class="pf-journey-node-wrap" data-action="journey-jump" data-block="${m.bi}">
+                <span class="pf-journey-node ${m.state}">${m.done ? SVG_CHECK(15, 3) : m.bi + 1}</span>
+                <span class="pf-journey-label pf-journey-labels ${m.labelState}">${escapeHtml(m.block.label)}</span>
+              </button>
+            `,
+          )
+          .join("")}
+        <span class="pf-journey-ready"><span>${progressPct(active)}%</span> ready</span>
+      </div>
+    </div>
   `;
 }
 
-function renderPhasePanel(active, phase) {
-  const phaseIndex = PHASES.findIndex((item) => item.id === phase.id);
+function renderRail(active, phase) {
+  const phasesInMovement = PHASES.filter((p) => p.block === phase.block);
+  const curIdx = PHASES.findIndex((p) => p.id === phase.id);
+  return `
+    <aside class="pf-rail">
+      <div class="pf-rail-eyebrow">Movement ${phase.block + 1} · ${escapeHtml(BLOCKS[phase.block].label)}</div>
+      <div class="pf-rail-list">
+        ${phasesInMovement
+          .map((p) => {
+            const done = active.completed.includes(p.id);
+            const current = p.id === phase.id;
+            const dotClass = done ? "done" : current ? "current" : "upcoming";
+            return `
+              <button class="pf-phase-row ${current ? "active" : ""}" data-action="set-phase" data-phase="${attr(p.id)}">
+                <span class="pf-phase-dot ${dotClass}">${done ? SVG_CHECK(10, 3.5) : ""}</span>
+                <span class="pf-phase-name">${escapeHtml(p.name)}</span>
+                ${p.devotional ? `<span class="pf-phase-star" title="Devotional">✦</span>` : ""}
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+      <div class="pf-rail-nav">
+        <button class="pf-rail-nav-btn" data-action="prev-phase" ${curIdx <= 0 ? "disabled" : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Prev</button>
+        <button class="pf-rail-nav-btn" data-action="next-phase" ${curIdx >= PHASES.length - 1 ? "disabled" : ""}>Next<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </aside>
+  `;
+}
+
+function renderCanvas(active, phase) {
+  const curIdx = PHASES.findIndex((p) => p.id === phase.id);
   const complete = active.completed.includes(phase.id);
   return `
-    <section class="panel panel-pad phase-workbench">
-      <div class="workbench-header">
-        <div>
-          <span class="eyebrow">Step ${phaseIndex + 1} of ${PHASES.length} - ${escapeHtml(BLOCKS[phase.block].label)}</span>
-          <h1 class="title">${escapeHtml(phase.name)}</h1>
-          <p class="phase-focus">${escapeHtml(phase.focus)}</p>
-        </div>
-        <div class="workbench-status">
-          ${phase.devotional ? `<span class="badge neutral">Devotional</span>` : ""}
-          <span class="badge neutral">${phase.doItems.length} focus points</span>
-        </div>
+    <main class="pf-canvas">
+      <div class="pf-canvas-eyebrow">${escapeHtml(BLOCKS[phase.block].label)} · ${escapeHtml(BLOCKS[phase.block].when)} · Phase ${curIdx + 1} of ${PHASES.length}</div>
+      <h1 class="pf-phase-title">${escapeHtml(phase.name)}</h1>
+      <p class="pf-phase-focus">${escapeHtml(phase.focus)}</p>
+      ${renderChecklistCard(active, phase)}
+      ${renderWriterCard(active, phase)}
+      <div class="pf-complete-row">
+        <button class="pf-btn ${complete ? "" : "pf-btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
+          ${complete ? "Phase complete · undo" : "Mark phase complete"}
+        </button>
+        <button class="pf-btn pf-btn-ghost" data-action="export-active">Export</button>
+        <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
       </div>
-      <div class="focus-note-list workbench-focus-list">
-        ${phase.doItems.map((item, index) => renderFocusNoteCard(active, phase, item, index)).join("")}
+    </main>
+  `;
+}
+
+function renderChecklistCard(active, phase) {
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head">
+        <span class="pf-eyebrow">This phase</span>
+        <span class="pf-checklist-count">${phaseCheckCount(active, phase)} / ${phase.doItems.length}</span>
       </div>
-      ${
-        phase.actions
-          ? `<div class="action-row workbench-coach-actions">${phase.actions
-              .map(
-                (action, index) =>
-                  `<button class="btn" data-action="phase-action" data-action-index="${index}" ${ui.loading ? "disabled" : ""}>${escapeHtml(action.label)}</button>`,
-              )
-              .join("")}</div>`
-          : ""
-      }
-      <div class="action-row workbench-complete-row">
-        <button class="btn" data-action="export-active">Export sermon</button>
-        <button class="btn" data-action="copy-active">Copy</button>
-        <button class="btn ${complete ? "" : "btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
-          ${complete ? "Phase complete - undo" : "Mark phase complete"}
+      <div class="pf-checklist-items">
+        ${phase.doItems
+          .map((item, index) => {
+            const done = isChecked(active, phase.id, index);
+            return `
+              <button class="pf-check-item" data-action="toggle-check" data-phase="${attr(phase.id)}" data-index="${index}">
+                <span class="pf-check-box ${done ? "done" : ""}">${done ? SVG_CHECK(12, 3.5) : ""}</span>
+                <span class="pf-check-text ${done ? "done" : ""}">${escapeHtml(item)}</span>
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function syncIndicator(active) {
+  const doc = active.googleDoc;
+  if (doc?.id) {
+    const key = ui.google.statusKey === "syncing" ? "syncing" : ui.google.statusKey === "missing" ? "missing" : "synced";
+    const text = ui.google.status || (doc.syncedAt ? `Synced ${formatTime(doc.syncedAt)}` : "Synced to Google Docs");
+    return { key, text };
+  }
+  if (ui.google.configured) return { key: "missing", text: "Connect Google Docs" };
+  return { key: "", text: "Saved on this device" };
+}
+
+function renderWriterCard(active, phase) {
+  const sync = syncIndicator(active);
+  return `
+    <section class="pf-card-box pf-writer-card">
+      <div class="pf-writer-head">
+        <span class="pf-writer-eyebrow">Your work</span>
+        <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync">
+          <span class="pf-sync-dot"></span>${escapeHtml(sync.text)}
         </button>
       </div>
+      <div class="pf-toolbar" aria-label="Text formatting">
+        <button class="pf-tool-pill" data-action="format-doc" data-format="h3" title="Heading">Heading <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+        <span class="pf-tool-div"></span>
+        <button class="pf-tool-btn serif b" data-action="format-doc" data-format="bold" title="Bold">B</button>
+        <button class="pf-tool-btn serif i" data-action="format-doc" data-format="italic" title="Italic">I</button>
+        <button class="pf-tool-btn serif u" data-action="format-doc" data-format="underline" title="Underline">U</button>
+        <span class="pf-tool-div"></span>
+        <button class="pf-tool-btn" data-action="format-doc" data-format="ul" title="Bulleted list"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+        <button class="pf-tool-btn" data-action="format-doc" data-format="ol" title="Numbered list"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
+        <span class="pf-tool-div"></span>
+        <button class="pf-tool-quote" data-action="format-doc" data-format="quote" title="Scripture block"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Scripture</button>
+      </div>
+      <div
+        class="pf-editor pf-scroll"
+        contenteditable="true"
+        spellcheck="false"
+        data-action="phase-editor"
+        data-phase="${attr(phase.id)}"
+        data-placeholder="Start writing your work for this phase…"
+      >${sanitizeRichHtml(phaseNoteHtml(active, phase))}</div>
     </section>
   `;
 }
 
-function renderDevotionalPanel(phase) {
-  if (phase.id !== "heart") {
+const COACH_SPARK = `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m12 3 1.9 4.6L19 9.5l-4.1 2.4L12 17l-2.9-5.1L5 9.5l5.1-1.9z"/></svg>`;
+
+function renderCoachComposer(active, phase) {
+  if (phase.devotional) {
+    const text =
+      phase.id === "heart"
+        ? "The work is done. Walk into Sunday emptied of yourself and full of Christ."
+        : "This phase is between you and the Lord. Keep it in your writing canvas above.";
     return `
-	      <section class="panel panel-pad">
-	        <span class="eyebrow">Private work</span>
-	        <p class="phase-focus">This phase is between you and the Lord. Capture what needs to be kept inside the focus boxes for this step.</p>
-	      </section>
+      <div class="pf-coach-wrap">
+        <div class="pf-devotional">
+          ${COACH_SPARK}
+          <span>${escapeHtml(text)}</span>
+        </div>
+      </div>
     `;
   }
+
+  const chips =
+    !ui.showCoach && phase.actions?.length
+      ? `<div class="pf-coach-chips">${phase.actions
+          .map(
+            (action, index) =>
+              `<button class="pf-coach-chip" data-action="phase-action" data-action-index="${index}">${escapeHtml(action.label)}</button>`,
+          )
+          .join("")}</div>`
+      : "";
+
   return `
-    <section class="panel panel-pad">
-      <span class="eyebrow">One last thing</span>
-      <p class="phase-focus">The work is done. Walk into Sunday emptied of yourself and full of Christ. He does not need a perfect sermon - he uses a surrendered preacher.</p>
-    </section>
+    <div class="pf-coach-wrap">
+      <div class="pf-coach-inner">
+        ${ui.showCoach ? renderCoachPanel(active) : chips}
+        <div class="pf-coach">
+          ${COACH_SPARK}
+          <input class="pf-coach-input" data-action="coach-input" value="${attr(ui.composer)}" placeholder="Ask the coach to react to your ${attr(phase.name.toLowerCase())}…" />
+          <button class="pf-coach-toggle" data-action="${ui.showCoach ? "close-coach" : "open-coach"}" title="${ui.showCoach ? "Hide thread" : "Show thread"}" aria-label="Toggle coach thread">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ui.showCoach ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"}"/></svg>
+          </button>
+          <button class="pf-coach-send" data-action="send" ${ui.loading || !ui.composer.trim() ? "disabled" : ""}>${ui.loading ? "…" : "Send"} <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
-function renderCoachDock(active) {
-  if (!ui.showCoach) {
-    const lastCoach = [...active.thread].reverse().find((message) => message.role === "assistant");
-    return `
-      <section class="panel panel-pad stack coach-dock">
-        <div>
-          <span class="eyebrow">Coach</span>
-          <h2 class="title">Ask when ready</h2>
-        </div>
-        <p class="subtle">Keep your writing space clear. Open the coach when you want feedback, orientation, or help with the current step.</p>
-        ${lastCoach ? `<p class="coach-preview">${escapeHtml(lastCoach.content.slice(0, 170))}${lastCoach.content.length > 170 ? "..." : ""}</p>` : ""}
-        <button class="btn btn-primary" data-action="open-coach">Open coach</button>
-      </section>
-    `;
-  }
-  return renderConversation(active);
-}
-
-function renderConversation(active) {
+function renderCoachPanel(active) {
   return `
-    <section class="panel coach-panel">
-      <div class="panel-pad section-head">
-        <div>
-          <span class="eyebrow">Coach</span>
-          <h2 class="title">Feedback thread</h2>
-        </div>
-        <button class="btn btn-ghost" data-action="close-coach">Close</button>
+    <div class="pf-coach-panel">
+      <div class="pf-coach-panel-head">
+        <span class="pf-eyebrow">Coach</span>
+        <button class="pf-btn pf-btn-ghost" style="margin-left:auto;padding:6px 12px;" data-action="close-coach">Close</button>
       </div>
-      <div class="thread" data-thread>
-        <div class="message-list">
-          ${
-            active.thread.length
-              ? active.thread.map(renderMessage).join("")
-              : `<div class="subtle">Bring your work to a phase action, or ask from the composer.</div>`
-          }
-          ${ui.loading ? `<div class="message coach"><div class="who">Coach</div><div class="bubble">${loadingDots()}</div></div>` : ""}
-        </div>
+      <div class="pf-coach-thread pf-scroll" data-thread>
+        ${
+          active.thread.length
+            ? active.thread.map(renderMessage).join("")
+            : `<div class="pf-msg-divider">Bring your work, or ask a question.</div>`
+        }
+        ${ui.loading ? `<div class="pf-msg coach"><div class="pf-msg-who">Coach</div><div class="pf-bubble">${loadingDots()}</div></div>` : ""}
       </div>
-      <div class="composer">
-        <label class="visually-hidden" for="composer">Message</label>
-        <textarea id="composer" class="textarea" data-action="composer-input" placeholder="${attr(ui.composerPlaceholder)}">${escapeHtml(ui.composer)}</textarea>
-        <div class="composer-actions">
-          <button class="btn btn-ghost" data-action="clear-composer">Clear</button>
-          <button class="btn btn-primary" data-action="send" ${ui.loading || !ui.composer.trim() ? "disabled" : ""}>${ui.loading ? "Thinking" : "Send"}</button>
-        </div>
-      </div>
-    </section>
+    </div>
   `;
 }
 
 function renderMessage(message) {
   if (message.role === "meta") {
-    return `<div class="divider">${escapeHtml(message.content)}</div>`;
+    return `<div class="pf-msg-divider">${escapeHtml(message.content)}</div>`;
   }
   const kind = message.role === "user" ? "user" : "coach";
   return `
-    <div class="message ${kind}">
-      ${message.role === "assistant" ? `<div class="who">Coach</div>` : ""}
-      <div class="bubble">${escapeHtml(message.content)}</div>
+    <div class="pf-msg ${kind}">
+      ${message.role === "assistant" ? `<div class="pf-msg-who">Coach</div>` : ""}
+      <div class="pf-bubble">${escapeHtml(message.content)}</div>
     </div>
   `;
 }
 
-function renderFocusNoteCard(active, phase, item, index) {
-  const key = noteItemKey(phase.id, index);
-  const value = getFocusNote(active, phase.id, index);
+function renderSwitcherModal(active) {
   return `
-    <article class="focus-note-card">
-      <div class="focus-note-head">
-        <div>
-          <span class="eyebrow">Focus ${index + 1}</span>
-          <h3>${escapeHtml(item)}</h3>
+    <div class="pf-overlay" data-action="close-switcher" data-overlay>
+      <div class="pf-modal" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Sermons</span>
+          <h2 class="pf-modal-title">Switch sermon</h2>
+        </div>
+        <div class="pf-switcher-list">
+          ${
+            state.sermons.length
+              ? state.sermons
+                  .map(
+                    (sermon) => `
+                      <button class="pf-switcher-item ${sermon.id === active?.id ? "active" : ""}" data-action="select-sermon" data-sermon="${attr(sermon.id)}">
+                        <div style="flex:1;min-width:0;">
+                          <div class="label">${escapeHtml(sermon.passage || "Untitled sermon")}</div>
+                          <div class="meta">${escapeHtml(sermon.title || "Untitled")} · ${escapeHtml(sermon.series || "No series")}</div>
+                        </div>
+                        <span class="pf-badge ${cardStatus(sermon).key}">${escapeHtml(cardStatus(sermon).label)}</span>
+                      </button>
+                    `,
+                  )
+                  .join("")
+              : `<p class="pf-modal-text">No sermons yet.</p>`
+          }
+        </div>
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="new-sermon">New sermon</button>
+          ${active ? `<button class="pf-btn" data-action="open-details">Edit details</button>` : ""}
+          <button class="pf-btn pf-btn-ghost" data-action="close-switcher">Close</button>
         </div>
       </div>
-      ${renderRichToolbar(key)}
-      <div
-        class="rich-note-editor"
-        contenteditable="true"
-        data-action="rich-note"
-        data-note-key="${attr(key)}"
-        data-phase="${attr(phase.id)}"
-        data-index="${index}"
-        data-placeholder="Type notes for this focus point..."
-      >${sanitizeRichHtml(value)}</div>
-    </article>
-  `;
-}
-
-function renderRichToolbar(key) {
-  return `
-    <div class="note-toolbar compact-toolbar" aria-label="Text formatting">
-      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="bold" title="Bold selected text"><strong>B</strong></button>
-      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="italic" title="Italic selected text"><em>I</em></button>
-      <button class="btn format-btn" type="button" data-action="format-rich" data-note-key="${attr(key)}" data-format="bullet" title="Turn selected lines into bullets">Bullets</button>
     </div>
   `;
 }
 
-function noteItemKey(phaseId, index) {
-  return `${phaseId}::${index}`;
+function renderDetailsModal(active) {
+  return `
+    <div class="pf-overlay" data-action="close-details" data-overlay>
+      <div class="pf-modal wide" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Details</span>
+          <h2 class="pf-modal-title">Sermon file</h2>
+        </div>
+        <form data-form="sermon-details">
+          <div class="pf-form-grid">
+            <div class="pf-field full">
+              <label class="pf-label" for="detail-passage">Passage</label>
+              <input id="detail-passage" class="pf-input" name="passage" value="${attr(active.passage)}" required />
+            </div>
+            <div class="pf-field full">
+              <label class="pf-label" for="detail-title">Title</label>
+              <input id="detail-title" class="pf-input" name="title" value="${attr(active.title)}" />
+            </div>
+            <div class="pf-field full">
+              <label class="pf-label" for="detail-series">Series</label>
+              <input id="detail-series" class="pf-input" name="series" value="${attr(active.series)}" />
+            </div>
+            <div class="pf-field">
+              <label class="pf-label" for="detail-date">Date</label>
+              <input id="detail-date" class="pf-input" type="date" name="date" value="${attr(active.date)}" />
+            </div>
+            <div class="pf-field">
+              <label class="pf-label" for="detail-length">Length (min)</label>
+              <input id="detail-length" class="pf-input" name="length" inputmode="numeric" value="${attr(active.length)}" />
+            </div>
+            <div class="pf-field full">
+              <label class="pf-label" for="detail-format">Deliverable</label>
+              <select id="detail-format" class="pf-select" name="format">
+                <option ${active.format === "Full manuscript" ? "selected" : ""}>Full manuscript</option>
+                <option ${active.format === "Preaching notes" ? "selected" : ""}>Preaching notes</option>
+              </select>
+            </div>
+          </div>
+          <div class="pf-modal-actions">
+            <button class="pf-btn pf-btn-primary" type="submit">Save</button>
+            <button class="pf-btn pf-btn-danger" type="button" data-action="delete-sermon">Remove sermon</button>
+            <button class="pf-btn pf-btn-ghost" type="button" data-action="close-details">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
 }
 
-function getFocusNote(active, phaseId, index) {
-  const key = noteItemKey(phaseId, index);
-  return active?.notes?.[key] || "";
-}
-
-function getPhaseFocusItems(sermon, phase) {
-  return phase.doItems.map((prompt, index) => {
-    const key = noteItemKey(phase.id, index);
-    const html = getFocusNote(sermon, phase.id, index);
-    return {
-      key,
-      index,
-      prompt,
-      html,
-      text: richHtmlToText(html),
-    };
-  });
-}
-
-function getPhaseFocusNotesText(sermon, phase, includeEmpty = false) {
-  const lines = [];
-  for (const item of getPhaseFocusItems(sermon, phase)) {
-    if (!includeEmpty && !item.text) continue;
-    lines.push(`${item.index + 1}. ${item.prompt}`);
-    lines.push(item.text || "(No notes yet.)");
-    lines.push("");
-  }
-
-  const text = lines.join("\n").trim();
-  const legacyNote = typeof sermon.notes?.[phase.id] === "string" ? sermon.notes[phase.id].trim() : "";
-  return text || legacyNote;
-}
-
-function getPhaseNoteValue(active, phase) {
-  return Object.prototype.hasOwnProperty.call(active.notes, phase.id)
-    ? active.notes[phase.id]
-    : phaseNoteTemplate(phase);
-}
-
-function phaseNoteTemplate(phase) {
-  const lines = [
-    `# ${phase.name}`,
-    "",
-    "What I should be doing in this step:",
-    `- ${phase.focus}`,
-    "",
-    "Work through these prompts:",
-    ...phase.doItems.map((item) => `- ${item}`),
-    "",
-    "My notes:",
-    "",
-  ];
-  if (phase.actions?.length) {
-    lines.splice(lines.length - 2, 0, "Helpful coach actions available:", ...phase.actions.map((action) => `- ${action.label}`), "");
-  }
-  return lines.join("\n");
-}
-
-function renderGoogleDocsPanel(active) {
+function renderGoogleDocsModal(active) {
   const doc = active.googleDoc;
   const configured = ui.google.configured;
   const connected = ui.google.connected;
@@ -1372,140 +1545,110 @@ function renderGoogleDocsPanel(active) {
       ? connected
         ? "Connect a Google Doc to this sermon"
         : "Connect Google to create a Doc"
-	      : "Add GOOGLE_CLIENT_ID in Vercel";
-  const connectedClass = doc?.id ? "google-docs-connected" : "";
-  const title = doc?.id ? "Docs sync" : "Live sermon doc";
+      : "Add GOOGLE_CLIENT_ID in Vercel";
 
-	  return `
-	    <div class="google-docs-box ${connectedClass}">
-	      <div class="section-head">
-	        <div>
-	          <span class="eyebrow">Google Docs</span>
-	          <h3 class="mini-title">${escapeHtml(title)}</h3>
-	        </div>
-	      </div>
-	      <p class="meta-line" data-google-status>${escapeHtml(status)}</p>
-	      <label class="toggle-row">
-	        <input type="checkbox" data-action="google-autosync" ${autoSync ? "checked" : ""} ${doc?.id ? "" : "disabled"} />
-	        <span>Auto-sync after edits</span>
-	      </label>
-	      <div class="action-row compact-actions">
-	        ${
-	          doc?.url
-	            ? `<a class="btn doc-link" href="${attr(doc.url)}" target="_blank" rel="noopener">Open Doc</a>`
-	            : ""
-	        }
-	        ${
-	          configured && !connected
-	            ? `<button class="btn" data-action="google-connect" ${ui.google.loading ? "disabled" : ""}>Connect Google</button>`
-            : ""
-        }
-        ${
-          configured && connected && !doc?.id
-            ? `<button class="btn btn-primary" data-action="google-create-doc" ${ui.google.loading ? "disabled" : ""}>Create Doc</button>`
-            : ""
-        }
-        ${
-          doc?.id
-            ? `<button class="btn" data-action="google-sync-now" ${ui.google.loading ? "disabled" : ""}>Sync now</button>`
-            : ""
-        }
+  return `
+    <div class="pf-overlay" data-action="close-google-docs" data-overlay>
+      <div class="pf-modal" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Google Docs</span>
+          <h2 class="pf-modal-title">${doc?.id ? "Document sync" : "Live sermon doc"}</h2>
+        </div>
+        <p class="pf-modal-text" data-google-status>${escapeHtml(status)}</p>
+        <label class="pf-toggle-row">
+          <input type="checkbox" data-action="google-autosync" ${autoSync ? "checked" : ""} ${doc?.id ? "" : "disabled"} />
+          <span>Auto-sync after edits</span>
+        </label>
+        <div class="pf-modal-actions">
+          ${doc?.url ? `<a class="pf-btn" href="${attr(doc.url)}" target="_blank" rel="noopener">Open Doc</a>` : ""}
+          ${configured && !connected ? `<button class="pf-btn" data-action="google-connect" ${ui.google.loading ? "disabled" : ""}>Connect Google</button>` : ""}
+          ${configured && connected && !doc?.id ? `<button class="pf-btn pf-btn-primary" data-action="google-create-doc" ${ui.google.loading ? "disabled" : ""}>Create Doc</button>` : ""}
+          ${doc?.id ? `<button class="pf-btn pf-btn-primary" data-action="google-sync-now" ${ui.google.loading ? "disabled" : ""}>Sync now</button>` : ""}
+          <button class="pf-btn pf-btn-ghost" data-action="close-google-docs">Close</button>
+        </div>
+        ${configured ? "" : `<p class="pf-helper">Set <code>GOOGLE_CLIENT_ID</code> in Vercel to enable Google Docs sync.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function phaseNoteKind(phase) {
+  if (phase.devotional) return "prayer";
+  if (phase.id === "immersion") return "question";
+  return "note";
+}
+
+function kindLabel(kind) {
+  return { coach: "Coach", question: "Question", prayer: "Prayer", note: "Note" }[kind] || "Note";
+}
+
+function collectActiveNoteGroups(active) {
+  if (!active) return [];
+  const groups = [];
+  for (const phase of PHASES) {
+    const entries = [];
+    if (phaseNoteText(active, phase).trim()) {
+      entries.push({ kind: phaseNoteKind(phase), html: phaseNoteHtml(active, phase) });
+    }
+    active.thread
+      .filter((message) => message.role === "assistant" && message.phaseId === phase.id)
+      .forEach((message) => entries.push({ kind: "coach", text: message.content }));
+    if (entries.length) {
+      entries.reverse();
+      groups.push({ phase: phase.name, when: BLOCKS[phase.block].when, entries });
+    }
+  }
+  const orphanCoach = active.thread.filter((message) => message.role === "assistant" && !message.phaseId);
+  if (orphanCoach.length) {
+    groups.push({
+      phase: "Coach feedback",
+      when: "",
+      entries: orphanCoach.map((message) => ({ kind: "coach", text: message.content })).reverse(),
+    });
+  }
+  return groups;
+}
+
+function renderJournal(active) {
+  const groups = collectActiveNoteGroups(active);
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:28px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Notes</span>
+        <h1 class="pf-h1">Everything you've captured</h1>
+        <p class="pf-page-sub">Notes, questions, prayers, and coach feedback — gathered by phase${
+          active ? ` for <strong>${escapeHtml(active.passage || "this sermon")}</strong>` : ""
+        }.</p>
       </div>
       ${
-        configured
-          ? ""
-          : `<p class="helper-text">Set <code>GOOGLE_CLIENT_ID</code> in Vercel to enable Google Docs sync.</p>`
+        groups.length
+          ? `<div class="pf-notes-list">${groups.map(renderNoteGroup).join("")}</div>`
+          : `<div class="pf-empty">No notes yet. Start writing in a phase and it will be filed here automatically.</div>`
       }
     </div>
   `;
 }
 
-function renderJournal() {
-  const grouped = collectWorkflowNoteGroups();
+function renderNoteGroup(group) {
   return `
-    <section class="journal-view notes-library-view">
-      <div class="journal-hero notes-library-hero">
-        <span class="eyebrow">Notes</span>
-        <h1 class="journal-title">Every focus point, filed automatically.</h1>
-        <p>The boxes in the workspace are your notes. This view gathers them by sermon, workflow section, and prompt so nothing lives in a second disconnected journal.</p>
+    <section class="pf-note-group">
+      <div class="pf-note-group-head">
+        <span class="pf-note-phase">${escapeHtml(group.phase)}</span>
+        ${group.when ? `<span class="pf-note-when">${escapeHtml(group.when)}</span>` : ""}
       </div>
-      <div class="journal-layout notes-library-layout">
-        <aside class="journal-library stack notes-library">
-          ${grouped.length ? grouped.map(renderWorkflowNoteGroup).join("") : renderEmptyJournal()}
-        </aside>
+      <div>
+        ${group.entries
+          .map(
+            (entry) => `
+              <div class="pf-note-entry">
+                <span class="pf-kind ${entry.kind}">${kindLabel(entry.kind)}</span>
+                <div class="pf-note-body">${entry.html ? sanitizeRichHtml(entry.html) : escapeHtml(entry.text || "")}</div>
+              </div>
+            `,
+          )
+          .join("")}
       </div>
     </section>
-  `;
-}
-
-function collectWorkflowNoteGroups() {
-  return state.sermons
-    .map((sermon) => {
-      const sections = BLOCKS.map((block, blockIndex) => {
-        const phases = PHASES.filter((phase) => phase.block === blockIndex)
-          .map((phase) => {
-            const notes = getPhaseFocusItems(sermon, phase).filter((note) => note.text);
-            return notes.length ? { phase, notes } : null;
-          })
-          .filter(Boolean);
-        return phases.length ? { block, phases } : null;
-      }).filter(Boolean);
-      const count = sections.reduce(
-        (total, section) => total + section.phases.reduce((phaseTotal, phase) => phaseTotal + phase.notes.length, 0),
-        0,
-      );
-      return count ? { sermon, sections, count } : null;
-    })
-    .filter(Boolean);
-}
-
-function renderWorkflowNoteGroup(group) {
-  return `
-    <section class="panel panel-pad journal-group workflow-note-group">
-      <div class="section-head">
-        <div>
-          <span class="eyebrow">Sermon</span>
-          <h2 class="mini-title">${escapeHtml(journalSermonLabel(group.sermon))}</h2>
-        </div>
-        <span class="badge neutral">${group.count}</span>
-      </div>
-      ${group.sections
-        .map(
-          (section) => `
-            <div class="journal-section workflow-note-section">
-              <div class="block-label">${escapeHtml(section.block.label)}<span>${escapeHtml(section.block.when)}</span></div>
-              ${section.phases.map((phaseGroup) => renderWorkflowPhaseNotes(group.sermon, phaseGroup)).join("")}
-            </div>
-          `,
-        )
-        .join("")}
-    </section>
-  `;
-}
-
-function renderWorkflowPhaseNotes(sermon, phaseGroup) {
-  return `
-    <div class="workflow-phase-notes">
-      <div class="workflow-phase-head">
-        <h3>${escapeHtml(phaseGroup.phase.name)}</h3>
-        <button class="btn btn-ghost" data-action="open-note-focus" data-sermon="${attr(sermon.id)}" data-phase="${attr(phaseGroup.phase.id)}">Open</button>
-      </div>
-      <div class="workflow-note-list">
-        ${phaseGroup.notes.map((note) => renderWorkflowNoteCard(note)).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function renderWorkflowNoteCard(note) {
-  return `
-    <article class="workflow-note-card">
-      <div class="workflow-note-card-head">
-        <span class="eyebrow">Focus ${note.index + 1}</span>
-      </div>
-      <h4>${escapeHtml(note.prompt)}</h4>
-      <div class="workflow-note-body">${sanitizeRichHtml(note.html)}</div>
-    </article>
   `;
 }
 
@@ -1700,72 +1843,84 @@ function renderEmptyJournal() {
   `;
 }
 
+const REVIEW_CHECKS = [
+  ["gospel", "The gospel is clearly present"],
+  ["hero", "Christ is the hero — not the hearer"],
+  ["illustration", "At least one concrete illustration"],
+  ["application", "Application is specific (something for Monday)"],
+  ["invitation", "A clear invitation to respond"],
+  ["walkaway", "One memorable walk-away line"],
+];
+
 function renderReview() {
+  const okCount = REVIEW_CHECKS.filter(([key]) => state.reviewChecks[key]).length;
+  const pct = Math.round((okCount / REVIEW_CHECKS.length) * 100);
   return `
-    <section class="two-col">
-      <form class="panel panel-pad stack" data-form="review-sermon">
+    <div class="pf-page pf-page-narrow pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:26px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Readiness check</span>
+        <h1 class="pf-h1">Is it ready to preach?</h1>
+        <p class="pf-page-sub">The non-negotiables before Sunday. Nothing here writes the sermon for you — it just makes sure nothing's missing.</p>
+      </div>
+
+      <section class="pf-score-card">
+        <div class="pf-score-head">
+          <span class="pf-score-label">${okCount} of ${REVIEW_CHECKS.length} ready</span>
+          <div class="pf-score-track"><div class="pf-score-fill" style="width:${pct}%;"></div></div>
+        </div>
         <div>
-          <span class="eyebrow">Review</span>
-          <h1 class="title">Completeness check</h1>
+          ${REVIEW_CHECKS.map(([key, label]) => {
+            const ok = Boolean(state.reviewChecks[key]);
+            return `
+              <button class="pf-review-item" style="width:100%;background:none;border-top:1px solid var(--border-subtle);cursor:pointer;text-align:left;" data-action="review-check" data-key="${key}">
+                <span class="pf-review-box ${ok ? "ok" : ""}">${ok ? SVG_CHECK(14, 3.4) : ""}</span>
+                <span class="pf-review-label ${ok ? "ok" : ""}">${escapeHtml(label)}</span>
+              </button>
+            `;
+          }).join("")}
         </div>
-        <div class="form-grid">
-          <div class="field">
-            <label for="review-passage">Passage</label>
-            <input id="review-passage" class="input" data-action="review-meta" data-field="passage" value="${attr(state.reviewMeta.passage)}" placeholder="Ephesians 3:1-13" />
+        <form data-form="review-sermon">
+          <button class="pf-review-btn" type="submit" ${ui.reviewLoading || !state.reviewText.trim() ? "disabled" : ""}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L19 9.5l-4.1 2.4L12 17l-2.9-5.1L5 9.5l5.1-1.9z"/></svg>
+            ${ui.reviewLoading ? "Running review…" : "Run the full coach review"}
+          </button>
+        </form>
+      </section>
+
+      <section class="pf-score-card" style="margin-top:18px;">
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Manuscript</span>
+          <h2 class="pf-modal-title" style="font-size:18px;">Bring a finished sermon</h2>
+        </div>
+        <div class="pf-form-grid">
+          <div class="pf-field">
+            <label class="pf-label" for="review-passage">Passage</label>
+            <input id="review-passage" class="pf-input" data-action="review-meta" data-field="passage" value="${attr(state.reviewMeta.passage)}" placeholder="Ephesians 3:1-13" />
           </div>
-          <div class="field">
-            <label for="review-title">Title</label>
-            <input id="review-title" class="input" data-action="review-meta" data-field="title" value="${attr(state.reviewMeta.title)}" />
+          <div class="pf-field">
+            <label class="pf-label" for="review-title">Title</label>
+            <input id="review-title" class="pf-input" data-action="review-meta" data-field="title" value="${attr(state.reviewMeta.title)}" />
           </div>
         </div>
-        <div class="field">
-          <label for="review-file">Upload</label>
-          <input id="review-file" class="input" type="file" data-action="review-file" accept=".txt,.md,.markdown,.docx" />
+        <div class="pf-review-upload">
+          <div class="pf-field" style="margin:0;">
+            <label class="pf-label" for="review-file">Upload (.txt, .md, .docx)</label>
+            <input id="review-file" class="pf-input" type="file" data-action="review-file" accept=".txt,.md,.markdown,.docx" />
+          </div>
+          <textarea class="pf-textarea" data-action="review-text" placeholder="Paste the manuscript here.">${escapeHtml(state.reviewText)}</textarea>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="pf-btn pf-btn-ghost" type="button" data-action="clear-review">Clear</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="review-text">Sermon text</label>
-          <textarea id="review-text" class="textarea" style="min-height: 300px" data-action="review-text" placeholder="Paste the manuscript here.">${escapeHtml(
-            state.reviewText,
-          )}</textarea>
-        </div>
-        <div class="action-row">
-          <button class="btn btn-primary" type="submit" ${ui.reviewLoading || !state.reviewText.trim() ? "disabled" : ""}>${
-            ui.reviewLoading ? "Reviewing" : "Review sermon"
-          }</button>
-          <button class="btn" type="button" data-action="clear-review">Clear</button>
-        </div>
-      </form>
-      <aside class="panel panel-pad stack">
-        <div>
-          <span class="eyebrow">Framework</span>
-          <h2 class="title">Checks</h2>
-        </div>
-        <ul class="todo-list">
-          ${[
-            "One clear big idea and purpose",
-            "Structure flowing from the text",
-            "Christ as hero, not moralism",
-            "Gospel woven throughout and landed strongly",
-            "Explanation, illustration, and application under each point",
-            "Concrete imagery and specific application",
-            "Invitation, conclusion, and walk-away point",
-          ]
-            .map((item) => `<li>${escapeHtml(item)}</li>`)
-            .join("")}
-        </ul>
         ${
-          ui.reviewLoading || ui.reviewResult
-            ? `<div class="review-result">
-                ${
-                  ui.reviewLoading
-                    ? `<div class="message review"><div class="who">Review</div><div class="bubble">${loadingDots()}</div></div>`
-                    : `<div class="message review"><div class="who">Review</div><div class="bubble">${escapeHtml(ui.reviewResult)}</div></div>`
-                }
-              </div>`
-            : ""
+          ui.reviewLoading
+            ? `<div class="pf-review-result">${loadingDots()}</div>`
+            : ui.reviewResult
+              ? `<div class="pf-review-result">${escapeHtml(ui.reviewResult)}</div>`
+              : ""
         }
-      </aside>
-    </section>
+      </section>
+    </div>
   `;
 }
 
@@ -1799,6 +1954,7 @@ function saveDetails(form) {
     length: data.length.trim() || "40",
     format: data.format,
   });
+  ui.showDetails = false;
   showBanner("Sermon details saved.");
   render();
 }
@@ -1854,12 +2010,13 @@ async function send(textArg, metaLabel) {
   if (!text || ui.loading || !active) return;
   if (!requireOpenAIKey()) return;
 
+  const phaseId = active.activePhase;
   const base = [...active.thread];
-  if (metaLabel) base.push({ role: "meta", content: metaLabel });
-  const next = [...base, { role: "user", content: text }];
+  if (metaLabel) base.push({ role: "meta", content: metaLabel, phaseId });
+  const next = [...base, { role: "user", content: text, phaseId }];
   updateActive({ thread: next });
   ui.composer = "";
-  ui.composerPlaceholder = "Bring your work, or ask the coach a question...";
+  ui.showCoach = true;
   ui.loading = true;
   render();
 
@@ -1881,6 +2038,7 @@ async function send(textArg, metaLabel) {
         {
           role: "assistant",
           content: data.text || "No response came back. Try again.",
+          phaseId,
         },
       ],
     });
@@ -1892,6 +2050,7 @@ async function send(textArg, metaLabel) {
           role: "assistant",
           content:
             "I could not reach the coach server. Check the deployment, then make sure your OpenAI API key is saved in this browser.",
+          phaseId,
         },
       ],
     });
@@ -1911,10 +2070,9 @@ function tapPhaseAction(index) {
     return;
   }
   ui.composer = action.seed;
-  ui.composerPlaceholder = action.placeholder || ui.composerPlaceholder;
   render();
   requestAnimationFrame(() => {
-    const composer = document.querySelector("[data-action='composer-input']");
+    const composer = document.querySelector("[data-action='coach-input']");
     if (composer) {
       composer.focus();
       composer.setSelectionRange(composer.value.length, composer.value.length);
@@ -2200,6 +2358,104 @@ async function sendMagicLink() {
     showBanner("Magic link sent.");
   }
   render();
+}
+
+function requireAuthConfigured() {
+  if (ui.auth.configured && ui.auth.client) return true;
+  ui.auth.status = "Accounts need Supabase setup in Vercel. Your work is still saved on this device.";
+  ui.auth.statusKey = "missing";
+  showBanner("Sign-in needs Supabase setup (SUPABASE_URL, SUPABASE_ANON_KEY).");
+  render();
+  return false;
+}
+
+function afterSignedIn() {
+  ui.auth.passwordInput = "";
+  state.view = ui.lastView && ui.lastView !== "signin" ? ui.lastView : "workspace";
+}
+
+async function signInWithPassword() {
+  if (!requireAuthConfigured()) return;
+  const email = ui.auth.emailInput.trim();
+  const password = ui.auth.passwordInput;
+  if (!email || !password) {
+    showBanner("Enter your email and password.");
+    return;
+  }
+  ui.auth.loading = true;
+  ui.auth.status = "Signing in...";
+  ui.auth.statusKey = "syncing";
+  render();
+
+  const { error } = await ui.auth.client.auth.signInWithPassword({ email, password });
+  ui.auth.loading = false;
+  if (error) {
+    ui.auth.status = error.message || "Could not sign in.";
+    ui.auth.statusKey = "missing";
+    showBanner("Sign-in failed.");
+  } else {
+    afterSignedIn();
+    showBanner("Signed in.");
+  }
+  render();
+}
+
+async function signUpWithPassword() {
+  if (!requireAuthConfigured()) return;
+  const email = ui.auth.emailInput.trim();
+  const password = ui.auth.passwordInput;
+  if (!email || !password) {
+    showBanner("Enter your email and a password.");
+    return;
+  }
+  if (password.length < 6) {
+    showBanner("Use a password of at least 6 characters.");
+    return;
+  }
+  ui.auth.loading = true;
+  ui.auth.status = "Creating your account...";
+  ui.auth.statusKey = "syncing";
+  render();
+
+  const { data, error } = await ui.auth.client.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+  });
+  ui.auth.loading = false;
+  if (error) {
+    ui.auth.status = error.message || "Could not create account.";
+    ui.auth.statusKey = "missing";
+    showBanner("Sign-up failed.");
+  } else if (data.session) {
+    afterSignedIn();
+    showBanner("Account created.");
+  } else {
+    ui.signinMode = "signin";
+    ui.auth.status = "Account created — check your email to confirm, then sign in.";
+    ui.auth.statusKey = "ready";
+    showBanner("Check your email to confirm your account.");
+  }
+  render();
+}
+
+async function signInWithGoogle() {
+  if (!requireAuthConfigured()) return;
+  ui.auth.loading = true;
+  ui.auth.status = "Redirecting to Google...";
+  ui.auth.statusKey = "syncing";
+  render();
+  const { error } = await ui.auth.client.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+  if (error) {
+    ui.auth.loading = false;
+    ui.auth.status = error.message || "Could not start Google sign-in.";
+    ui.auth.statusKey = "missing";
+    showBanner("Google sign-in failed.");
+    render();
+  }
 }
 
 async function signOut() {
@@ -2593,32 +2849,34 @@ function setGoogleStatus(message, key = "neutral") {
   if (dot) dot.className = `google-status-dot ${key}`;
 }
 
-function formatRichNote(noteKey, format) {
-  const editor = findRichNoteEditor(noteKey);
-  if (!editor) return;
+const EXEC_COMMANDS = {
+  bold: ["bold"],
+  italic: ["italic"],
+  underline: ["underline"],
+  ul: ["insertUnorderedList"],
+  ol: ["insertOrderedList"],
+  h3: ["formatBlock", "h3"],
+  quote: ["formatBlock", "blockquote"],
+};
+
+function formatDoc(format) {
+  const editor = document.querySelector('[data-action="phase-editor"]');
+  const command = EXEC_COMMANDS[format];
+  if (!editor || !command) return;
   editor.focus({ preventScroll: true });
-
-  const command =
-    format === "italic"
-      ? "italic"
-      : format === "bullet"
-        ? "insertUnorderedList"
-        : "bold";
-  document.execCommand(command, false, null);
-  persistRichNote(editor);
+  try {
+    document.execCommand(command[0], false, command[1] || null);
+  } catch (_) {
+    /* execCommand is deprecated but still works for this rich-text editor */
+  }
+  persistPhaseEditor(editor);
 }
 
-function findRichNoteEditor(noteKey) {
-  return [...document.querySelectorAll('[data-action="rich-note"]')].find(
-    (editor) => editor.dataset.noteKey === noteKey,
-  );
-}
-
-function persistRichNote(editor) {
+function persistPhaseEditor(editor) {
   const active = getActive();
-  if (!active || !editor.dataset.noteKey) return;
+  if (!active || !editor.dataset.phase) return;
   const clean = sanitizeRichHtml(editor.innerHTML);
-  active.notes[editor.dataset.noteKey] = richHtmlToText(clean) ? clean : "";
+  active.notes[editor.dataset.phase] = richHtmlToText(clean) ? clean : "";
   active.updatedAt = new Date().toISOString();
   saveState();
 }
@@ -2720,13 +2978,30 @@ async function checkServerStatus() {
   render();
 }
 
+function closeOverlays() {
+  ui.showAuth = false;
+  ui.showOpenAIKey = false;
+  ui.showSwitcher = false;
+  ui.showDetails = false;
+  ui.showGoogleDocs = false;
+}
+
 document.addEventListener("click", (event) => {
+  // Backdrop click on a modal overlay closes it.
+  const overlay = event.target.closest("[data-overlay]");
+  if (overlay && !event.target.closest("[data-stop]")) {
+    closeOverlays();
+    render();
+    return;
+  }
+
   const target = event.target.closest("[data-action], [data-view], [data-sermon-card]");
   if (!target) return;
 
   if (target.dataset.view) {
     state.view = target.dataset.view;
     ui.showNew = false;
+    closeOverlays();
     saveState();
     render();
     return;
@@ -2741,8 +3016,21 @@ document.addEventListener("click", (event) => {
   }
 
   const action = target.dataset.action;
+  if (action === "toggle-theme") setTheme(state.theme === "dark" ? "light" : "dark");
+  if (action === "go-signin") {
+    if (state.view !== "signin") ui.lastView = state.view;
+    state.view = "signin";
+    closeOverlays();
+    render();
+  }
+  if (action === "close-signin") {
+    state.view = ui.lastView && ui.lastView !== "signin" ? ui.lastView : "workspace";
+    render();
+  }
   if (action === "new-sermon") {
     ui.showNew = true;
+    ui.showSwitcher = false;
+    state.view = "workspace";
     render();
   }
   if (action === "cancel-new") {
@@ -2753,24 +3041,36 @@ document.addEventListener("click", (event) => {
     updateActive({ activePhase: target.dataset.phase });
     render();
   }
+  if (action === "journey-jump") {
+    const bi = Number(target.dataset.block);
+    const phase = PHASES.find((p) => p.block === bi) || PHASES[0];
+    updateActive({ activePhase: phase.id });
+    render();
+  }
+  if (action === "prev-phase" || action === "next-phase") {
+    const active = getActive();
+    if (!active) return;
+    const curIdx = PHASES.findIndex((p) => p.id === active.activePhase);
+    const nextIdx = Math.min(PHASES.length - 1, Math.max(0, curIdx + (action === "next-phase" ? 1 : -1)));
+    updateActive({ activePhase: PHASES[nextIdx].id });
+    render();
+  }
   if (action === "toggle-complete") {
     toggleComplete(target.dataset.phase);
+  }
+  if (action === "toggle-check") {
+    const active = getActive();
+    if (!active) return;
+    const key = noteItemKey(target.dataset.phase, Number(target.dataset.index));
+    const checklist = { ...active.checklist, [key]: !active.checklist?.[key] };
+    updateActive({ checklist });
+    render();
   }
   if (action === "phase-action") {
     tapPhaseAction(Number(target.dataset.actionIndex));
   }
-  if (action === "orient") {
-    send(
-      "Orient me. Based on the clock and how many phases I have completed, where should I be, am I behind or on track, and what is my single next move?",
-      "Orientation",
-    );
-  }
   if (action === "send") {
     send();
-  }
-  if (action === "clear-composer") {
-    ui.composer = "";
-    render();
   }
   if (action === "open-coach") {
     ui.showCoach = true;
@@ -2780,47 +3080,45 @@ document.addEventListener("click", (event) => {
     ui.showCoach = false;
     render();
   }
-  if (action === "format-text") {
-    formatEditor(target.dataset.target, target.dataset.format);
+  if (action === "format-doc") {
+    formatDoc(target.dataset.format);
   }
-  if (action === "format-rich") {
-    formatRichNote(target.dataset.noteKey, target.dataset.format);
-  }
-  if (action === "save-quick-journal") {
-    const active = getActive();
-    const phase = getPhase(active);
-    saveJournalEntry({
-      sermonId: active?.id || "",
-      phaseId: phase?.id || "general",
-    });
-  }
-  if (action === "edit-journal-entry") {
-    editJournalEntry(target.dataset.entry);
-  }
-  if (action === "delete-journal-entry") {
-    deleteJournalEntry(target.dataset.entry);
-  }
-  if (action === "cancel-journal-edit") {
-    resetJournalDraft();
+  if (action === "open-switcher") {
+    ui.showSwitcher = true;
     render();
   }
-  if (action === "clear-journal-draft") {
-    resetJournalDraft();
+  if (action === "close-switcher") {
+    ui.showSwitcher = false;
+    render();
+  }
+  if (action === "select-sermon") {
+    state.activeId = target.dataset.sermon;
+    state.view = "workspace";
+    ui.showSwitcher = false;
+    ui.showNew = false;
+    saveState();
+    render();
+  }
+  if (action === "open-details") {
+    ui.showSwitcher = false;
+    ui.showDetails = true;
+    render();
+  }
+  if (action === "close-details") {
+    ui.showDetails = false;
+    render();
+  }
+  if (action === "open-google-docs") {
+    ui.showGoogleDocs = true;
+    render();
+  }
+  if (action === "close-google-docs") {
+    ui.showGoogleDocs = false;
     render();
   }
   if (action === "delete-sermon") {
+    ui.showDetails = false;
     deleteActive();
-  }
-  if (action === "open-note-focus") {
-    const sermonId = target.dataset.sermon;
-    const phaseId = target.dataset.phase;
-    state.sermons = state.sermons.map((sermon) =>
-      sermon.id === sermonId ? { ...sermon, activePhase: phaseId, updatedAt: new Date().toISOString() } : sermon,
-    );
-    state.activeId = sermonId;
-    state.view = "workspace";
-    saveState();
-    render();
   }
   if (action === "export-active") {
     const active = getActive();
@@ -2853,6 +3151,26 @@ document.addEventListener("click", (event) => {
     ui.showAuth = false;
     render();
   }
+  if (action === "google-signin") {
+    signInWithGoogle();
+  }
+  if (action === "password-signin") {
+    signInWithPassword();
+  }
+  if (action === "password-signup") {
+    signUpWithPassword();
+  }
+  if (action === "signin-mode-signup") {
+    ui.signinMode = "signup";
+    render();
+  }
+  if (action === "signin-mode-signin") {
+    ui.signinMode = "signin";
+    render();
+  }
+  if (action === "forgot-password") {
+    sendMagicLink();
+  }
   if (action === "send-magic-link") {
     sendMagicLink();
   }
@@ -2877,6 +3195,17 @@ document.addEventListener("click", (event) => {
     const all = state.sermons.map(exportMarkdown).join("\n\n---\n\n");
     downloadText("preach-flow-sermons.md", all || "# Preach Flow\n");
   }
+  if (action === "pipeline-filter") {
+    state.filter = target.dataset.filter;
+    saveState();
+    render();
+  }
+  if (action === "review-check") {
+    const key = target.dataset.key;
+    state.reviewChecks = { ...state.reviewChecks, [key]: !state.reviewChecks[key] };
+    saveState();
+    render();
+  }
   if (action === "clear-review") {
     state.reviewText = "";
     ui.reviewResult = "";
@@ -2898,7 +3227,7 @@ document.addEventListener("submit", (event) => {
 document.addEventListener("input", (event) => {
   const target = event.target;
   const action = target.dataset.action;
-  if (action === "composer-input") {
+  if (action === "coach-input") {
     ui.composer = target.value;
     const sendButton = document.querySelector("[data-action='send']");
     if (sendButton) sendButton.disabled = ui.loading || !ui.composer.trim();
@@ -2909,15 +3238,11 @@ document.addEventListener("input", (event) => {
   if (action === "auth-email-input") {
     ui.auth.emailInput = target.value;
   }
-  if (action === "phase-note") {
-    const active = getActive();
-    if (!active) return;
-    active.notes[target.dataset.phase] = target.value;
-    active.updatedAt = new Date().toISOString();
-    saveState();
+  if (action === "auth-password-input") {
+    ui.auth.passwordInput = target.value;
   }
-  if (action === "rich-note") {
-    persistRichNote(target);
+  if (action === "phase-editor") {
+    persistPhaseEditor(target);
   }
   if (action === "pipeline-query") {
     state.query = target.value;
@@ -2934,32 +3259,11 @@ document.addEventListener("input", (event) => {
     state.reviewMeta[target.dataset.field] = target.value;
     saveState();
   }
-  if (action === "journal-quick-title" || action === "journal-draft-title") {
-    ui.journalDraft.title = target.value;
-  }
-  if (action === "journal-quick-body" || action === "journal-draft-body") {
-    ui.journalDraft.body = target.value;
-    const submit = document.querySelector('form[data-form="journal-entry"] button[type="submit"]');
-    if (submit) submit.disabled = !ui.journalDraft.body.trim();
-    const quickSubmit = document.querySelector('[data-action="save-quick-journal"]');
-    if (quickSubmit) quickSubmit.disabled = !ui.journalDraft.body.trim();
-  }
 });
 
 document.addEventListener("change", (event) => {
   const target = event.target;
   const action = target.dataset.action;
-  if (action === "active-sermon") {
-    state.activeId = target.value;
-    state.view = "workspace";
-    saveState();
-    render();
-  }
-  if (action === "pipeline-filter") {
-    state.filter = target.value;
-    saveState();
-    render();
-  }
   if (action === "review-file") {
     handleReviewFile(target);
   }
@@ -2968,21 +3272,21 @@ document.addEventListener("change", (event) => {
     saveState();
     setGoogleStatus(target.checked ? "Auto-sync enabled" : "Auto-sync paused", target.checked ? "ready" : "neutral");
   }
-  if (action === "journal-draft-sermon") {
-    ui.journalDraft.sermonId = target.value;
-  }
-  if (action === "journal-draft-phase") {
-    ui.journalDraft.phaseId = target.value;
-  }
 });
 
+// Keep the contenteditable's selection when a toolbar button is pressed.
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-rich"]')) {
+  if (event.target.closest('[data-action="format-doc"]')) {
     event.preventDefault();
   }
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.target.dataset?.action === "coach-input" && event.key === "Enter") {
+    event.preventDefault();
+    send();
+    return;
+  }
   const card = event.target.closest("[data-sermon-card]");
   if (card && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();

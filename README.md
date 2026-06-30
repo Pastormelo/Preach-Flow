@@ -22,9 +22,15 @@ GOOGLE_CLIENT_ID=
 
 Preach Flow uses a bring-your-own-key model for the AI coach. Do not add your personal OpenAI API key to Vercel for a public deployment. Each visitor adds their own OpenAI API key inside the app, and that key is stored in their browser.
 
+## Design
+
+Preach Flow uses the **One Family Church** design system — orange on ink with cool slate grays, an off-white paper background, Montserrat display type and Mulish body type. The UI supports a **light/dark theme toggle** (persisted per browser), a movement "journey" progress path, and a distraction-free writing canvas. All styling lives in `src/styles.css` as CSS custom properties scoped to `[data-theme="light|dark"]`.
+
 ## Accounts and Database
 
 Preach Flow uses Supabase Auth and a Supabase Postgres table for account-based saving. Run the SQL in `supabase/schema.sql` inside your Supabase SQL editor, then add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to Vercel.
+
+Sign-in supports **email + password**, **Continue with Google**, and a one-time **magic link**. To enable Google sign-in, turn on the Google provider in your Supabase project (Authentication → Providers → Google) and add this site's URL to the allowed redirect URLs. Password sign-up may require email confirmation depending on your Supabase Auth settings.
 
 The app stores one private `app_state` JSON document per user. Row Level Security restricts each user to their own row.
 
