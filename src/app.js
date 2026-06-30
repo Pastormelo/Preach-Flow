@@ -1296,7 +1296,7 @@ function renderCanvas(active, phase) {
           ${complete ? "Phase complete · undo" : "Mark phase complete"}
         </button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
-        <button class="pf-btn pf-btn-ghost" data-action="export-active-md">.md</button>
+        <button class="pf-btn pf-btn-ghost" data-action="export-active-doc">Word</button>
         <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
       </div>
     </main>
@@ -2281,6 +2281,37 @@ function exportPdf(title, bodyHtml) {
   win.focus();
 }
 
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Word-compatible .doc (HTML-based) — opens in Word and Google Docs.
+function exportDoc(filename, bodyHtml) {
+  const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escapeHtml(filename)}</title>
+<style>
+  body { font-family: "Calibri", "Segoe UI", sans-serif; color: #20242a; line-height: 1.5; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 2px; font-size: 10pt; font-weight: bold; color: #c2640f; margin: 0 0 2pt; }
+  h1 { font-size: 22pt; margin: 0 0 2pt; }
+  .subtitle { font-size: 13pt; color: #39424c; margin: 0 0 4pt; }
+  .meta { font-size: 9pt; color: #5e6c7a; margin: 0 0 14pt; }
+  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 1px; color: #5e6c7a; border-bottom: 1px solid #e0e5eb; margin: 16pt 0 6pt; }
+  h3 { font-size: 13pt; margin: 10pt 0 4pt; }
+  .note { font-size: 11pt; color: #39424c; }
+  .note ul, .note ol { margin: 4pt 0; padding-left: 22pt; }
+  .note blockquote { margin: 6pt 0; padding-left: 10pt; border-left: 3px solid #ffd2a8; font-style: italic; }
+  .muted { color: #8c97a3; }
+</style></head><body>${bodyHtml}</body></html>`;
+  downloadBlob(`${slug(filename)}.doc`, "﻿" + doc, "application/msword");
+}
+
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -3215,6 +3246,10 @@ document.addEventListener("click", (event) => {
   if (action === "export-active-md") {
     const active = getActive();
     if (active) downloadText(`${slug(active.passage)}.md`, exportMarkdown(active));
+  }
+  if (action === "export-active-doc") {
+    const active = getActive();
+    if (active) exportDoc(active.passage || "Sermon", sermonDocHtml(active));
   }
   if (action === "copy-active") {
     const active = getActive();
