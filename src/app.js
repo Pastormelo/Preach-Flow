@@ -1109,7 +1109,7 @@ function renderPipeline() {
             ([value, label]) =>
               `<button class="pf-chip ${state.filter === value ? "active" : ""}" data-action="pipeline-filter" data-filter="${value}">${label}</button>`,
           ).join("")}
-          <button class="pf-btn pf-btn-ghost" data-action="export-all">Export all</button>
+          <button class="pf-btn pf-btn-ghost" data-action="export-all">Export all (PDF)</button>
         </div>
       </div>
       ${
@@ -1295,7 +1295,8 @@ function renderCanvas(active, phase) {
         <button class="pf-btn ${complete ? "" : "pf-btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
           ${complete ? "Phase complete · undo" : "Mark phase complete"}
         </button>
-        <button class="pf-btn pf-btn-ghost" data-action="export-active">Export</button>
+        <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
+        <button class="pf-btn pf-btn-ghost" data-action="export-active-md">.md</button>
         <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
       </div>
     </main>
@@ -2206,6 +2207,78 @@ function downloadText(filename, text) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---- PDF export via the browser's print-to-PDF ----
+function sermonSectionsHtml(sermon) {
+  let html = "";
+  for (const [blockIndex, block] of BLOCKS.entries()) {
+    const phases = PHASES.filter((phase) => phase.block === blockIndex);
+    const withNotes = phases.filter((phase) => phaseNoteText(sermon, phase).trim());
+    if (!withNotes.length) continue;
+    html += `<h2>${escapeHtml(block.label)}</h2>`;
+    for (const phase of withNotes) {
+      const done = sermon.completed.includes(phase.id);
+      html += `<h3>${done ? "✓ " : ""}${escapeHtml(phase.name)}</h3>`;
+      html += `<div class="note">${sanitizeRichHtml(phaseNoteHtml(sermon, phase))}</div>`;
+    }
+  }
+  if (!html) html = `<p class="muted">No notes captured yet.</p>`;
+  return html;
+}
+
+function sermonDocHtml(sermon) {
+  const status = sermonStatus(sermon);
+  return `
+    <section class="sermon">
+      <p class="eyebrow">${escapeHtml(sermon.series || "Sermon")}</p>
+      <h1>${escapeHtml(sermon.passage || "Untitled sermon")}</h1>
+      ${sermon.title ? `<p class="subtitle">${escapeHtml(sermon.title)}</p>` : ""}
+      <p class="meta">
+        ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date"} ·
+        ${escapeHtml(sermon.length || "—")} min ·
+        ${escapeHtml(sermon.format || "")} ·
+        ${sermon.completed.length}/${PHASES.length} phases (${progressPct(sermon)}%) · ${escapeHtml(status.label)}
+      </p>
+      ${sermonSectionsHtml(sermon)}
+    </section>
+  `;
+}
+
+function buildPrintDoc(title, bodyHtml) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  @page { margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Mulish", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #20242a; line-height: 1.6; margin: 0; padding: 28px; }
+  .sermon { max-width: 720px; margin: 0 auto 40px; }
+  .sermon + .sermon { border-top: 2px solid #e0e5eb; padding-top: 28px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 700; color: #dc6a12; margin: 0 0 6px; }
+  h1 { font-family: "Montserrat", sans-serif; font-weight: 800; letter-spacing: -.02em; font-size: 30px; margin: 0 0 4px; }
+  .subtitle { font-size: 17px; color: #39424c; margin: 0 0 8px; }
+  .meta { font-size: 12.5px; color: #5e6c7a; margin: 0 0 22px; }
+  h2 { font-family: "Montserrat", sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #5e6c7a; margin: 26px 0 10px; border-bottom: 1px solid #e0e5eb; padding-bottom: 6px; }
+  h3 { font-family: "Montserrat", sans-serif; font-weight: 700; font-size: 17px; margin: 16px 0 6px; color: #20242a; page-break-after: avoid; }
+  .note { font-size: 14.5px; color: #39424c; }
+  .note ul, .note ol { margin: 6px 0; padding-left: 22px; }
+  .note blockquote { margin: 10px 0; padding-left: 14px; border-left: 3px solid #ffd2a8; font-style: italic; color: #39424c; }
+  .muted { color: #8c97a3; }
+  h2, h3 { page-break-inside: avoid; }
+</style></head><body>${bodyHtml}
+<script>window.onload=function(){setTimeout(function(){window.print();},250);};window.onafterprint=function(){window.close();};</script>
+</body></html>`;
+}
+
+function exportPdf(title, bodyHtml) {
+  const win = window.open("", "_blank");
+  if (!win) {
+    showBanner("Allow pop-ups for this site to export a PDF.");
+    return;
+  }
+  win.document.open();
+  win.document.write(buildPrintDoc(title, bodyHtml));
+  win.document.close();
+  win.focus();
 }
 
 async function copyText(text) {
@@ -3137,6 +3210,10 @@ document.addEventListener("click", (event) => {
   }
   if (action === "export-active") {
     const active = getActive();
+    if (active) exportPdf(active.passage || "Sermon", sermonDocHtml(active));
+  }
+  if (action === "export-active-md") {
+    const active = getActive();
     if (active) downloadText(`${slug(active.passage)}.md`, exportMarkdown(active));
   }
   if (action === "copy-active") {
@@ -3207,8 +3284,11 @@ document.addEventListener("click", (event) => {
     });
   }
   if (action === "export-all") {
-    const all = state.sermons.map(exportMarkdown).join("\n\n---\n\n");
-    downloadText("preach-flow-sermons.md", all || "# Preach Flow\n");
+    if (!state.sermons.length) {
+      showBanner("No sermons to export yet.");
+    } else {
+      exportPdf("Preach Flow sermons", state.sermons.map(sermonDocHtml).join(""));
+    }
   }
   if (action === "pipeline-filter") {
     state.filter = target.dataset.filter;
