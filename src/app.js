@@ -1588,7 +1588,7 @@ function collectActiveNoteGroups(active) {
   for (const phase of PHASES) {
     const entries = [];
     if (phaseNoteText(active, phase).trim()) {
-      entries.push({ kind: phaseNoteKind(phase), html: phaseNoteHtml(active, phase) });
+      entries.push({ kind: phaseNoteKind(phase), html: phaseNoteHtml(active, phase), phaseId: phase.id, editable: true });
     }
     active.thread
       .filter((message) => message.role === "assistant" && message.phaseId === phase.id)
@@ -1638,11 +1638,26 @@ function renderNoteGroup(group) {
       </div>
       <div>
         ${group.entries
-          .map(
-            (entry) => `
+          .map((entry) =>
+            entry.editable
+              ? `
               <div class="pf-note-entry">
                 <span class="pf-kind ${entry.kind}">${kindLabel(entry.kind)}</span>
-                <div class="pf-note-body">${entry.html ? sanitizeRichHtml(entry.html) : escapeHtml(entry.text || "")}</div>
+                <div
+                  class="pf-note-body pf-note-editable"
+                  contenteditable="true"
+                  spellcheck="true"
+                  data-action="notes-editor"
+                  data-phase="${attr(entry.phaseId)}"
+                  data-placeholder="Write a note for this phase…"
+                  title="Click to edit — saves automatically"
+                >${sanitizeRichHtml(entry.html)}</div>
+              </div>
+            `
+              : `
+              <div class="pf-note-entry">
+                <span class="pf-kind ${entry.kind}">${kindLabel(entry.kind)}</span>
+                <div class="pf-note-body">${escapeHtml(entry.text || "")}</div>
               </div>
             `,
           )
@@ -3241,7 +3256,7 @@ document.addEventListener("input", (event) => {
   if (action === "auth-password-input") {
     ui.auth.passwordInput = target.value;
   }
-  if (action === "phase-editor") {
+  if (action === "phase-editor" || action === "notes-editor") {
     persistPhaseEditor(target);
   }
   if (action === "pipeline-query") {
