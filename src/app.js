@@ -580,7 +580,7 @@ function attr(value) {
 function sanitizeRichHtml(value) {
   const template = document.createElement("template");
   template.innerHTML = String(value || "");
-  const allowed = new Set(["B", "STRONG", "I", "EM", "UL", "OL", "LI", "DIV", "P", "BR"]);
+  const allowed = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "DIV", "P", "BR", "H3", "BLOCKQUOTE"]);
   for (const node of [...template.content.querySelectorAll("*")]) {
     if (!allowed.has(node.tagName)) {
       node.replaceWith(...node.childNodes);
@@ -1349,7 +1349,13 @@ function renderWriterCard(active, phase) {
         </button>
       </div>
       <div class="pf-toolbar" aria-label="Text formatting">
-        <button class="pf-tool-pill" data-action="format-doc" data-format="h3" title="Heading">Heading <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+        <span class="pf-tool-menu-wrap">
+          <button class="pf-tool-pill" data-action="heading-menu" title="Text style" aria-haspopup="true">Heading <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+          <span class="pf-tool-menu" data-tool-menu>
+            <button class="pf-tool-menu-item" data-action="format-doc" data-format="h3">Heading</button>
+            <button class="pf-tool-menu-item" data-action="format-doc" data-format="p">Normal text</button>
+          </span>
+        </span>
         <span class="pf-tool-div"></span>
         <button class="pf-tool-btn serif b" data-action="format-doc" data-format="bold" title="Bold">B</button>
         <button class="pf-tool-btn serif i" data-action="format-doc" data-format="italic" title="Italic">I</button>
@@ -2978,13 +2984,36 @@ const EXEC_COMMANDS = {
   quote: ["formatBlock", "blockquote"],
 };
 
+// Which block element (h3/blockquote) the selection currently sits inside, if any.
+function currentBlockTag(editor) {
+  const selection = window.getSelection();
+  let node = selection?.anchorNode || null;
+  while (node && node !== editor) {
+    if (node.nodeType === 1) {
+      const tag = node.tagName.toLowerCase();
+      if (tag === "h3" || tag === "blockquote") return tag;
+    }
+    node = node.parentNode;
+  }
+  return "";
+}
+
 function formatDoc(format) {
   const editor = document.querySelector('[data-action="phase-editor"]');
-  const command = EXEC_COMMANDS[format];
-  if (!editor || !command) return;
+  if (!editor) return;
   editor.focus({ preventScroll: true });
   try {
-    document.execCommand(command[0], false, command[1] || null);
+    if (format === "h3" || format === "quote" || format === "p") {
+      // Block formats toggle: clicking Heading/Scripture again returns the
+      // block to a normal paragraph (execCommand alone never un-sets them).
+      const tag = format === "quote" ? "blockquote" : format === "h3" ? "h3" : "p";
+      const target = tag !== "p" && currentBlockTag(editor) === tag ? "p" : tag;
+      document.execCommand("formatBlock", false, target);
+    } else {
+      const command = EXEC_COMMANDS[format];
+      if (!command) return;
+      document.execCommand(command[0], false, command[1] || null);
+    }
   } catch (_) {
     /* execCommand is deprecated but still works for this rich-text editor */
   }
@@ -3097,6 +3126,10 @@ async function checkServerStatus() {
   render();
 }
 
+function closeToolMenus() {
+  document.querySelectorAll("[data-tool-menu].open").forEach((menu) => menu.classList.remove("open"));
+}
+
 function closeOverlays() {
   ui.showAuth = false;
   ui.showOpenAIKey = false;
@@ -3106,6 +3139,9 @@ function closeOverlays() {
 }
 
 document.addEventListener("click", (event) => {
+  // Any click outside the heading dropdown closes it.
+  if (!event.target.closest(".pf-tool-menu-wrap")) closeToolMenus();
+
   // Backdrop click on a modal overlay closes it.
   const overlay = event.target.closest("[data-overlay]");
   if (overlay && !event.target.closest("[data-stop]")) {
@@ -3199,8 +3235,15 @@ document.addEventListener("click", (event) => {
     ui.showCoach = false;
     render();
   }
+  if (action === "heading-menu") {
+    // Toggle the dropdown in place — no render(), so the editor selection survives.
+    const menu = target.parentElement?.querySelector("[data-tool-menu]");
+    if (menu) menu.classList.toggle("open");
+    return;
+  }
   if (action === "format-doc") {
     formatDoc(target.dataset.format);
+    closeToolMenus();
   }
   if (action === "open-switcher") {
     ui.showSwitcher = true;
@@ -3406,7 +3449,7 @@ document.addEventListener("change", (event) => {
 
 // Keep the contenteditable's selection when a toolbar button is pressed.
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-doc"]')) {
+  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"]')) {
     event.preventDefault();
   }
 });
@@ -3426,6 +3469,15 @@ document.addEventListener("keydown", (event) => {
     render();
   }
 });
+
+// Deep link from the marketing homepage: /app#signin opens the sign-in view.
+// Without the hash, never boot into a stale persisted sign-in view.
+if (window.location.hash === "#signin" && !ui.auth.user) {
+  ui.lastView = state.view !== "signin" ? state.view : "workspace";
+  state.view = "signin";
+} else if (state.view === "signin") {
+  state.view = "workspace";
+}
 
 render();
 checkServerStatus();

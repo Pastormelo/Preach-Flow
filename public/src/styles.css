@@ -1203,6 +1203,45 @@ p {
   background: var(--border-default);
   margin: 0 5px;
 }
+.pf-tool-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.pf-tool-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 150px;
+  flex-direction: column;
+  padding: 5px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.pf-tool-menu.open {
+  display: flex;
+}
+.pf-tool-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pf-tool-menu-item:hover {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+}
 .pf-tool-quote {
   display: inline-flex;
   align-items: center;

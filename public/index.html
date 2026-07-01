@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Preach Flow</title>
+    <title>PreachFlow — Sermon prep that keeps the text in charge</title>
     <meta
       name="description"
-      content="Preach Flow is a focused sermon-prep workspace for moving from the text to the pulpit."
+      content="PreachFlow is not an AI sermon generator. It is a guided sermon-prep workflow for pastors who want to study deeply, think clearly, and preach with conviction."
     />
     <link rel="icon" type="image/svg+xml" href="./assets/preach-flow-mark.svg?v=ofc-2" />
     <link rel="apple-touch-icon" href="./assets/preach-flow-mark.svg?v=ofc-2" />
@@ -15,14 +15,420 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Mulish:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Mulish:wght@400;500;600;700&display=swap"
     />
-    <link rel="stylesheet" href="./src/styles.css?v=preach-flow-ofc-redesign-20260630" />
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" async defer></script>
+    <style>
+      :root {
+        --surface-page: #f4fbfe;
+        --surface-card: #ffffff;
+        --surface-sunken: #f7f9fb;
+        --surface-inverse: #20242a;
+        --text-primary: #20242a;
+        --text-secondary: #39424c;
+        --text-muted: #5e6c7a;
+        --text-inverse: #f4fbfe;
+        --text-brand: #dc6a12;
+        --border-subtle: #eef1f5;
+        --border-default: #e0e5eb;
+        --border-strong: #c9d0d9;
+        --brand: #ff953e;
+        --brand-hover: #f47f22;
+        --brand-soft: #fff4ea;
+        --brand-soft-border: #ffd2a8;
+        --on-brand: #20242a;
+        --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+        --font-body: "Mulish", ui-sans-serif, system-ui, sans-serif;
+        --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+        --shadow-sm: 0 1px 2px rgba(32, 36, 42, 0.06), 0 2px 6px rgba(32, 36, 42, 0.06);
+        --shadow-md: 0 2px 4px rgba(32, 36, 42, 0.05), 0 8px 20px rgba(32, 36, 42, 0.08);
+        --shadow-brand: 0 8px 24px rgba(255, 149, 62, 0.32);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.6;
+        background: var(--surface-page);
+        color: var(--text-primary);
+      }
+      h1, h2, h3, p { margin: 0; }
+      a { color: inherit; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+      .eyebrow {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--text-brand);
+        display: block;
+        margin-bottom: 12px;
+      }
+      .h2 {
+        font-family: var(--font-display);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: clamp(26px, 3vw, 36px);
+        line-height: 1.08;
+      }
+      .lead { font-size: 17.5px; color: var(--text-secondary); max-width: 62ch; }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        padding: 14px 26px;
+        border-radius: 10px;
+        border: 0;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 0.14s var(--ease-out), box-shadow 0.18s var(--ease-out), background 0.18s var(--ease-out);
+      }
+      .btn-primary { background: var(--brand); color: var(--on-brand); box-shadow: var(--shadow-sm); }
+      .btn-primary:hover { background: var(--brand-hover); transform: translateY(-1px); box-shadow: var(--shadow-brand); }
+      .btn-outline { background: var(--surface-card); color: var(--text-secondary); border: 1.5px solid var(--border-strong); }
+      .btn-outline:hover { background: var(--surface-sunken); transform: translateY(-1px); }
+
+      /* nav */
+      .nav {
+        position: sticky; top: 0; z-index: 40;
+        background: color-mix(in srgb, var(--surface-page) 88%, transparent);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border-default);
+      }
+      .nav-inner { display: flex; align-items: center; gap: 26px; padding: 14px 28px; max-width: 1080px; margin: 0 auto; }
+      .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+      .brand-mark {
+        width: 34px; height: 34px; border-radius: 10px; background: var(--brand);
+        display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-brand);
+      }
+      .brand-name { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.01em; font-size: 18px; }
+      .brand-name span { color: var(--text-brand); }
+      .nav-links { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+      .nav-links a {
+        font-family: var(--font-display); font-weight: 700; font-size: 13.5px;
+        color: var(--text-secondary); text-decoration: none; padding: 8px 14px; border-radius: 999px;
+        transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out);
+      }
+      .nav-links a:hover { background: var(--brand-soft); color: var(--text-brand); }
+      .nav-cta { margin-left: 8px; padding: 10px 18px !important; border-radius: 9px !important; background: var(--brand); color: var(--on-brand) !important; }
+      .nav-cta:hover { background: var(--brand-hover) !important; }
+
+      /* hero */
+      .hero { padding: 96px 0 84px; text-align: center; }
+      .hero h1 {
+        font-family: var(--font-display); font-weight: 800; letter-spacing: -0.028em;
+        font-size: clamp(38px, 5.4vw, 62px); line-height: 1.03; max-width: 17ch; margin: 0 auto 22px;
+      }
+      .hero h1 em { font-style: normal; color: var(--text-brand); }
+      .hero .sub { font-size: clamp(17px, 1.9vw, 20px); line-height: 1.55; color: var(--text-secondary); max-width: 58ch; margin: 0 auto 20px; }
+      .hero .not-ai {
+        display: inline-block; font-family: var(--font-display); font-weight: 700; font-size: 14px;
+        color: var(--text-brand); background: var(--brand-soft); border: 1px solid var(--brand-soft-border);
+        border-radius: 999px; padding: 9px 20px; margin-bottom: 34px; line-height: 1.5;
+      }
+      .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+      .hero .trust { font-size: 14px; color: var(--text-muted); font-family: var(--font-display); font-weight: 600; letter-spacing: 0.02em; }
+
+      /* sections */
+      section { padding: 76px 0; }
+      section.alt { background: var(--surface-sunken); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
+      .section-head { max-width: 680px; margin-bottom: 40px; }
+      .section-head .h2 { margin-bottom: 16px; }
+
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+      .card {
+        background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 16px;
+        box-shadow: var(--shadow-sm); padding: 26px;
+      }
+      .card .icon {
+        width: 42px; height: 42px; border-radius: 12px; background: var(--brand-soft);
+        border: 1px solid var(--brand-soft-border); display: flex; align-items: center; justify-content: center;
+        color: var(--text-brand); margin-bottom: 16px;
+      }
+      .card h3 { font-family: var(--font-display); font-weight: 800; font-size: 16.5px; letter-spacing: -0.01em; margin-bottom: 8px; }
+      .card p { font-size: 14.5px; color: var(--text-secondary); }
+
+      /* positioning compare */
+      .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .compare-col { border-radius: 18px; padding: 30px; }
+      .compare-col.not { background: var(--surface-card); border: 1px solid var(--border-default); }
+      .compare-col.is { background: var(--surface-inverse); color: var(--text-inverse); box-shadow: var(--shadow-md); }
+      .compare-col h3 {
+        font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: 0.14em;
+        text-transform: uppercase; margin-bottom: 18px;
+      }
+      .compare-col.not h3 { color: var(--text-muted); }
+      .compare-col.is h3 { color: var(--brand); }
+      .compare-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+      .compare-col li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.5; }
+      .compare-col.not li { color: var(--text-secondary); }
+      .compare-col.is li { color: rgba(244, 251, 254, 0.92); }
+      .compare-col li svg { flex-shrink: 0; margin-top: 3px; }
+
+      /* workflow */
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
+      .step {
+        background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 16px;
+        box-shadow: var(--shadow-sm); padding: 26px;
+      }
+      .step .num {
+        display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+        border-radius: 999px; background: var(--brand); color: var(--on-brand);
+        font-family: var(--font-display); font-weight: 800; font-size: 14px; margin-bottom: 14px;
+      }
+      .step h3 { font-family: var(--font-display); font-weight: 800; font-size: 16.5px; letter-spacing: -0.01em; margin-bottom: 8px; }
+      .step p { font-size: 14.5px; color: var(--text-secondary); }
+
+      /* conviction */
+      .conviction { background: var(--surface-inverse); color: var(--text-inverse); text-align: center; padding: 90px 0; }
+      .conviction .h2 { color: var(--text-inverse); margin-bottom: 18px; }
+      .conviction .intro { color: rgba(244, 251, 254, 0.78); font-size: 17px; max-width: 52ch; margin: 0 auto 34px; }
+      .creed { display: flex; flex-direction: column; gap: 10px; margin: 0 auto 34px; }
+      .creed p {
+        font-family: var(--font-display); font-weight: 700; font-size: clamp(17px, 2.2vw, 22px);
+        letter-spacing: -0.01em; color: var(--text-inverse);
+      }
+      .creed p strong { color: var(--brand); font-weight: 800; }
+      .conviction .outro { color: rgba(244, 251, 254, 0.72); font-size: 15.5px; max-width: 52ch; margin: 0 auto; }
+
+      /* final cta */
+      .final { text-align: center; padding: 90px 0; }
+      .final .h2 { max-width: 22ch; margin: 0 auto 16px; }
+      .final p { color: var(--text-secondary); font-size: 17px; margin-bottom: 30px; }
+
+      footer { border-top: 1px solid var(--border-default); padding: 26px 0; }
+      .foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); }
+      .foot a { color: var(--text-muted); text-decoration: none; }
+      .foot a:hover { color: var(--text-brand); }
+
+      @media (max-width: 880px) {
+        .cards, .steps, .compare { grid-template-columns: 1fr; }
+        .nav-links a:not(.nav-cta):not(.keep) { display: none; }
+        .hero { padding: 64px 0 60px; }
+        section { padding: 56px 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { transition: none !important; }
+        html { scroll-behavior: auto; }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="./src/app.js"></script>
+    <!-- NAV -->
+    <nav class="nav">
+      <div class="nav-inner">
+        <a class="brand" href="./">
+          <span class="brand-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>
+          </span>
+          <span class="brand-name">Preach<span>Flow</span></span>
+        </a>
+        <div class="nav-links">
+          <a href="./">Home</a>
+          <a href="#workflow">How It Works</a>
+          <a href="#features">Features</a>
+          <a class="keep" href="./app#signin">Sign In</a>
+          <a class="nav-cta keep" href="./app">Start Preparing</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 1. HERO -->
+    <header class="hero">
+      <div class="wrap">
+        <h1>Sermon prep that keeps <em>the text</em> in charge.</h1>
+        <p class="sub">PreachFlow helps pastors move from passage to pulpit with biblical clarity, expositional structure, gospel-centered application, and weekly momentum.</p>
+        <p class="not-ai">Not an AI sermon generator. A faithful sermon workflow for pastors who want to study deeply, think clearly, and preach with conviction.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="./app">Start Preparing</a>
+          <a class="btn btn-outline" href="#workflow">See How It Works</a>
+        </div>
+        <p class="trust">The Word leads. The pastor studies. PreachFlow brings structure, clarity, and momentum.</p>
+      </div>
+    </header>
+
+    <!-- 2. PROBLEM -->
+    <section class="alt" id="problem">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">The problem</span>
+          <h2 class="h2">Pastors do not need a shortcut around the text.</h2>
+        </div>
+        <p class="lead" style="margin-bottom: 14px;">Every week, pastors carry the weight of preaching God&rsquo;s Word while also leading people, shepherding souls, managing decisions, and responding to real needs. The problem is not usually a lack of desire. It is the challenge of moving from study notes, commentaries, observations, and pastoral burden into a clear, faithful sermon.</p>
+        <p class="lead" style="margin-bottom: 40px;">PreachFlow is built to help with that process, without replacing the preacher&rsquo;s responsibility to study, pray, discern, and preach.</p>
+        <div class="cards">
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+            <h3>Scattered study notes</h3>
+            <p>Observations, commentary insights, cross-references, illustrations, and application ideas can pile up without becoming a clear sermon.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></span>
+            <h3>Unclear sermon burden</h3>
+            <p>A passage may be rich, but the sermon still needs a clear big idea, purpose, and call to respond.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+            <h3>Weekly pressure</h3>
+            <p>Sermon preparation often happens alongside counseling, meetings, leadership, family, emergencies, and ministry demands.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. POSITIONING -->
+    <section id="positioning">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Our conviction</span>
+          <h2 class="h2">Not sermon generation. Sermon formation.</h2>
+          <p class="lead" style="margin-top: 16px;">PreachFlow does not replace the preacher. It strengthens the preacher&rsquo;s process. The app helps pastors ask better questions, organize their study, clarify the burden of the text, shape the sermon, and review the message before preaching.</p>
+        </div>
+        <div class="compare">
+          <div class="compare-col not">
+            <h3>What PreachFlow is not</h3>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b23a36" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>An AI tool that writes your sermon for you</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b23a36" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>A shortcut around exegesis</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b23a36" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>A replacement for prayer, study, or pastoral discernment</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b23a36" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>A content machine for generic religious talks</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b23a36" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>A way to outsource conviction</li>
+            </ul>
+          </div>
+          <div class="compare-col is">
+            <h3>What PreachFlow is</h3>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF953E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A guided sermon-prep workflow</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF953E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A study and structure assistant</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF953E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A big idea and outline coach</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF953E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A tool for strengthening pastoral application</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF953E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A review process for clarity, faithfulness, and gospel centrality</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. WORKFLOW -->
+    <section class="alt" id="workflow">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">How it works</span>
+          <h2 class="h2">A guided path from text to delivery.</h2>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <span class="num">1</span>
+            <h3>Start with the text</h3>
+            <p>Choose the passage, sermon date, series, translation, and preaching aim. Begin where every faithful sermon must begin: Scripture.</p>
+          </div>
+          <div class="step">
+            <span class="num">2</span>
+            <h3>Study with better questions</h3>
+            <p>Explore context, structure, repeated words, argument flow, theological themes, original audience significance, and key interpretive issues.</p>
+          </div>
+          <div class="step">
+            <span class="num">3</span>
+            <h3>Clarify the burden</h3>
+            <p>Move from scattered notes to a clear central message. Identify what the text says, why it matters, and how your people need to respond.</p>
+          </div>
+          <div class="step">
+            <span class="num">4</span>
+            <h3>Shape the sermon</h3>
+            <p>Build and refine outlines, movements, transitions, introductions, conclusions, and invitations that serve the passage.</p>
+          </div>
+          <div class="step">
+            <span class="num">5</span>
+            <h3>Apply with pastoral precision</h3>
+            <p>Speak to real people: believers, unbelievers, the weary, the proud, the suffering, the skeptic, the nominal Christian, and the church body.</p>
+          </div>
+          <div class="step">
+            <span class="num">6</span>
+            <h3>Review before preaching</h3>
+            <p>Check for biblical faithfulness, clarity, gospel centrality, weak transitions, thin application, unnecessary length, and unclear calls to respond.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. FEATURES -->
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Features</span>
+          <h2 class="h2">Built for faithful sermon preparation.</h2>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg></span>
+            <h3>Text Study Assistant</h3>
+            <p>Helps you examine the passage with focused questions about context, structure, theology, and meaning.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></span>
+            <h3>Big Idea Coach</h3>
+            <p>Helps clarify the main burden of the text and turn it into a clear sermon claim.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+            <h3>Outline Lab</h3>
+            <p>Helps compare and refine sermon structures that serve the passage instead of forcing the text into a template.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <h3>Application Engine</h3>
+            <p>Helps move beyond generic application into specific pastoral counsel for real people.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6.6 5.5 5.5 0 0 1 21.5 12c-2.5 4.5-9.5 9-9.5 9z"/></svg></span>
+            <h3>Christ Connection Check</h3>
+            <p>Helps you point to Christ responsibly without forcing allegory or flattening the text.</p>
+          </div>
+          <div class="card">
+            <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+            <h3>Sermon Review</h3>
+            <p>Helps evaluate the sermon for clarity, faithfulness, gospel centrality, length, transitions, and pastoral usefulness.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. CONVICTION -->
+    <section class="conviction">
+      <div class="wrap">
+        <h2 class="h2">The preacher is not replaced.</h2>
+        <p class="intro">PreachFlow exists to support the preacher, not replace him.</p>
+        <div class="creed">
+          <p>The <strong>Word</strong> still leads.</p>
+          <p>The <strong>pastor</strong> still studies.</p>
+          <p>The <strong>Spirit</strong> still empowers.</p>
+          <p>The church still needs a <strong>shepherd</strong>, not a machine.</p>
+        </div>
+        <p class="outro">PreachFlow simply helps bring order, clarity, and momentum to the sermon-prep process.</p>
+      </div>
+    </section>
+
+    <!-- 7. FINAL CTA -->
+    <section class="final">
+      <div class="wrap">
+        <h2 class="h2">Prepare your next sermon with clarity and conviction.</h2>
+        <p>Start with the text. Clarify the message. Shape the sermon. Preach with confidence.</p>
+        <a class="btn btn-primary" href="./app">Start Preparing</a>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap foot">
+        <span>PreachFlow — from text to pulpit with clarity.</span>
+        <span style="margin-left: auto;"><a href="./app#signin">Sign In</a> · <a href="./app">Start Preparing</a></span>
+      </div>
+    </footer>
   </body>
 </html>
