@@ -121,7 +121,44 @@
       .nav-cta:hover { background: var(--brand-hover) !important; }
 
       /* hero */
-      .hero { padding: 96px 0 84px; text-align: center; }
+      .hero {
+        position: relative;
+        padding: 96px 0 84px;
+        text-align: center;
+        overflow: hidden;
+      }
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: -20% -10% auto;
+        height: 480px;
+        background:
+          radial-gradient(420px 300px at 18% 30%, rgba(255, 149, 62, 0.14), transparent 70%),
+          radial-gradient(520px 340px at 84% 18%, rgba(255, 149, 62, 0.1), transparent 70%),
+          radial-gradient(340px 260px at 60% 90%, rgba(208, 236, 246, 0.5), transparent 70%);
+        pointer-events: none;
+      }
+      .hero-book {
+        position: absolute;
+        right: -70px;
+        bottom: -60px;
+        width: 340px;
+        height: 340px;
+        color: var(--brand);
+        opacity: 0.07;
+        transform: rotate(-8deg);
+        pointer-events: none;
+      }
+      .hero-book.left {
+        left: -90px;
+        right: auto;
+        top: -70px;
+        bottom: auto;
+        transform: rotate(10deg);
+        width: 300px;
+        height: 300px;
+      }
+      .hero .wrap { position: relative; }
       .hero h1 {
         font-family: var(--font-display); font-weight: 800; letter-spacing: -0.028em;
         font-size: clamp(38px, 5.4vw, 62px); line-height: 1.03; max-width: 17ch; margin: 0 auto 22px;
@@ -306,8 +343,33 @@
       .wf-mcard .wf-frame { box-shadow: var(--shadow-sm); }
       .wf-mcard .wf-screen { min-height: 0; padding: 18px; font-size: 13px; }
 
+      /* weeks ahead */
+      .ahead-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 36px 0 26px; }
+      .ahead-card {
+        position: relative;
+        background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 16px;
+        box-shadow: var(--shadow-sm); padding: 20px;
+      }
+      .ahead-card .when {
+        font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--text-brand); display: block; margin-bottom: 8px;
+      }
+      .ahead-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 15.5px; letter-spacing: -0.01em; margin-bottom: 6px; }
+      .ahead-card p { font-size: 13px; color: var(--text-secondary); }
+      .ahead-card .bar { height: 5px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; margin-top: 14px; }
+      .ahead-card .bar i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+      .ahead-stat {
+        display: flex; gap: 16px; align-items: flex-start;
+        background: var(--brand-soft); border: 1px solid var(--brand-soft-border); border-radius: 16px;
+        padding: 20px 24px; margin-top: 8px;
+      }
+      .ahead-stat .big { font-family: var(--font-display); font-weight: 800; font-size: 30px; letter-spacing: -0.02em; color: var(--text-brand); line-height: 1.1; white-space: nowrap; }
+      .ahead-stat p { font-size: 14.5px; color: var(--text-secondary); }
+
       /* conviction */
-      .conviction { background: var(--surface-inverse); color: var(--text-inverse); text-align: center; padding: 90px 0; }
+      .conviction { position: relative; overflow: hidden; background: var(--surface-inverse); color: var(--text-inverse); text-align: center; padding: 90px 0; }
+      .conviction .hero-book { color: #ff953e; opacity: 0.08; right: -60px; bottom: -80px; }
+      .conviction .wrap { position: relative; }
       .conviction .h2 { color: var(--text-inverse); margin-bottom: 18px; }
       .conviction .intro { color: rgba(244, 251, 254, 0.78); font-size: 17px; max-width: 52ch; margin: 0 auto 34px; }
       .creed { display: flex; flex-direction: column; gap: 10px; margin: 0 auto 34px; }
@@ -335,6 +397,11 @@
         section { padding: 56px 0; }
         .wf-layout { display: none; }
         .wf-mobile { display: block; }
+        .ahead-grid { grid-template-columns: 1fr 1fr; }
+        .ahead-stat { flex-direction: column; gap: 8px; }
+      }
+      @media (max-width: 560px) {
+        .ahead-grid { grid-template-columns: 1fr; }
       }
       @media (prefers-reduced-motion: reduce) {
         * { transition: none !important; animation: none !important; }
@@ -368,6 +435,8 @@
 
     <!-- 1. HERO -->
     <header class="hero">
+      <svg class="hero-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>
+      <svg class="hero-book left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>
       <div class="wrap">
         <h1>Sermon prep that keeps <em>the text</em> in charge.</h1>
         <p class="sub">PreachFlow helps pastors move from passage to pulpit with biblical clarity, expositional structure, gospel-centered application, and weekly momentum.</p>
@@ -442,8 +511,49 @@
       </div>
     </section>
 
+    <!-- 3.5 WEEKS AHEAD -->
+    <section class="alt" id="ahead">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Weeks ahead, not hours behind</span>
+          <h2 class="h2">Preach from overflow, not panic.</h2>
+          <p class="lead" style="margin-top: 16px;">Surveys of working pastors consistently put sermon prep at 10–18 hours a week — and too much of it lands on Friday and Saturday, squeezed between counseling, meetings, and crises. PreachFlow is built around a different rhythm: four sermons simmering at once, each a week further along, so no text ever goes from first reading to pulpit in one desperate push.</p>
+        </div>
+        <div class="ahead-grid">
+          <div class="ahead-card">
+            <span class="when">This Sunday</span>
+            <h3>Polish &amp; Delivery</h3>
+            <p>Readiness check, delivery prep, heart prep. Sharpening — not construction.</p>
+            <div class="bar"><i style="width:92%"></i></div>
+          </div>
+          <div class="ahead-card">
+            <span class="when">1 week out</span>
+            <h3>Outline &amp; Application</h3>
+            <p>Structure, specific application, and the invitation take shape with margin to spare.</p>
+            <div class="bar"><i style="width:60%"></i></div>
+          </div>
+          <div class="ahead-card">
+            <span class="when">2 weeks out</span>
+            <h3>Study</h3>
+            <p>Commentaries and cross-references test your work; the aim and gospel center settle.</p>
+            <div class="bar"><i style="width:35%"></i></div>
+          </div>
+          <div class="ahead-card">
+            <span class="when">3 weeks out</span>
+            <h3>Exegesis</h3>
+            <p>The newest text starts on your knees — immersion, observation, meditation.</p>
+            <div class="bar"><i style="width:12%"></i></div>
+          </div>
+        </div>
+        <div class="ahead-stat">
+          <span class="big">4 weeks</span>
+          <p>A text you've lived with for a month has been prayed over, tested against real pastoral moments, and given time to gather illustrations on its own. That is where freshness comes from — a rhythm popularized by Bruce Mawhinney's <em>Preaching with Freshness</em>, built into PreachFlow's pipeline, phases, and clock. <a href="./app#ahead" style="color: var(--text-brand); font-weight: 700;">Learn the rhythm in the app →</a></p>
+        </div>
+      </div>
+    </section>
+
     <!-- 4. WORKFLOW (interactive) -->
-    <section class="alt" id="workflow">
+    <section id="workflow">
       <div class="wrap">
         <div class="section-head wf-reveal">
           <span class="eyebrow">How it works</span>
@@ -470,7 +580,7 @@
     </section>
 
     <!-- 5. FEATURES -->
-    <section id="features">
+    <section class="alt" id="features">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">Features</span>
@@ -484,7 +594,7 @@
           </div>
           <div class="card">
             <span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></span>
-            <h3>Big Idea Coach</h3>
+            <h3>Big Idea Guide</h3>
             <p>Helps clarify the main burden of the text and turn it into a clear sermon claim.</p>
           </div>
           <div class="card">
@@ -513,6 +623,7 @@
 
     <!-- 6. CONVICTION -->
     <section class="conviction">
+      <svg class="hero-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>
       <div class="wrap">
         <h2 class="h2">The preacher is not replaced.</h2>
         <p class="intro">PreachFlow exists to support the preacher, not replace him.</p>

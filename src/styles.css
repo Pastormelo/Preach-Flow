@@ -2042,6 +2042,140 @@ p {
   color: var(--text-muted);
 }
 
+/* =========================== WORKSHEETS / OUTLINE =========================== */
+.pf-ws-field {
+  margin-bottom: 14px;
+}
+.pf-ws-field:last-child {
+  margin-bottom: 0;
+}
+.pf-ws-input {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  padding: 10px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out);
+}
+.pf-ws-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(255, 149, 62, 0.45);
+}
+.pf-outline-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.pf-outline-row:first-of-type {
+  border-top: 0;
+}
+.pf-outline-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.pf-outline-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.pf-outline-btn:hover {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+.pf-outline-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.pf-outline-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.pf-outline-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pf-ghost-add {
+  width: 100%;
+  margin-top: 12px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 11px;
+  text-align: center;
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.16s var(--ease-out), border-color 0.16s var(--ease-out);
+}
+.pf-ghost-add:hover {
+  color: var(--text-brand);
+  border-color: var(--brand-soft-border);
+}
+
+/* =========================== SEARCH / TAGS =========================== */
+.pf-search-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-body);
+  transition: transform 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out);
+}
+.pf-search-hit:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.pf-note-body mark {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+#pf-find-chip {
+  display: none;
+  position: fixed;
+  z-index: 90;
+  background: var(--surface-inverse, #20242a);
+  color: #f4fbfe;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 15px;
+  font-family: var(--font-display, sans-serif);
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(32, 36, 42, 0.35);
+}
+
+/* =========================== SERMON GUIDE EXTRAS =========================== */
+.pf-guide-disclaimer {
+  padding: 10px 18px 13px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 /* =========================== LOADING DOTS =========================== */
 .pf-dots {
   display: inline-flex;
