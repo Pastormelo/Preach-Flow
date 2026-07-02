@@ -2,6 +2,10 @@
 
 Preach Flow is a focused sermon-prep web app converted from `pulpitos.jsx`.
 
+The marketing homepage lives at `/` (`index.html`); the app itself lives at `/app` (`app.html`). PreachFlow is positioned as a guided sermon-prep workflow — not an AI sermon generator. The in-app AI feature is called **Sermon Guide**: it helps pastors study the passage, clarify the sermon burden, shape the message, and review their work without replacing the preacher.
+
+Key app features: the 15-phase workflow with per-phase writing canvas and checklists; structured worksheets (big idea, Christ connection, application audiences) and a movement outline builder; a Notes bank with cross-sermon word search and tags; sermon import (.docx/.pdf/.txt/.md) into the pipeline or as a preached sermon; direct PDF and Word export plus a pre-filled production slides doc; Google Docs sync; and a Stay Ahead page teaching the four-weeks-ahead prep rhythm.
+
 ## Hosted Deployment
 
 This project is ready for Vercel. It serves the app as static files and runs the coach/review endpoints as hosted API functions in `/api`.
