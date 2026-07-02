@@ -2988,7 +2988,7 @@ p {
   width: 46px;
   height: 46px;
   margin: 0 auto 14px;
-  background: url("../assets/preach-flow-mark.svg?v=ofc-3") center / contain no-repeat;
+  background: url("../assets/preach-flow-mark.svg?v=ofc-4") center / contain no-repeat;
 }
 
 /* small flame-gradient accent under page titles on reading pages */
@@ -3014,7 +3014,7 @@ p {
   bottom: -110px;
   width: 430px;
   height: 430px;
-  background: url("../assets/preach-flow-mark.svg?v=ofc-3") center / contain no-repeat;
+  background: url("../assets/preach-flow-mark.svg?v=ofc-4") center / contain no-repeat;
   opacity: 0.05;
   transform: rotate(-8deg);
   pointer-events: none;

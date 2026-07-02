@@ -1004,10 +1004,9 @@ function restoreFocus(focus) {
   });
 }
 
-// The Word Ablaze — layered flame rising from the open book. Flat colors so
-// the inline mark needs no gradient defs; the favicon asset carries the
-// gradient version.
-const PF_MARK_PATHS = `<path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/><path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#c94f10" opacity=".55"/><path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/><path d="M64 88L64 101" stroke="#20242A" stroke-width="3.6" stroke-linecap="round"/>`;
+// The Word Ablaze — flat orange flame with a dark knockout core rising from
+// the open book (the "shirt print" rendering). Sits on the dark brand chips.
+const PF_MARK_PATHS = `<path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/><path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#23272e"/><path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/><path d="M64 88L64 101" stroke="#23272e" stroke-width="3.6" stroke-linecap="round"/>`;
 
 const pfMarkSvg = (size) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 128 128" fill="none" aria-hidden="true">${PF_MARK_PATHS}</svg>`;

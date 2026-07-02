@@ -1,18 +1,9 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Preach Flow logo">
-  <defs>
-    <linearGradient id="pfFlame" x1="0.2" y1="1" x2="0.55" y2="0">
-      <stop offset="0" stop-color="#f26a1b"/>
-      <stop offset="0.55" stop-color="#ff953e"/>
-      <stop offset="1" stop-color="#ffc06a"/>
-    </linearGradient>
-  </defs>
   <rect x="4" y="4" width="120" height="120" rx="30" fill="#20242A"/>
   <g transform="translate(64 66) scale(0.82) translate(-64 -58)">
-    <path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="url(#pfFlame)"/>
-    <path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#c94f10" opacity="0.55"/>
+    <path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/>
+    <path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#20242A"/>
     <path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/>
     <path d="M64 88L64 101" stroke="#20242A" stroke-width="3.6" stroke-linecap="round"/>
-    <path d="M26 81C38 77.5 50 80 58 87" stroke="#dcc9b2" stroke-width="2.6" stroke-linecap="round"/>
-    <path d="M102 81C90 77.5 78 80 70 87" stroke="#dcc9b2" stroke-width="2.6" stroke-linecap="round"/>
   </g>
 </svg>
