@@ -428,6 +428,7 @@ const ui = {
   librarySort: "date",
   debriefSermonId: "",
   debriefQuery: "",
+  confirmDeleteId: "",
   practice: { running: false, seconds: 0 },
   activeSeriesId: "",
   drafting: "",
@@ -942,6 +943,7 @@ function render() {
     ${ui.showGoogleDocs && active ? renderGoogleDocsModal(active) : ""}
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
+    ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
   `;
 
   if (state.view === "signin") {
@@ -1002,7 +1004,15 @@ function restoreFocus(focus) {
   });
 }
 
-const BRAND_MARK_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.3-3.6-2-6-2H3v13h3c2.4 0 4.5.7 6 2"/><path d="M12 7c1.5-1.3 3.6-2 6-2h3v13h-3c-2.4 0-4.5.7-6 2z"/><path d="M12 7v12"/></svg>`;
+// The Word Ablaze — layered flame rising from the open book. Flat colors so
+// the inline mark needs no gradient defs; the favicon asset carries the
+// gradient version.
+const PF_MARK_PATHS = `<path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/><path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#c94f10" opacity=".55"/><path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/><path d="M64 88L64 101" stroke="#20242A" stroke-width="3.6" stroke-linecap="round"/>`;
+
+const pfMarkSvg = (size) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 128 128" fill="none" aria-hidden="true">${PF_MARK_PATHS}</svg>`;
+
+const BRAND_MARK_SVG = pfMarkSvg(22);
 
 // The weekly essentials stay visible; everything else lives in small
 // dropdown groups so the bar survives on a phone or iPad.
@@ -1149,7 +1159,7 @@ function renderSignin(active) {
           <a class="pf-btn pf-btn-ghost" href="./" style="text-decoration:none;">Home</a>
         </div>
         <div class="pf-signin-head">
-          <a class="pf-signin-mark" href="./" aria-label="PreachFlow home" style="text-decoration:none;">${BRAND_MARK_SVG.replace('width="18" height="18"', 'width="24" height="24"')}</a>
+          <a class="pf-signin-mark" href="./" aria-label="PreachFlow home" style="text-decoration:none;">${pfMarkSvg(30)}</a>
           <h1 class="pf-signin-title">${creating ? "Create your account" : "Welcome back"}</h1>
           <p class="pf-signin-subtitle">${creating ? "Start moving from the text to the pulpit." : "Pick up your prep right where you left it."}</p>
         </div>
@@ -1692,6 +1702,7 @@ function renderLibraryCard(sermon) {
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="workspace" data-sermon="${attr(sermon.id)}">Open</button>
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="editor" data-sermon="${attr(sermon.id)}">Editor</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief</button>
+        <button class="pf-btn pf-btn-ghost pf-lib-delete" data-action="delete-sermon" data-sermon="${attr(sermon.id)}" title="Delete this sermon">Delete</button>
       </div>
     </div>
   `;
@@ -1787,7 +1798,6 @@ function renderPipelineSermons() {
               `<button class="pf-chip ${state.filter === value ? "active" : ""}" data-action="pipeline-filter" data-filter="${value}">${label}</button>`,
           ).join("")}
           <button class="pf-btn pf-btn-ghost" data-action="open-import">Import</button>
-          <button class="pf-btn pf-btn-ghost" data-action="export-all">Export all (PDF)</button>
         </div>
       </div>
       ${
@@ -5815,15 +5825,41 @@ function slug(value) {
     .slice(0, 60);
 }
 
-function deleteActive() {
-  const active = getActive();
-  if (!active) return;
-  const ok = confirm(`Remove "${active.passage || "this sermon"}" from Preach Flow?`);
-  if (!ok) return;
-  state.sermons = state.sermons.filter((sermon) => sermon.id !== active.id);
-  state.activeId = state.sermons[0]?.id || null;
-  if (!state.activeId) state.view = "workspace";
+// Deleting a sermon always flows through the confirmation modal
+// (ui.confirmDeleteId) — never a bare click, never a browser confirm().
+function renderConfirmDeleteModal() {
+  const sermon = state.sermons.find((item) => item.id === ui.confirmDeleteId);
+  if (!sermon) return "";
+  const hasDoc = Boolean(sermon.googleDoc?.id);
+  return `
+    <div class="pf-overlay" data-action="close-confirm-delete" data-overlay>
+      <div class="pf-modal" data-stop style="max-width:440px;">
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow" style="color:var(--ofc-danger);">Delete sermon</span>
+        </div>
+        <p style="font-size:15.5px;line-height:1.55;margin:6px 0 10px;">Delete <strong>${escapeHtml(sermon.passage || "this sermon")}</strong>${sermon.title ? ` — “${escapeHtml(sermon.title)}”` : ""}${sermon.date ? ` (${escapeHtml(fmtDate(sermon.date))})` : ""}?</p>
+        <p class="pf-helper" style="margin-bottom:4px;">This permanently removes the sermon with all of its phase notes, worksheets, outline, and debrief from Preach Flow. <strong>This cannot be undone.</strong>${hasDoc ? " The synced Google Doc itself stays safe in your Google Drive." : ""}</p>
+        <div class="pf-modal-actions">
+          <button class="pf-btn" data-action="close-confirm-delete">Cancel</button>
+          <button class="pf-btn pf-btn-danger" data-action="confirm-delete-sermon">Yes, delete it</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function deleteSermonById(id) {
+  const sermon = state.sermons.find((item) => item.id === id);
+  ui.confirmDeleteId = "";
+  if (!sermon) {
+    render();
+    return;
+  }
+  state.sermons = state.sermons.filter((item) => item.id !== id);
+  if (state.activeId === id) state.activeId = state.sermons[0]?.id || null;
+  if (ui.debriefSermonId === id) ui.debriefSermonId = "";
   saveState();
+  showBanner(`Deleted "${sermon.passage || "sermon"}".`);
   render();
 }
 
@@ -5846,6 +5882,7 @@ function closeNavMenus() {
 }
 
 function closeOverlays() {
+  ui.confirmDeleteId = "";
   ui.showAuth = false;
   ui.showOpenAIKey = false;
   ui.showSwitcher = false;
@@ -6078,7 +6115,15 @@ document.addEventListener("click", (event) => {
   }
   if (action === "delete-sermon") {
     ui.showDetails = false;
-    deleteActive();
+    ui.confirmDeleteId = target.dataset.sermon || state.activeId || "";
+    render();
+  }
+  if (action === "confirm-delete-sermon") {
+    deleteSermonById(ui.confirmDeleteId);
+  }
+  if (action === "close-confirm-delete") {
+    ui.confirmDeleteId = "";
+    render();
   }
   if (action === "editor-export-pdf" || action === "editor-export-doc") {
     const active = getActive();
@@ -6221,13 +6266,6 @@ document.addEventListener("click", (event) => {
     ensureGoogleToken().then((connected) => {
       if (connected) syncGoogleDoc(state.activeId, { announce: true });
     });
-  }
-  if (action === "export-all") {
-    if (!state.sermons.length) {
-      showBanner("No sermons to export yet.");
-    } else {
-      exportPdf("Preach Flow sermons", state.sermons.map(sermonDocHtml).join(""));
-    }
   }
   if (action === "pipeline-filter") {
     state.filter = target.dataset.filter;
