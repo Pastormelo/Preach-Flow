@@ -2460,3 +2460,518 @@ p {
     padding: 0 16px;
   }
 }
+
+/* =====================================================================
+   Grouped navigation, Sermon Editor, Practice mode, Library, resources,
+   auto-checklists, and the Impact chooser.
+   ===================================================================== */
+
+/* ---- grouped top nav ---- */
+.pf-nav-group {
+  position: relative;
+  display: inline-flex;
+}
+.pf-nav-group-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pf-nav-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  display: none;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(32, 36, 42, 0.14);
+  z-index: 60;
+}
+.pf-nav-menu.open {
+  display: flex;
+}
+.pf-nav-menu-item {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pf-nav-menu-item:hover {
+  background: var(--surface-sunken);
+}
+.pf-nav-menu-item.active {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+}
+
+/* ---- section hints (Series Architect, resources) ---- */
+.pf-section-hint {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: -4px 0 14px;
+}
+
+/* ---- Congregational Lens explainer ---- */
+.pf-lens-explain {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 26px;
+}
+.pf-lens-explain-item p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* ---- Impact chooser cards ---- */
+.pf-tool-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pf-tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 20px 22px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-out), transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
+}
+.pf-tool-card:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(32, 36, 42, 0.08);
+}
+.pf-tool-card.locked {
+  opacity: 0.6;
+}
+.pf-tool-card-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.pf-tool-card-desc {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.pf-tool-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.pf-tool-card-go {
+  color: var(--text-brand);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+/* ---- Sermon Editor ---- */
+.pf-editor-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.pf-editor-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.25;
+}
+.pf-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pf-editor-statbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.pf-editor-statbar b {
+  color: var(--text-primary);
+}
+.pf-doc-canvas {
+  max-width: 860px;
+  margin: 0 auto;
+  min-height: 68vh;
+  padding: 56px 64px 80px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  box-shadow: 0 14px 40px rgba(32, 36, 42, 0.07);
+  font-size: 16.5px;
+  line-height: 1.75;
+}
+.pf-doc-canvas:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+.pf-doc-canvas h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5em;
+  margin: 0.8em 0 0.35em;
+}
+.pf-doc-canvas h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2em;
+  margin: 0.8em 0 0.3em;
+}
+.pf-doc-canvas h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05em;
+  margin: 0.7em 0 0.25em;
+}
+
+/* rich-text font sizes (survive the sanitizer as fixed classes) */
+.pf-size-1 { font-size: 0.75em; }
+.pf-size-2 { font-size: 0.87em; }
+.pf-size-3 { font-size: 1em; }
+.pf-size-4 { font-size: 1.18em; }
+.pf-size-5 { font-size: 1.4em; }
+.pf-size-6 { font-size: 1.7em; }
+.pf-size-7 { font-size: 2.1em; }
+
+/* ---- Practice mode ---- */
+.pf-practice-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(32, 36, 42, 0.08);
+}
+.pf-practice-timer {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  min-width: 118px;
+}
+.pf-practice-timer.over {
+  color: var(--ofc-danger);
+}
+.pf-practice-controls {
+  display: flex;
+  gap: 8px;
+}
+.pf-practice-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.pf-practice-over-est {
+  color: var(--ofc-danger);
+}
+.pf-practice-pace {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.pf-practice-font {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.pf-font-btn {
+  width: 42px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pf-font-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--text-brand);
+}
+.pf-font-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pf-practice-doc {
+  max-width: 860px;
+  margin: 22px auto 0;
+  padding: 44px 52px 72px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  line-height: 1.8;
+}
+.pf-practice-doc h2,
+.pf-practice-doc h3,
+.pf-practice-doc h4 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  margin: 0.8em 0 0.3em;
+}
+.pf-practice-doc blockquote,
+.pf-doc-canvas blockquote {
+  border-left: 3px solid var(--brand);
+  padding: 6px 14px;
+  margin: 10px 0;
+  background: var(--surface-sunken);
+  border-radius: 0 10px 10px 0;
+}
+
+/* ---- Sermon Library ---- */
+.pf-lib-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.pf-lib-search {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  gap: 8px;
+}
+.pf-lib-search .pf-input {
+  flex: 1;
+}
+.pf-lib-sort {
+  width: auto;
+  min-width: 150px;
+}
+.pf-lib-group-head {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  margin: 26px 0 12px;
+}
+.pf-lib-group-head span {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: 6px;
+}
+.pf-lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.pf-lib-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-out), transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
+}
+.pf-lib-card:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(32, 36, 42, 0.08);
+}
+.pf-lib-passage {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.pf-lib-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pf-lib-meta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.pf-lib-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-brand);
+}
+.pf-lib-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.pf-lib-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.pf-lib-badge.done {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+}
+.pf-lib-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.pf-lib-actions .pf-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+/* ---- per-phase resources ---- */
+.pf-resource-list {
+  display: flex;
+  flex-direction: column;
+}
+.pf-resource-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pf-resource-row:last-child {
+  border-bottom: 0;
+}
+.pf-resource-row:hover .pf-resource-label {
+  color: var(--text-brand);
+}
+.pf-resource-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.pf-resource-arrow {
+  color: var(--text-brand);
+}
+.pf-resource-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.pf-resource-row.custom {
+  justify-content: space-between;
+  align-items: center;
+}
+.pf-resource-add {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ---- auto-checklist ---- */
+.pf-check-auto {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  vertical-align: 1px;
+}
+.pf-check-auto.on {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+}
+.pf-btn-locked {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ---- debrief-first nudge ---- */
+.pf-debrief-nudge {
+  border-left: 3px solid var(--brand);
+}
+
+/* ---- responsive ---- */
+@media (max-width: 880px) {
+  /* let the nav wrap so the dropdown menus aren't clipped by overflow scrolling */
+  .pf-nav {
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+  .pf-lens-explain {
+    grid-template-columns: 1fr;
+  }
+  .pf-tool-cards {
+    grid-template-columns: 1fr;
+  }
+  .pf-doc-canvas {
+    padding: 28px 22px 60px;
+  }
+  .pf-practice-doc {
+    padding: 26px 20px 54px;
+  }
+  .pf-practice-timer {
+    font-size: 28px;
+    min-width: 100px;
+  }
+  .pf-resource-add {
+    grid-template-columns: 1fr;
+  }
+  .pf-editor-topline {
+    flex-direction: column;
+  }
+}
