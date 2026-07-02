@@ -13,9 +13,7 @@ const MAX_BODY = 12 * 1024 * 1024;
 
 let JSZip = null;
 try {
-  JSZip = require(
-    "/Users/melosauval/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/.pnpm/node_modules/jszip",
-  );
+  JSZip = require("jszip");
 } catch {
   JSZip = null;
 }

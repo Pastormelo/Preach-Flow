@@ -54,8 +54,8 @@ https://www.googleapis.com/auth/documents
 ## Run Locally
 
 ```sh
-cd /Users/melosauval/Downloads/pulpitos-web
-node server.mjs
+npm install
+npm start
 ```
 
 Then open:
@@ -64,7 +64,33 @@ Then open:
 http://127.0.0.1:4173
 ```
 
+`npm install` is only needed once (it installs `jszip`, used for `.docx` import). Without it the app still runs; only `.docx` extraction is disabled.
+
 The app still runs and saves sermons locally without a user OpenAI key. Coach and review calls ask each user to add their own key inside the app.
+
+## Project Layout
+
+The site has a single source of truth — there are no duplicated copies to keep in sync:
+
+```txt
+index.html    Marketing homepage (served at /)
+app.html      The app shell (served at /app)
+src/          App code: app.js and styles.css
+assets/       Brand mark and Montserrat font files
+api/          Vercel serverless functions (coach, draft, review, extract-docx, status, config)
+supabase/     Database schema (run in the Supabase SQL editor)
+server.mjs    Local dev server (static files + the same API endpoints)
+```
+
+`npm run build` assembles the deployable static site into `dist/` from these root sources. `dist/` is generated output and is not committed.
+
+## Tests
+
+```sh
+npm test
+```
+
+Runs the smoke suite in `test/`: syntax-checks every JS file, boots the local server, and verifies the homepage, app shell, API status/config endpoints, 404 handling, and the path-traversal guard.
 
 ## Features
 

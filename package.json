@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p dist && cp -R public/* dist/"
+    "start": "node server.mjs",
+    "build": "rm -rf dist && mkdir -p dist/src && cp index.html app.html dist/ && cp -R assets dist/ && cp src/app.js src/styles.css dist/src/",
+    "test": "node --test"
   },
   "dependencies": {
     "jszip": "^3.10.1"

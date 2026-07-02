@@ -34,11 +34,12 @@ https://your-site.vercel.app
 
 ## Option 1: Vercel Dashboard + GitHub
 
-1. Create a new private GitHub repository.
-2. Upload the contents of `/Users/melosauval/Downloads/pulpitos-web`.
-3. Go to `https://vercel.com/new`.
-4. Import the GitHub repository.
-5. Deploy.
+1. Push this repository to GitHub.
+2. Go to `https://vercel.com/new`.
+3. Import the GitHub repository.
+4. Deploy.
+5. Visit `https://your-project.vercel.app/api/status`.
+6. Confirm it returns `"requiresUserOpenAIKey": true`.
 
 ## Google Docs Sync
 
@@ -57,30 +58,27 @@ https://your-site.vercel.app
 Then add the Client ID to Vercel under Project Settings -> Environment Variables and redeploy. This is not a secret, but it must match the deployed origin.
 
 Preach Flow creates one Google Doc per sermon and writes a fresh sermon snapshot into it after edits. Edits made directly in Google Docs may be replaced by the next Preach Flow sync.
-6. Visit `https://your-project.vercel.app/api/status`.
-7. Confirm it returns `"requiresUserOpenAIKey": true`.
 
 Your GitHub repo should include these top-level items:
 
 ```txt
 api/
-public/
 src/
 assets/
 supabase/
 index.html
+app.html
 package.json
 vercel.json
 ```
 
-Vercel serves the deployed website from `public/`. The root `index.html`, `src/`, and `assets/` are kept for local development.
+Vercel runs `npm run build`, which assembles the static site into `dist/` from the root sources (`index.html`, `app.html`, `src/`, `assets/`). There is only one copy of the site code — no directories to keep in sync.
 
 ## Option 2: Vercel CLI
 
-If `vercel` is installed and you are logged in:
+If `vercel` is installed and you are logged in, run from the repository root:
 
 ```sh
-cd /Users/melosauval/Downloads/pulpitos-web
 vercel
 vercel --prod
 ```
