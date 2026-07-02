@@ -471,6 +471,13 @@ function saveState() {
   if (!cloudSyncPaused) scheduleCloudSync();
 }
 
+// Persist to this device only — used by the work timer's periodic flush so a
+// ticking clock doesn't trigger Google Docs / cloud syncs every minute. The
+// accumulated time rides along on the next regular saveState().
+function saveStateQuiet() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(stateSnapshot()));
+}
+
 function stateSnapshot() {
   return {
     sermons: state.sermons,
@@ -522,6 +529,7 @@ function normalizeSermon(sermon) {
       : [],
     tags: Array.isArray(sermon.tags) ? sermon.tags.filter(Boolean).map(String) : [],
     slidesDoc: typeof sermon.slidesDoc === "string" ? sermon.slidesDoc : "",
+    timeSpent: Number.isFinite(sermon.timeSpent) && sermon.timeSpent > 0 ? Math.round(sermon.timeSpent) : 0,
     googleDoc:
       sermon.googleDoc && typeof sermon.googleDoc === "object"
         ? {
@@ -643,6 +651,25 @@ function fmtDate(date) {
     month: "short",
     day: "numeric",
   });
+}
+
+function fmtDuration(totalSeconds, withSeconds = false) {
+  const seconds = Math.max(0, Math.round(totalSeconds || 0));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (withSeconds) {
+    if (h) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+    if (m) return `${m}m ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+  }
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m`;
+  return seconds ? "under a minute" : "0m";
+}
+
+function isPreachedSermon(sermon) {
+  return sermon.completed.length >= PHASES.length;
 }
 
 function formatTime(iso) {
@@ -1328,6 +1355,12 @@ function renderContextStrip(active, phase) {
           <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(daysOut)} days</div><div class="pf-stat-label">${escapeHtml(daysLabel)}</div></div>
           <div class="pf-stat-div"></div>
           <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(active.length || "—")} min</div><div class="pf-stat-label">target length</div></div>
+          <div class="pf-stat-div"></div>
+          ${
+            isPreachedSermon(active)
+              ? `<div class="pf-stat"><div class="pf-stat-num">${escapeHtml(fmtDuration(active.timeSpent))}</div><div class="pf-stat-label">total time spent</div></div>`
+              : `<div class="pf-stat"><div class="pf-stat-num"><span class="pf-timer-dot"></span><span data-work-timer>${escapeHtml(fmtDuration(active.timeSpent, true))}</span></div><div class="pf-stat-label">working on this sermon</div></div>`
+          }
         </div>
       </div>
       <div class="pf-journey">
@@ -2733,6 +2766,7 @@ function exportMarkdown(sermon) {
     `Deliverable: ${sermon.format}`,
     `Status: ${status.label}`,
     `Progress: ${sermon.completed.length}/${PHASES.length}`,
+    ...(sermon.timeSpent ? [`Time in preparation: ${fmtDuration(sermon.timeSpent)}`] : []),
     ...(sermon.tags?.length ? [`Tags: ${sermon.tags.join(", ")}`] : []),
     "",
     ...worksheetSummaryLines(sermon),
@@ -3541,6 +3575,7 @@ function buildGoogleDocText(sermon) {
     `Deliverable: ${sermon.format || "-"}`,
     `Status: ${status.label}`,
     `Progress: ${sermon.completed.length}/${PHASES.length} phases`,
+    ...(sermon.timeSpent ? [`Time in preparation: ${fmtDuration(sermon.timeSpent)}`] : []),
     "",
     ...worksheetSummaryLines(sermon),
     "PREPARATION NOTES",
@@ -4365,6 +4400,62 @@ if (window.location.hash === "#signin" && !ui.auth.user) {
 } else if (state.view === "signin") {
   state.view = "workspace";
 }
+
+// ---- sermon work timer ----
+// Counts up while the workspace is open on an unpreached sermon. Pauses when
+// the tab is hidden or after 5 idle minutes; freezes for good once every
+// phase is complete. The display ticks via direct DOM updates (no re-render);
+// accumulated seconds persist quietly each minute and on pause/close.
+const WORK_IDLE_LIMIT = 5 * 60 * 1000;
+let workTrackedId = null;
+let workSeconds = 0;
+let workLastActivity = Date.now();
+
+function flushWorkSeconds() {
+  if (workTrackedId && workSeconds > 0) {
+    const sermon = state.sermons.find((item) => item.id === workTrackedId);
+    if (sermon) {
+      sermon.timeSpent = (sermon.timeSpent || 0) + workSeconds;
+      saveStateQuiet();
+    }
+  }
+  workSeconds = 0;
+}
+
+setInterval(() => {
+  const active = getActive();
+  const working =
+    state.view === "workspace" &&
+    !ui.showNew &&
+    active &&
+    !isPreachedSermon(active) &&
+    document.visibilityState === "visible" &&
+    Date.now() - workLastActivity < WORK_IDLE_LIMIT;
+
+  if (!working) {
+    flushWorkSeconds();
+    workTrackedId = null;
+    return;
+  }
+  if (workTrackedId !== active.id) {
+    flushWorkSeconds();
+    workTrackedId = active.id;
+  }
+  workSeconds += 1;
+  if (workSeconds >= 60) flushWorkSeconds();
+  const display = document.querySelector("[data-work-timer]");
+  if (display) display.textContent = fmtDuration((active.timeSpent || 0) + workSeconds, true);
+}, 1000);
+
+["mousedown", "keydown", "mousemove", "wheel", "touchstart"].forEach((eventName) =>
+  document.addEventListener(eventName, () => {
+    workLastActivity = Date.now();
+  }, { passive: true }),
+);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") flushWorkSeconds();
+});
+window.addEventListener("beforeunload", () => flushWorkSeconds());
 
 render();
 checkServerStatus();

@@ -787,6 +787,30 @@ p {
   height: 30px;
   background: var(--border-default);
 }
+.pf-timer-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  margin-right: 7px;
+  vertical-align: 2px;
+  animation: pfTimerPulse 2s var(--ease-out) infinite;
+}
+@keyframes pfTimerPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-timer-dot {
+    animation: none;
+  }
+}
 
 /* journey path */
 .pf-journey {
