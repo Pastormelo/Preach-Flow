@@ -1369,6 +1369,7 @@ function renderSermonCard(sermon) {
         <span>${escapeHtml(sermonMovementLabel(sermon))}</span>
         <span class="pct">${pct}%</span>
       </div>
+      ${status.key === "done" ? `<button class="pf-chip pf-card-debrief" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief this sermon →</button>` : ""}
     </article>
   `;
 }
@@ -2141,7 +2142,7 @@ const SHEPHERD_CARDS = [
   {
     key: "sevenday",
     title: "Seven-Day Follow-Up",
-    desc: "A short optional pathway for the week after the message.",
+    desc: "For someone this sermon stirred — short daily encouragements a pastor can text or email during the week.",
     fields: [
       "Day 1 — Remember the big idea",
       "Day 2 — Return to the passage",
@@ -2176,7 +2177,7 @@ const PACK_CARDS = [
   {
     key: "devotional",
     title: "Seven-Day Devotional",
-    desc: "A short daily follow-up: Scripture, reflection, prayer, and practice for each day.",
+    desc: "For the whole church — a daily Scripture, reflection, prayer, and practice that extends the sermon through the week.",
     fields: ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
   },
   {
@@ -2485,6 +2486,17 @@ function renderImpact(active) {
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Ministry response</span>
         <h1 class="pf-h1">Turn Sunday's sermon into a week of ministry</h1>
         <p class="pf-page-sub">Staff alignment, prayer, shepherding, discipleship, and communication — all drawn from <strong>${escapeHtml(active.passage || "this sermon")}</strong>. ${renderLensNotice()}</p>
+        <div class="pf-flowline">
+          <button class="pf-flow-step" data-view="workspace">1 · Prepare the sermon</button>
+          <span class="pf-flow-sep">→</span>
+          <button class="pf-flow-step ${tab === "plan" || tab === "shepherd" ? "on" : ""}" data-action="impact-tab" data-tab="plan">2 · Plan the response</button>
+          <span class="pf-flow-sep">→</span>
+          <button class="pf-flow-step ${tab === "pack" ? "on" : ""}" data-action="impact-tab" data-tab="pack">3 · Equip the church</button>
+          <span class="pf-flow-sep">→</span>
+          <button class="pf-flow-step ${tab === "debrief" ? "on" : ""}" data-action="${debriefAvailable(active) ? "impact-tab" : "impact-tab-locked"}" data-tab="debrief">4 · Reflect after Sunday</button>
+          <span class="pf-flow-sep">→</span>
+          <button class="pf-flow-step" data-action="cf-diet">5 · Watch the diet over time</button>
+        </div>
       </div>
 
       <section class="pf-card-box pf-checklist-card" style="margin-bottom:18px;">
@@ -5352,6 +5364,7 @@ document.addEventListener("click", (event) => {
     render();
   }
   if (action === "open-debrief") {
+    if (target.dataset.sermon) state.activeId = target.dataset.sermon;
     state.view = "impact";
     ui.impactTab = "debrief";
     saveState();
@@ -5374,6 +5387,12 @@ document.addEventListener("click", (event) => {
   }
   if (action === "cf-lens") {
     state.view = "lens";
+    render();
+  }
+  if (action === "cf-diet") {
+    state.view = "pipeline";
+    ui.pipelineTab = "diet";
+    saveState();
     render();
   }
   if (action === "min-chip") {
