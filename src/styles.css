@@ -2200,6 +2200,152 @@ p {
   color: var(--text-muted);
 }
 
+/* =========================== MINISTRY WORKFLOW =========================== */
+.pf-subtabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.pf-chip-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pf-inline-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--text-brand);
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-ministry-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-top: 3px;
+  max-width: 52ch;
+}
+.pf-ministry-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-items: flex-start;
+}
+.pf-ministry-area {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.pf-chip-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pf-chip-add .pf-input {
+  flex: 1;
+  max-width: 260px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.pf-impact-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+}
+.pf-impact-summary p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.pf-impact-summary em {
+  color: var(--text-muted);
+}
+.pf-lens-notice {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
+.pf-lens-notice.on {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+  border-color: var(--brand-soft-border);
+}
+.pf-lens-privacy {
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-soft-border);
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+}
+.pf-diet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+}
+.pf-diet-label {
+  width: 190px;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.pf-diet-track {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--surface-page);
+  overflow: hidden;
+}
+.pf-diet-track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+  transition: width 0.4s var(--ease-out);
+}
+.pf-diet-count {
+  width: 34px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pf-series-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+@media (max-width: 880px) {
+  .pf-impact-summary,
+  .pf-series-row-grid {
+    grid-template-columns: 1fr;
+  }
+  .pf-diet-label {
+    width: 120px;
+  }
+  .pf-ministry-actions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+}
+
 /* =========================== LOADING DOTS =========================== */
 .pf-dots {
   display: inline-flex;

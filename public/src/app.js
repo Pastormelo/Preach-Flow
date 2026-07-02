@@ -365,6 +365,11 @@ const ui = {
   signinMode: "signin",
   switcherQuery: "",
   notesQuery: "",
+  impactTab: "plan",
+  pipelineTab: "sermons",
+  activeSeriesId: "",
+  drafting: "",
+  dietRange: "12",
   audience: "Believer",
   importText: "",
   importStatusNote: "",
@@ -418,6 +423,9 @@ if (!state.reviewText) state.reviewText = "";
 if (!state.reviewChecks || typeof state.reviewChecks !== "object") state.reviewChecks = {};
 if (!state.google) state.google = { autoSync: true };
 if (!Array.isArray(state.journalEntries)) state.journalEntries = [];
+if (!Array.isArray(state.series)) state.series = [];
+if (!state.lens || typeof state.lens !== "object") state.lens = normalizeLens(null);
+if (!state.dietReview || typeof state.dietReview !== "object") state.dietReview = { text: "", at: "" };
 
 function loadTheme() {
   const stored = localStorage.getItem(THEME_STORE);
@@ -445,6 +453,9 @@ function loadState() {
       reviewChecks: parsed.reviewChecks && typeof parsed.reviewChecks === "object" ? parsed.reviewChecks : {},
       google: parsed.google || { autoSync: true },
       journalEntries: Array.isArray(parsed.journalEntries) ? parsed.journalEntries.map(normalizeJournalEntry) : [],
+      series: Array.isArray(parsed.series) ? parsed.series.map(normalizeSeries) : [],
+      lens: normalizeLens(parsed.lens),
+      dietReview: parsed.dietReview && typeof parsed.dietReview === "object" ? parsed.dietReview : { text: "", at: "" },
     };
   } catch {
     return {
@@ -490,6 +501,9 @@ function stateSnapshot() {
     reviewChecks: state.reviewChecks,
     google: state.google,
     journalEntries: state.journalEntries,
+    series: state.series,
+    lens: state.lens,
+    dietReview: state.dietReview,
   };
 }
 
@@ -507,6 +521,9 @@ function applyStateSnapshot(snapshot) {
   state.reviewChecks = snapshot?.reviewChecks && typeof snapshot.reviewChecks === "object" ? snapshot.reviewChecks : {};
   state.google = snapshot?.google || { autoSync: true };
   state.journalEntries = Array.isArray(snapshot?.journalEntries) ? snapshot.journalEntries.map(normalizeJournalEntry) : [];
+  state.series = Array.isArray(snapshot?.series) ? snapshot.series.map(normalizeSeries) : [];
+  state.lens = normalizeLens(snapshot?.lens);
+  state.dietReview = snapshot?.dietReview && typeof snapshot.dietReview === "object" ? snapshot.dietReview : { text: "", at: "" };
 }
 
 function normalizeSermon(sermon) {
@@ -530,6 +547,16 @@ function normalizeSermon(sermon) {
     tags: Array.isArray(sermon.tags) ? sermon.tags.filter(Boolean).map(String) : [],
     slidesDoc: typeof sermon.slidesDoc === "string" ? sermon.slidesDoc : "",
     timeSpent: Number.isFinite(sermon.timeSpent) && sermon.timeSpent > 0 ? Math.round(sermon.timeSpent) : 0,
+    impact: sermon.impact && typeof sermon.impact === "object" ? sermon.impact : {},
+    shepherd:
+      sermon.shepherd && typeof sermon.shepherd === "object"
+        ? { ...sermon.shepherd, responses: Array.isArray(sermon.shepherd.responses) ? sermon.shepherd.responses : [] }
+        : { responses: [] },
+    pack: sermon.pack && typeof sermon.pack === "object" ? sermon.pack : {},
+    debrief:
+      sermon.debrief && typeof sermon.debrief === "object"
+        ? { ...sermon.debrief, responses: Array.isArray(sermon.debrief.responses) ? sermon.debrief.responses : [] }
+        : { responses: [] },
     googleDoc:
       sermon.googleDoc && typeof sermon.googleDoc === "object"
         ? {
@@ -578,6 +605,45 @@ function normalizeJournalEntry(entry) {
     body: entry.body || "",
     createdAt: entry.createdAt || now,
     updatedAt: entry.updatedAt || entry.createdAt || now,
+  };
+}
+
+function normalizeSeries(series) {
+  return {
+    id: series.id || genId(),
+    title: series.title || "",
+    subtitle: series.subtitle || "",
+    passages: series.passages || "",
+    startDate: series.startDate || "",
+    endDate: series.endDate || "",
+    count: series.count || "",
+    description: series.description || "",
+    formation: series.formation && typeof series.formation === "object" ? series.formation : {},
+    anchors: Array.isArray(series.anchors) ? series.anchors.filter(Boolean).map(String) : [],
+    burdens: Array.isArray(series.burdens) ? series.burdens.filter(Boolean).map(String) : [],
+    map: Array.isArray(series.map)
+      ? series.map.map((row) => ({
+          when: row?.when || "",
+          passage: row?.passage || "",
+          title: row?.title || "",
+          idea: row?.idea || "",
+          emphasis: row?.emphasis || "",
+        }))
+      : [],
+    outputs: series.outputs && typeof series.outputs === "object" ? series.outputs : {},
+    arcReview: typeof series.arcReview === "string" ? series.arcReview : "",
+    arcReviewAt: series.arcReviewAt || "",
+    createdAt: series.createdAt || new Date().toISOString(),
+    updatedAt: series.updatedAt || new Date().toISOString(),
+  };
+}
+
+function normalizeLens(lens) {
+  const source = lens && typeof lens === "object" ? lens : {};
+  return {
+    ...source,
+    enabled: Boolean(source.enabled),
+    needs: Array.isArray(source.needs) ? source.needs.filter(Boolean).map(String) : [],
   };
 }
 
@@ -809,6 +875,7 @@ const BRAND_MARK_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="no
 
 const NAV_ITEMS = [
   ["workspace", "Workspace"],
+  ["impact", "Impact"],
   ["pipeline", "Pipeline"],
   ["journal", "Notes"],
   ["review", "Review"],
@@ -987,6 +1054,13 @@ function renderAccount(active) {
           </div>
           <div class="pf-account-row">
             <div style="flex:1;">
+              <div class="pf-account-label">Congregational Lens</div>
+              <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
+            </div>
+            <button class="pf-btn" data-action="open-lens">Open</button>
+          </div>
+          <div class="pf-account-row">
+            <div style="flex:1;">
               <div class="pf-account-label">Appearance</div>
               <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
             </div>
@@ -1007,6 +1081,8 @@ function renderMain(active) {
   if (state.view === "journal") return renderJournal(active);
   if (state.view === "review") return renderReview();
   if (state.view === "ahead") return renderAhead();
+  if (state.view === "impact") return renderImpact(active);
+  if (state.view === "lens") return renderLens();
   if (active) return renderWorkspace(active);
   return renderNewSermon();
 }
@@ -1192,7 +1268,25 @@ function sermonMovementLabel(sermon) {
   return BLOCKS[phase.block].label;
 }
 
+const PIPELINE_TABS = [
+  ["sermons", "Sermons"],
+  ["series", "Series Architect"],
+  ["diet", "Diet Review"],
+];
+
 function renderPipeline() {
+  const tab = ui.pipelineTab || "sermons";
+  return `
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-subtabs" style="margin-bottom:26px;">
+        ${PIPELINE_TABS.map(([key, label]) => `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="pipeline-tab" data-tab="${key}">${label}</button>`).join("")}
+      </div>
+      ${tab === "series" ? renderSeriesArchitect() : tab === "diet" ? renderDietReview() : renderPipelineSermons()}
+    </div>
+  `;
+}
+
+function renderPipelineSermons() {
   const query = state.query.trim().toLowerCase();
   const sermons = state.sermons
     .filter((sermon) => {
@@ -1211,7 +1305,7 @@ function renderPipeline() {
     });
 
   return `
-    <div class="pf-page pf-page-wide pf-fade">
+    <div>
       <div class="pf-page-head">
         <div>
           <span class="pf-eyebrow pf-eyebrow-brand">Pipeline</span>
@@ -1529,6 +1623,8 @@ function renderCanvas(active, phase) {
         <button class="pf-btn ${complete ? "" : "pf-btn-primary"}" data-action="toggle-complete" data-phase="${attr(phase.id)}">
           ${complete ? "Phase complete · undo" : "Mark phase complete"}
         </button>
+        <button class="pf-btn pf-btn-ghost" data-action="open-impact">Impact Plan</button>
+        ${debriefAvailable(active) ? `<button class="pf-btn pf-btn-ghost" data-action="open-debrief">Debrief</button>` : ""}
         <button class="pf-btn pf-btn-ghost" data-action="open-slides">Slides doc</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active-doc">Word</button>
@@ -1993,6 +2089,973 @@ function importSermon(form) {
   render();
 }
 
+// ============================================================
+// MINISTRY WORKFLOW — Impact Plan, Shepherding Follow-Up,
+// Discipleship Pack, Post-Sermon Debrief, Series Architect,
+// Congregational Lens, Preaching Diet Review
+// ============================================================
+
+// Impact Plan = church-wide ministry action. People-facing resources live in
+// the Discipleship Pack; pastoral-care planning lives in Shepherding — the
+// Impact tab points to both so each feature keeps one clear purpose.
+const IMPACT_CARDS = [
+  {
+    key: "staff",
+    title: "Staff Alignment",
+    desc: "What should staff know, reinforce, pray for, and follow up on this week?",
+    fields: ["Staff focus", "Key reminder", "Prayer burden", "Follow-up needs", "Ministry emphasis"],
+  },
+  {
+    key: "prayer",
+    title: "Prayer Team Prompts",
+    desc: "Specific prayer burdens connected to the passage, the big idea, and expected responses.",
+    fields: ["Prayer burdens", "Repentance prayers", "Encouragement prayers", "Evangelistic prayers", "Church-wide prayer focus"],
+  },
+  {
+    key: "comms",
+    title: "Communications",
+    desc: "A sermon summary, weekly email blurb, social caption, and next-step invitation.",
+    fields: ["Sermon summary", "Weekly email blurb", "Social caption", "Quote options", "Next-step invitation"],
+  },
+  {
+    key: "worship",
+    title: "Worship & Service Planning",
+    desc: "Scripture readings, confession, assurance, and thematic direction for the service.",
+    fields: ["Service theme", "Scripture reading", "Confession prompt", "Assurance of pardon", "Communion reflection", "Song / theme direction"],
+  },
+];
+
+const SHEPHERD_CARDS = [
+  {
+    key: "care",
+    title: "Pastoral Care Plan",
+    desc: "The conversations this sermon may open, Scriptures for follow-up, and shepherding questions.",
+    fields: ["Conversations this sermon may open", "Pastoral care concerns", "Follow-up Scriptures", "Shepherding questions"],
+  },
+  {
+    key: "pathways",
+    title: "Next-Step Pathways",
+    desc: "Clear, simple next steps for people the sermon stirs.",
+    fields: ["Invite to prayer", "Recommend a resource", "Encourage confession", "Connect to a group", "Meet with pastor / elder", "Encourage baptism / membership / service", "Follow-up email"],
+  },
+  {
+    key: "sevenday",
+    title: "Seven-Day Follow-Up",
+    desc: "A short optional pathway for the week after the message.",
+    fields: [
+      "Day 1 — Remember the big idea",
+      "Day 2 — Return to the passage",
+      "Day 3 — Confess and repent",
+      "Day 4 — Believe the gospel promise",
+      "Day 5 — Practice obedience",
+      "Day 6 — Pray with others",
+      "Day 7 — Prepare for the next gathering",
+    ],
+  },
+];
+
+const PACK_CARDS = [
+  {
+    key: "group",
+    title: "Family Group Guide",
+    desc: "Discussion questions, leader notes, and prayer prompts for groups.",
+    fields: ["Opening question", "Read the passage", "Observation questions", "Interpretation questions", "Application questions", "Prayer prompts", "Leader notes"],
+  },
+  {
+    key: "personal",
+    title: "Personal Reflection Guide",
+    desc: "A simple pathway for personal response to the message.",
+    fields: ["Main idea", "Key Scripture", "Reflection questions", "Confession prompt", "Prayer prompt", "One obedience step"],
+  },
+  {
+    key: "family",
+    title: "Parent Conversation Guide",
+    desc: "The big idea for kids and simple family conversations.",
+    fields: ["Big idea for kids", "Dinner table question", "Car ride question", "Prayer with children", "Family practice this week", "Memory verse suggestion"],
+  },
+  {
+    key: "devotional",
+    title: "Seven-Day Devotional",
+    desc: "A short daily follow-up: Scripture, reflection, prayer, and practice for each day.",
+    fields: ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
+  },
+  {
+    key: "memory",
+    title: "Memory Verse Card",
+    desc: "One verse the church carries out of this sermon.",
+    fields: ["Verse reference", "Verse text", "Why this verse matters", "Simple memorization prompt"],
+  },
+  {
+    key: "nextsteps",
+    title: "Weekly Next Steps",
+    desc: "Concrete responses for the week.",
+    fields: ["Repent", "Believe", "Practice", "Discuss", "Pray", "Serve", "Share"],
+  },
+];
+
+const SERIES_OUTPUT_CARD = {
+  key: "outputs",
+  title: "Series Outputs",
+  desc: "Ready-to-adapt pieces for launching and supporting the series.",
+  fields: ["Series description (website)", "Series launch announcement", "Family group overview", "Prayer points for the series", "Staff alignment notes", "Social media description"],
+};
+
+const SHEPHERD_RESPONSES = ["Repentance", "Assurance", "Grief", "Anxiety", "Anger", "Shame", "Guilt", "Unbelief", "Marriage conflict", "Family tension", "Spiritual dryness", "Confusion", "Conviction", "Encouragement", "Mission urgency"];
+const DEBRIEF_RESPONSES = ["Repentance", "Encouragement", "Questions", "Tears / grief", "Confession", "Pushback", "Assurance", "Evangelistic interest", "Counseling need", "Follow-up conversations", "Serving response", "Giving response", "Baptism / membership interest"];
+const SERIES_ANCHORS = ["God", "Scripture", "Sin", "Christ", "Gospel", "Spirit", "Church", "Mission", "Prayer", "Suffering", "Holiness", "Wisdom", "Justice", "Generosity", "Family", "Eschatology"];
+const SERIES_BURDENS = ["Anxiety", "Shame", "Guilt", "Spiritual dryness", "Conflict", "Pride", "Apathy", "Fear", "Suffering", "Grief", "Marriage", "Parenting", "Mission", "Unity", "Repentance", "Assurance"];
+const LENS_NEEDS = ["Bible intake", "Prayer", "Evangelism", "Generosity", "Serving", "Community", "Marriage", "Parenting", "Unity", "Repentance", "Assurance", "Emotional maturity", "Leadership development", "Mission"];
+
+const MINISTRY_DISCLAIMER =
+  "This supports ministry planning. It does not replace prayer, pastoral discernment, staff leadership, or shepherding responsibility.";
+
+function ministryTemplate(fields) {
+  return fields.map((field) => `${field}:\n`).join("\n");
+}
+
+function ministryValue(store, key, fields) {
+  const value = store?.[key];
+  return typeof value === "string" && value.trim() ? value : ministryTemplate(fields);
+}
+
+function ministryFilled(store, key, fields) {
+  const value = store?.[key];
+  return Boolean(typeof value === "string" && value.trim() && value.trim() !== ministryTemplate(fields).trim());
+}
+
+function getSeries(id = ui.activeSeriesId) {
+  return state.series.find((series) => series.id === id) || null;
+}
+
+// Resolve a data-store attribute to the live object edits should land on.
+function ministryStore(name) {
+  const active = getActive();
+  if (name === "impact" || name === "shepherd" || name === "pack" || name === "debrief") return active ? active[name] : null;
+  if (name === "lens") return state.lens;
+  if (name === "series") return getSeries();
+  if (name === "series-formation") return getSeries()?.formation || null;
+  if (name === "series-outputs") return getSeries()?.outputs || null;
+  return null;
+}
+
+function touchMinistryStore(name) {
+  const active = getActive();
+  if ((name === "impact" || name === "shepherd" || name === "pack" || name === "debrief") && active) {
+    active.updatedAt = new Date().toISOString();
+  }
+  if (name.startsWith("series")) {
+    const series = getSeries();
+    if (series) series.updatedAt = new Date().toISOString();
+  }
+  saveState();
+}
+
+// ---- Sermon Guide drafting (uses /api/draft, never the coach) ----
+const DRAFT_SPECS = {};
+IMPACT_CARDS.forEach((card) => {
+  DRAFT_SPECS[`impact.${card.key}`] = { store: "impact", ...card };
+});
+SHEPHERD_CARDS.forEach((card) => {
+  DRAFT_SPECS[`shepherd.${card.key}`] = { store: "shepherd", ...card };
+});
+PACK_CARDS.forEach((card) => {
+  DRAFT_SPECS[`pack.${card.key}`] = { store: "pack", ...card };
+});
+DRAFT_SPECS["series-outputs.outputs"] = { store: "series-outputs", ...SERIES_OUTPUT_CARD };
+DRAFT_SPECS["pack.devotional"].instructions =
+  "For each day include: a Scripture reference, a two-to-three sentence reflection, a one-line prayer, and one concrete practice.";
+DRAFT_SPECS["shepherd.sevenday"].instructions =
+  "Keep each day to two or three lines the pastor could text or email to someone the sermon stirred.";
+
+function lensSummaryLines() {
+  const lens = state.lens || {};
+  if (!lens.enabled) return [];
+  const fields = [
+    ["Church", [lens["profile.name"], lens["profile.city"], lens["profile.size"]].filter(Boolean).join(", ")],
+    ["Ministry context", [lens["profile.style"], lens["profile.context"], lens["profile.demographics"]].filter(Boolean).join(" · ")],
+    ["Current season", lens["season.now"]],
+    ["The Lord is emphasizing", lens["season.emphasis"]],
+    ["Pressures / opportunities", lens["season.pressures"]],
+    ["Discipleship needs", (lens.needs || []).join(", ")],
+    ["Recurring pastoral burdens", lens["burdens.recurring"]],
+    ["Mission priorities", [lens["mission.local"], lens["mission.outreach"], lens["mission.planting"], lens["mission.partnerships"], lens["mission.evangelism"]].filter(Boolean).join(" · ")],
+    ["Leadership language", lens["leadership.language"]],
+    ["Initiatives to reinforce", lens["leadership.initiatives"]],
+    ["Leadership themes to repeat", lens["leadership.themes"]],
+  ].filter(([, value]) => value && String(value).trim());
+  if (!fields.length) return [];
+  return [
+    "CONGREGATIONAL CONTEXT (broad, non-confidential — shape application and language to this real church):",
+    ...fields.map(([label, value]) => `${label}: ${value}`),
+    "",
+  ];
+}
+
+function sermonDraftContext(sermon) {
+  const lines = [activeContext(sermon)];
+  const extras = [];
+  const manuscript = phaseNoteText(sermon, PHASES.find((phase) => phase.id === "manuscript"));
+  const invitation = phaseNoteText(sermon, PHASES.find((phase) => phase.id === "invitation"));
+  const applicationNote = phaseNoteText(sermon, PHASES.find((phase) => phase.id === "application"));
+  if (applicationNote.trim()) extras.push(`APPLICATION NOTES:\n${applicationNote.slice(0, 900)}`);
+  if (invitation.trim()) extras.push(`INVITATION PLAN:\n${invitation.slice(0, 500)}`);
+  if (manuscript.trim()) extras.push(`MANUSCRIPT EXCERPT:\n${manuscript.slice(0, 1400)}`);
+  return [...lines, "", ...extras, "", ...lensSummaryLines()].join("\n");
+}
+
+async function draftWithGuide(specKey) {
+  const spec = DRAFT_SPECS[specKey];
+  if (!spec || ui.drafting) return;
+  const store = ministryStore(spec.store);
+  if (!store) return;
+  if (!requireOpenAIKey()) return;
+  if (ministryFilled(store, spec.key, spec.fields)) {
+    const ok = confirm(`Replace your current "${spec.title}" draft with a fresh Sermon Guide draft?`);
+    if (!ok) return;
+  }
+
+  const active = getActive();
+  const series = getSeries();
+  const context = spec.store.startsWith("series")
+    ? seriesDraftContext(series)
+    : active
+      ? sermonDraftContext(active)
+      : "";
+
+  ui.drafting = specKey;
+  render();
+  try {
+    const response = await fetch("./api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...openAIHeaders() },
+      body: JSON.stringify({
+        context,
+        prompt: `Draft the "${spec.title}" resource. ${spec.instructions || ""}\nUse exactly these labeled fields, in this order, filling each with brief, concrete, pastorally useful content drawn from the sermon material provided:\n${spec.fields.map((field) => `${field}:`).join("\n")}\nReturn only the labeled fields.`,
+      }),
+    });
+    const data = await response.json();
+    if (data.text) {
+      store[spec.key] = data.text;
+      touchMinistryStore(spec.store);
+      showBanner(`Draft ready — review and adapt it before you use it.`);
+    } else {
+      showBanner("No draft came back. Try again.");
+    }
+  } catch {
+    showBanner("Could not reach Sermon Guide. Check your connection and key.");
+  } finally {
+    ui.drafting = "";
+    render();
+  }
+}
+
+function seriesDraftContext(series) {
+  if (!series) return "";
+  const lines = [
+    `SERIES: ${series.title || "Untitled series"}${series.subtitle ? ` — ${series.subtitle}` : ""}`,
+    `Passages: ${series.passages || "-"}`,
+    `Window: ${series.startDate || "?"} to ${series.endDate || "?"} (${series.count || "?"} sermons)`,
+    `Description: ${series.description || "-"}`,
+    `Formation goal: ${series.formation?.goal || "-"}`,
+    `Desired church response: ${series.formation?.response || "-"}`,
+    `Practices to cultivate: ${series.formation?.practices || "-"}`,
+    `Sins to confront: ${series.formation?.sins || "-"}`,
+    `Comforts to apply: ${series.formation?.comforts || "-"}`,
+    `Doctrinal anchors: ${(series.anchors || []).join(", ") || "-"}`,
+    `Pastoral burdens: ${(series.burdens || []).join(", ") || "-"}`,
+    "Series map:",
+    ...(series.map || []).map(
+      (row, index) =>
+        `${index + 1}. ${row.when || ""} ${row.passage || "(passage tbd)"} — ${row.title || ""}${row.idea ? ` | Big idea: ${row.idea}` : ""}${row.emphasis ? ` | Formation: ${row.emphasis}` : ""}`,
+    ),
+    "",
+    ...lensSummaryLines(),
+  ];
+  return lines.join("\n");
+}
+
+async function reviewSeriesArc(seriesId) {
+  const series = getSeries(seriesId);
+  if (!series || ui.drafting) return;
+  if (!requireOpenAIKey()) return;
+  ui.drafting = "series-arc";
+  render();
+  try {
+    const response = await fetch("./api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...openAIHeaders() },
+      body: JSON.stringify({
+        context: seriesDraftContext(series),
+        prompt:
+          "Review this sermon series arc pastorally. Consider: Does the series have a clear progression? Are the sermons connected without being repetitive? Is the church being formed doctrinally and pastorally? Are we confronting sin and applying grace? Is there evangelistic clarity? Is there a clear landing point? Name what is strong first, then genuine gaps, then two or three practical suggestions. Observe and consider — no scores or grades.",
+      }),
+    });
+    const data = await response.json();
+    series.arcReview = data.text || "";
+    series.arcReviewAt = new Date().toISOString();
+    series.updatedAt = new Date().toISOString();
+    saveState();
+  } catch {
+    showBanner("Could not reach Sermon Guide.");
+  } finally {
+    ui.drafting = "";
+    render();
+  }
+}
+
+// ---- shared ministry UI pieces ----
+function renderChipGroup(store, field, options, selected) {
+  const chosen = Array.isArray(selected) ? selected : [];
+  const custom = chosen.filter((value) => !options.includes(value));
+  return `
+    <div class="pf-filter-chips" style="margin-bottom:10px;">
+      ${[...options, ...custom]
+        .map(
+          (option) =>
+            `<button type="button" class="pf-chip ${chosen.includes(option) ? "active" : ""}" data-action="min-chip" data-store="${attr(store)}" data-field="${attr(field)}" data-value="${attr(option)}">${escapeHtml(option)}</button>`,
+        )
+        .join("")}
+    </div>
+    <div class="pf-chip-add">
+      <input class="pf-input" data-action="min-chip-input" placeholder="Add your own…" />
+      <button type="button" class="pf-btn pf-btn-ghost" data-action="min-chip-add" data-store="${attr(store)}" data-field="${attr(field)}">Add</button>
+    </div>
+  `;
+}
+
+function renderMinistryCard(store, card, storeObj) {
+  const specKey = `${store}.${card.key}`;
+  const drafting = ui.drafting === specKey;
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
+          <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
+        </div>
+        <div class="pf-ministry-actions">
+          <button class="pf-btn pf-btn-ghost" data-action="ministry-copy" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Copy this card's content">Copy</button>
+          <button class="pf-btn" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${drafting ? "Drafting…" : "Draft with Sermon Guide"}</button>
+        </div>
+      </div>
+      <textarea class="pf-ws-input pf-ministry-area" rows="${Math.max(6, card.fields.length + 2)}" data-action="ministry-field" data-store="${attr(store)}" data-key="${attr(card.key)}">${escapeHtml(ministryValue(ministryStore(store), card.key, card.fields))}</textarea>
+    </section>
+  `;
+}
+
+function renderLensNotice() {
+  return state.lens?.enabled
+    ? `<span class="pf-lens-notice on" data-action="open-lens" role="button">Using Congregational Lens</span>`
+    : `<span class="pf-lens-notice" data-action="open-lens" role="button">Congregational Lens off — set your church context</span>`;
+}
+
+function debriefAvailable(sermon) {
+  if (isPreachedSermon(sermon)) return true;
+  const days = daysUntil(sermon.date);
+  return days !== null && days < 0;
+}
+
+// ---- Impact view (per-sermon ministry response) ----
+const IMPACT_TABS = [
+  ["plan", "Impact Plan"],
+  ["shepherd", "Shepherding"],
+  ["pack", "Discipleship Pack"],
+  ["debrief", "Debrief"],
+];
+
+function renderImpact(active) {
+  if (!active) {
+    return `
+      <div class="pf-page pf-page-read pf-fade">
+        <div class="pf-empty">Start a sermon first — the ministry response is built from your actual sermon work.
+          <div style="margin-top:14px;"><button class="pf-btn pf-btn-primary" data-action="new-sermon">Start a sermon</button></div>
+        </div>
+      </div>
+    `;
+  }
+  const tab = ui.impactTab || "plan";
+  const bigIdea = worksheetValue(active, "aim", "burden").trim();
+  const burden = worksheetValue(active, "aim", "fallen").trim();
+  const purpose = worksheetValue(active, "aim", "purpose").trim();
+  const thin = !bigIdea && !(active.outline || []).some((m) => m.title.trim());
+
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:20px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Ministry response</span>
+        <h1 class="pf-h1">Turn Sunday's sermon into a week of ministry</h1>
+        <p class="pf-page-sub">Staff alignment, prayer, shepherding, discipleship, and communication — all drawn from <strong>${escapeHtml(active.passage || "this sermon")}</strong>. ${renderLensNotice()}</p>
+      </div>
+
+      <section class="pf-card-box pf-checklist-card" style="margin-bottom:18px;">
+        <div class="pf-impact-summary">
+          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "—")}</p></div>
+          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "—")}</p></div>
+          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : '<em>Not yet — set it in The Aim phase.</em>'}</p></div>
+          <div><span class="pf-label">Pastoral burden</span><p>${burden ? escapeHtml(burden) : "—"}</p></div>
+          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "—"}</p></div>
+        </div>
+        <div class="pf-ws-field" style="margin-top:12px;">
+          <label class="pf-label">This week's ministry emphasis</label>
+          <textarea class="pf-ws-input" rows="2" data-action="ministry-field" data-store="impact" data-key="summary.emphasis" placeholder="The one thing every ministry should reinforce this week.">${escapeHtml(active.impact["summary.emphasis"] || "")}</textarea>
+        </div>
+      </section>
+
+      ${thin ? `<div class="pf-empty" style="margin-bottom:18px;">This sermon's big idea and outline are still thin — the more sermon work you bring, the more faithful these drafts will be. <button class="pf-btn pf-btn-ghost" data-view="workspace">Back to the Workspace</button></div>` : ""}
+
+      <div class="pf-subtabs" style="margin-bottom:20px;">
+        ${IMPACT_TABS.map(([key, label]) => {
+          if (key === "debrief" && !debriefAvailable(active)) {
+            return `<button class="pf-chip pf-chip-locked" data-action="impact-tab-locked" title="Available after the sermon is preached">${label} ·</button>`;
+          }
+          return `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="impact-tab" data-tab="${key}">${label}</button>`;
+        }).join("")}
+      </div>
+
+      ${tab === "plan" ? renderImpactPlanTab(active) : ""}
+      ${tab === "shepherd" ? renderShepherdTab(active) : ""}
+      ${tab === "pack" ? renderPackTab(active) : ""}
+      ${tab === "debrief" ? renderDebriefTab(active) : ""}
+
+      <p class="pf-helper" style="margin-top:20px;">${MINISTRY_DISCLAIMER}</p>
+    </div>
+  `;
+}
+
+function renderImpactPlanTab(active) {
+  return `
+    <p class="pf-page-sub" style="margin-bottom:18px;">Church-wide ministry action: what staff, the prayer team, communications, and worship planning need from this sermon. Group and family resources live in the <button class="pf-inline-link" data-action="impact-tab" data-tab="pack">Discipleship Pack</button>; pastoral-care planning lives in <button class="pf-inline-link" data-action="impact-tab" data-tab="shepherd">Shepherding</button>.</p>
+    ${IMPACT_CARDS.map((card) => renderMinistryCard("impact", card, active.impact)).join("")}
+  `;
+}
+
+function renderShepherdTab(active) {
+  return `
+    <p class="pf-page-sub" style="margin-bottom:14px;">Turn sermon conviction into pastoral care — the responses this message may surface and the follow-up pathways for them.</p>
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Likely responses</span></div>
+      ${renderChipGroup("shepherd", "responses", SHEPHERD_RESPONSES, active.shepherd.responses)}
+    </section>
+    ${SHEPHERD_CARDS.map((card) => renderMinistryCard("shepherd", card, active.shepherd)).join("")}
+  `;
+}
+
+function renderPackTab(active) {
+  return `
+    <p class="pf-page-sub" style="margin-bottom:18px;">Don't let the sermon die on Sunday — resources for groups, families, personal reflection, prayer, and next steps.</p>
+    ${PACK_CARDS.map((card) => renderMinistryCard("pack", card, active.pack)).join("")}
+  `;
+}
+
+const DEBRIEF_FIELDS = [
+  ["landed", "What landed?", "What seemed clear, weighty, or helpful to the church?"],
+  ["unclear", "What felt unclear?", "Where did the sermon feel muddy, rushed, over-explained, or underdeveloped?"],
+  ["sharpen", "What would I cut or strengthen?", "What should have been shorter, sharper, clearer, or more direct?"],
+];
+
+const DEBRIEF_CARDS = [
+  {
+    key: "followup",
+    title: "Pastoral follow-up needed",
+    desc: "Broad categories only — no names or confidential details.",
+    fields: ["People / categories to follow up with", "Issues to address", "Resources to send", "Meetings to schedule", "Staff / elder notes"],
+  },
+  {
+    key: "future",
+    title: "What should shape future preaching?",
+    desc: "Carry Sunday's lessons forward into the calendar.",
+    fields: ["Revisit this doctrine", "Clarify this issue", "Series idea", "One-off sermon idea", "Address in family groups", "Address with staff / elders"],
+  },
+  {
+    key: "growth",
+    title: "Preacher growth reflection",
+    desc: "Notice, don't grade. What did you learn about your own preaching?",
+    fields: ["Delivery", "Clarity", "Tone", "Structure", "Application", "Gospel clarity", "Time management"],
+  },
+];
+
+function renderDebriefTab(active) {
+  if (!debriefAvailable(active)) {
+    return `<div class="pf-empty">The debrief opens after the sermon is preached (or the preaching date passes). Learn from Sunday — then shepherd better next week.</div>`;
+  }
+  return `
+    <p class="pf-page-sub" style="margin-bottom:14px;">Learn from Sunday. Reflect on what landed, what was unclear, what surfaced, and what should shape future preaching. <em>Do not store confidential counseling details or sensitive member information here.</em></p>
+    ${DEBRIEF_FIELDS.map(
+      ([key, label, hint]) => `
+        <div class="pf-ws-field">
+          <label class="pf-label">${escapeHtml(label)}</label>
+          <textarea class="pf-ws-input" rows="3" data-action="ministry-field" data-store="debrief" data-key="${attr(key)}" placeholder="${attr(hint)}">${escapeHtml(active.debrief[key] || "")}</textarea>
+        </div>
+      `,
+    ).join("")}
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">What responses surfaced?</span></div>
+      ${renderChipGroup("debrief", "responses", DEBRIEF_RESPONSES, active.debrief.responses)}
+    </section>
+    ${DEBRIEF_CARDS.map((card) => `
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head" style="align-items:flex-start;">
+          <div style="min-width:0;">
+            <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
+            <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
+          </div>
+          <div class="pf-ministry-actions">
+            <button class="pf-btn pf-btn-ghost" data-action="ministry-copy" data-store="debrief" data-key="${attr(card.key)}">Copy</button>
+          </div>
+        </div>
+        <textarea class="pf-ws-input pf-ministry-area" rows="${card.fields.length + 2}" data-action="ministry-field" data-store="debrief" data-key="${attr(card.key)}">${escapeHtml(ministryValue(active.debrief, card.key, card.fields))}</textarea>
+      </section>
+    `).join("")}
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Carry forward</span></div>
+      <p class="pf-ministry-desc" style="margin-bottom:12px;">Everything you write here is already searchable in Notes. Carry the insights into what comes next:</p>
+      <div class="pf-modal-actions" style="margin-top:0;">
+        <button class="pf-btn" data-action="cf-new-sermon">Start a sermon from an idea</button>
+        <button class="pf-btn" data-action="cf-series">Open Series Architect</button>
+        <button class="pf-btn" data-action="cf-lens">Note a broad pattern in Congregational Lens</button>
+      </div>
+    </section>
+  `;
+}
+
+// ---- Congregational Lens ----
+const LENS_FIELDS = [
+  ["Church profile", [
+    ["profile.name", "Church name", ""],
+    ["profile.city", "City / community", ""],
+    ["profile.size", "Church size", "e.g. ~120 adults on Sundays"],
+    ["profile.style", "Service style", ""],
+    ["profile.context", "Primary ministry context", "e.g. church plant, replant, established church"],
+    ["profile.demographics", "Demographic notes", "Broad strokes only."],
+  ]],
+  ["Current ministry season", [
+    ["season.now", "What season is the church in right now?", ""],
+    ["season.emphasis", "What is the Lord currently emphasizing in the church?", ""],
+    ["season.pressures", "What pressures or opportunities is the church facing?", ""],
+  ]],
+  ["Mission priorities", [
+    ["mission.local", "Local mission focus", ""],
+    ["mission.outreach", "Outreach priorities", ""],
+    ["mission.planting", "Church planting emphasis", ""],
+    ["mission.partnerships", "Community partnerships", ""],
+    ["mission.evangelism", "Evangelistic burden", ""],
+  ]],
+  ["Leadership emphases", [
+    ["leadership.language", "What language is the church using right now?", ""],
+    ["leadership.initiatives", "What initiatives need reinforcement?", ""],
+    ["leadership.themes", "What leadership themes need to be repeated?", ""],
+  ]],
+];
+
+function renderLens() {
+  const lens = state.lens;
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:20px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Congregational Lens</span>
+        <h1 class="pf-h1">Apply sermons with your actual church in view</h1>
+        <p class="pf-page-sub">Broad church context that shapes application, the Impact Plan, Shepherding, the Discipleship Pack, and Series Architect. Entirely optional — the app works without it.</p>
+      </div>
+
+      <div class="pf-lens-privacy">Congregational Lens is for broad church context, not confidential counseling notes or private member details. Do not store names, counseling situations, or sensitive personal data here.</div>
+
+      <section class="pf-card-box pf-checklist-card">
+        <label class="pf-toggle-row" style="margin-top:0;">
+          <input type="checkbox" data-action="lens-toggle" ${lens.enabled ? "checked" : ""} />
+          <span><strong>Use Congregational Lens</strong> when Sermon Guide helps with application, ministry drafts, and series planning. A small "Using Congregational Lens" notice appears wherever it's applied.</span>
+        </label>
+      </section>
+
+      ${LENS_FIELDS.map(
+        ([groupTitle, fields]) => `
+          <section class="pf-card-box pf-checklist-card">
+            <div class="pf-checklist-head"><span class="pf-eyebrow">${escapeHtml(groupTitle)}</span></div>
+            ${fields
+              .map(
+                ([key, label, hint]) => `
+                  <div class="pf-ws-field">
+                    <label class="pf-label">${escapeHtml(label)}</label>
+                    <textarea class="pf-ws-input" rows="2" data-action="ministry-field" data-store="lens" data-key="${attr(key)}" placeholder="${attr(hint)}">${escapeHtml(lens[key] || "")}</textarea>
+                  </div>
+                `,
+              )
+              .join("")}
+          </section>
+        `,
+      ).join("")}
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Discipleship needs</span></div>
+        ${renderChipGroup("lens", "needs", LENS_NEEDS, lens.needs)}
+        <div class="pf-ws-field" style="margin-top:12px;">
+          <label class="pf-label">Recurring pastoral burdens</label>
+          <textarea class="pf-ws-input" rows="2" data-action="ministry-field" data-store="lens" data-key="burdens.recurring" placeholder="What issues regularly show up in shepherding, preaching, or leadership?">${escapeHtml(lens["burdens.recurring"] || "")}</textarea>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+// ---- Series Architect ----
+const SERIES_OVERVIEW_FIELDS = [
+  ["title", "Series title", "Don't Follow Your Heart"],
+  ["subtitle", "Series subtitle", ""],
+  ["passages", "Primary book / passages", "Psalms of the heart"],
+  ["startDate", "Start date", ""],
+  ["endDate", "End date", ""],
+  ["count", "Number of sermons", ""],
+];
+
+const SERIES_FORMATION_FIELDS = [
+  ["goal", "Primary formation goal", "What kind of people should this series help form?"],
+  ["response", "Desired church response", ""],
+  ["practices", "Key practices to cultivate", ""],
+  ["sins", "Key sins to confront", ""],
+  ["comforts", "Key comforts to apply", ""],
+];
+
+function renderSeriesArchitect() {
+  const series = getSeries();
+  if (series) return renderSeriesEditor(series);
+  return `
+    <div class="pf-page-head" style="display:block;margin-bottom:22px;">
+      <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Series Architect</span>
+      <h1 class="pf-h1">Plan series that form the church</h1>
+      <p class="pf-page-sub">Clarify the theological, pastoral, and discipleship goals of a series before you preach it — formation over time, not just passages on dates.</p>
+    </div>
+    ${
+      state.series.length
+        ? `<div class="pf-switcher-list" style="margin-bottom:16px;">${state.series
+            .map(
+              (item) => `
+                <button class="pf-switcher-item" data-action="series-open" data-series="${attr(item.id)}">
+                  <div style="flex:1;min-width:0;">
+                    <div class="label">${escapeHtml(item.title || "Untitled series")}</div>
+                    <div class="meta">${escapeHtml(item.passages || "")}${item.startDate ? ` · ${escapeHtml(item.startDate)}` : ""} · ${(item.map || []).length} sermon${(item.map || []).length === 1 ? "" : "s"} mapped</div>
+                  </div>
+                  <span class="pf-badge">${escapeHtml(item.formation?.goal ? "Formation set" : "Draft")}</span>
+                </button>
+              `,
+            )
+            .join("")}</div>`
+        : `<div class="pf-empty" style="margin-bottom:16px;">No series yet. A series plan starts with a formation question, not a schedule: <em>what kind of people should these sermons help form?</em></div>`
+    }
+    <button class="pf-btn pf-btn-primary" data-action="series-new">New series</button>
+  `;
+}
+
+function renderSeriesEditor(series) {
+  return `
+    <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+      <button class="pf-btn pf-btn-ghost" data-action="series-back" style="margin-bottom:12px;">&larr; All series</button>
+      <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Series Architect</span>
+      <h1 class="pf-h1">${escapeHtml(series.title || "New series")}</h1>
+      <p class="pf-page-sub">Plan the formation arc — then prepare each sermon in the Workspace as its week comes. ${renderLensNotice()}</p>
+    </div>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Series overview</span></div>
+      <div class="pf-form-grid">
+        ${SERIES_OVERVIEW_FIELDS.map(
+          ([key, label, hint]) => `
+            <div class="pf-field ${key === "title" || key === "passages" ? "full" : ""}" style="margin-bottom:0;">
+              <label class="pf-label">${escapeHtml(label)}</label>
+              <input class="pf-input" ${key.endsWith("Date") ? 'type="date"' : ""} data-action="ministry-field" data-store="series" data-key="${attr(key)}" value="${attr(series[key] || "")}" placeholder="${attr(hint)}" />
+            </div>
+          `,
+        ).join("")}
+        <div class="pf-field full" style="margin-bottom:0;">
+          <label class="pf-label">Series description</label>
+          <textarea class="pf-ws-input" rows="2" data-action="ministry-field" data-store="series" data-key="description">${escapeHtml(series.description || "")}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Formation goal</span></div>
+      ${SERIES_FORMATION_FIELDS.map(
+        ([key, label, hint]) => `
+          <div class="pf-ws-field">
+            <label class="pf-label">${escapeHtml(label)}</label>
+            <textarea class="pf-ws-input" rows="2" data-action="ministry-field" data-store="series-formation" data-key="${attr(key)}" placeholder="${attr(hint)}">${escapeHtml(series.formation[key] || "")}</textarea>
+          </div>
+        `,
+      ).join("")}
+    </section>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Doctrinal anchors</span></div>
+      ${renderChipGroup("series", "anchors", SERIES_ANCHORS, series.anchors)}
+    </section>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Pastoral burdens</span></div>
+      ${renderChipGroup("series", "burdens", SERIES_BURDENS, series.burdens)}
+    </section>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head">
+        <span class="pf-eyebrow">Series map</span>
+        <span class="pf-checklist-count">${series.map.length} sermon${series.map.length === 1 ? "" : "s"}</span>
+      </div>
+      ${series.map
+        .map(
+          (row, index) => `
+            <div class="pf-outline-row">
+              <div class="pf-outline-tools">
+                <button class="pf-outline-btn" data-action="series-map-up" data-index="${index}" ${index === 0 ? "disabled" : ""}>▲</button>
+                <button class="pf-outline-btn" data-action="series-map-down" data-index="${index}" ${index === series.map.length - 1 ? "disabled" : ""}>▼</button>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div class="pf-series-row-grid">
+                  <input class="pf-ws-input" data-action="series-map-field" data-index="${index}" data-field="when" value="${attr(row.when)}" placeholder="Week ${index + 1} / date" />
+                  <input class="pf-ws-input" data-action="series-map-field" data-index="${index}" data-field="passage" value="${attr(row.passage)}" placeholder="Passage" />
+                </div>
+                <input class="pf-ws-input" style="margin-top:6px;" data-action="series-map-field" data-index="${index}" data-field="title" value="${attr(row.title)}" placeholder="Sermon title" />
+                <div class="pf-series-row-grid" style="margin-top:6px;">
+                  <input class="pf-ws-input" data-action="series-map-field" data-index="${index}" data-field="idea" value="${attr(row.idea)}" placeholder="Big idea" />
+                  <input class="pf-ws-input" data-action="series-map-field" data-index="${index}" data-field="emphasis" value="${attr(row.emphasis)}" placeholder="Formation emphasis / primary application" />
+                </div>
+              </div>
+              <button class="pf-outline-btn" data-action="series-map-remove" data-index="${index}">✕</button>
+            </div>
+          `,
+        )
+        .join("")}
+      <button class="pf-ghost-add" data-action="series-map-add">+ Add sermon to the map</button>
+    </section>
+
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <span class="pf-eyebrow">Series arc review</span>
+          <p class="pf-ministry-desc">Progression, connection without repetition, doctrinal and pastoral formation, sin confronted and grace applied, evangelistic clarity, a clear landing point.</p>
+        </div>
+        <button class="pf-btn" data-action="series-arc-review" ${ui.drafting ? "disabled" : ""}>${ui.drafting === "series-arc" ? "Reviewing…" : "Review with Sermon Guide"}</button>
+      </div>
+      ${series.arcReview ? `<div class="pf-review-result" style="margin-top:8px;">${escapeHtml(series.arcReview)}</div>` : `<p class="pf-helper" style="margin-top:4px;">Map at least a few sermons first, then ask Sermon Guide to consider the arc.</p>`}
+    </section>
+
+    ${renderMinistryCard("series-outputs", SERIES_OUTPUT_CARD, series.outputs)}
+
+    <div class="pf-modal-actions">
+      <button class="pf-btn" data-action="series-export-pdf">Export series plan (PDF)</button>
+      <button class="pf-btn" data-action="series-export-doc">Export series plan (Word)</button>
+      <button class="pf-btn pf-btn-danger" data-action="series-delete">Delete series</button>
+    </div>
+    <p class="pf-helper" style="margin-top:16px;">Series Architect plans the formation arc of the calendar. Each sermon is still prepared, phase by phase, in the Workspace.</p>
+  `;
+}
+
+function seriesDocHtml(series) {
+  const section = (title, body) => (body ? `<h2>${escapeHtml(title)}</h2><div class="note">${body}</div>` : "");
+  const para = (value) => (value && value.trim() ? `<p>${escapeHtml(value)}</p>` : "");
+  return `
+    <section class="sermon">
+      <p class="eyebrow">Series plan</p>
+      <h1>${escapeHtml(series.title || "Untitled series")}</h1>
+      ${series.subtitle ? `<p class="subtitle">${escapeHtml(series.subtitle)}</p>` : ""}
+      <p class="meta">${escapeHtml(series.passages || "")}${series.startDate ? ` · ${escapeHtml(series.startDate)} → ${escapeHtml(series.endDate || "?")}` : ""}${series.count ? ` · ${escapeHtml(series.count)} sermons` : ""}</p>
+      ${para(series.description)}
+      ${section("Formation goal", SERIES_FORMATION_FIELDS.map(([key, label]) => (series.formation[key] ? `<h3>${escapeHtml(label)}</h3><p>${escapeHtml(series.formation[key])}</p>` : "")).join(""))}
+      ${series.anchors.length ? section("Doctrinal anchors", `<p>${escapeHtml(series.anchors.join(", "))}</p>`) : ""}
+      ${series.burdens.length ? section("Pastoral burdens", `<p>${escapeHtml(series.burdens.join(", "))}</p>`) : ""}
+      ${
+        series.map.length
+          ? section(
+              "Series map",
+              `<ol>${series.map.map((row) => `<li><strong>${escapeHtml(row.title || row.passage || "TBD")}</strong> — ${escapeHtml([row.when, row.passage].filter(Boolean).join(" · "))}${row.idea ? `<br>Big idea: ${escapeHtml(row.idea)}` : ""}${row.emphasis ? `<br>Formation: ${escapeHtml(row.emphasis)}` : ""}</li>`).join("")}</ol>`,
+            )
+          : ""
+      }
+      ${ministryFilled(series.outputs, "outputs", SERIES_OUTPUT_CARD.fields) ? section("Series outputs", `<p>${escapeHtml(series.outputs.outputs).replaceAll("\n", "<br>")}</p>`) : ""}
+      ${series.arcReview ? section("Arc review (Sermon Guide)", `<p>${escapeHtml(series.arcReview).replaceAll("\n", "<br>")}</p>`) : ""}
+    </section>
+  `;
+}
+
+// ---- Preaching Diet Review ----
+const BIBLE_BOOKS = [
+  ["Genesis", "OT", "Law"], ["Exodus", "OT", "Law"], ["Leviticus", "OT", "Law"], ["Numbers", "OT", "Law"], ["Deuteronomy", "OT", "Law"],
+  ["Joshua", "OT", "OT History"], ["Judges", "OT", "OT History"], ["Ruth", "OT", "OT History"],
+  ["1 Samuel", "OT", "OT History"], ["2 Samuel", "OT", "OT History"], ["1 Kings", "OT", "OT History"], ["2 Kings", "OT", "OT History"],
+  ["1 Chronicles", "OT", "OT History"], ["2 Chronicles", "OT", "OT History"], ["Ezra", "OT", "OT History"], ["Nehemiah", "OT", "OT History"], ["Esther", "OT", "OT History"],
+  ["Job", "OT", "Wisdom & Poetry"], ["Psalms", "OT", "Wisdom & Poetry", ["Psalm"]], ["Proverbs", "OT", "Wisdom & Poetry"], ["Ecclesiastes", "OT", "Wisdom & Poetry"], ["Song of Solomon", "OT", "Wisdom & Poetry", ["Song of Songs"]],
+  ["Isaiah", "OT", "Prophets"], ["Jeremiah", "OT", "Prophets"], ["Lamentations", "OT", "Prophets"], ["Ezekiel", "OT", "Prophets"], ["Daniel", "OT", "Prophets"],
+  ["Hosea", "OT", "Prophets"], ["Joel", "OT", "Prophets"], ["Amos", "OT", "Prophets"], ["Obadiah", "OT", "Prophets"], ["Jonah", "OT", "Prophets"], ["Micah", "OT", "Prophets"],
+  ["Nahum", "OT", "Prophets"], ["Habakkuk", "OT", "Prophets"], ["Zephaniah", "OT", "Prophets"], ["Haggai", "OT", "Prophets"], ["Zechariah", "OT", "Prophets"], ["Malachi", "OT", "Prophets"],
+  ["Matthew", "NT", "Gospels & Acts"], ["Mark", "NT", "Gospels & Acts"], ["Luke", "NT", "Gospels & Acts"], ["John", "NT", "Gospels & Acts"], ["Acts", "NT", "Gospels & Acts"],
+  ["Romans", "NT", "Epistles"], ["1 Corinthians", "NT", "Epistles"], ["2 Corinthians", "NT", "Epistles"], ["Galatians", "NT", "Epistles"], ["Ephesians", "NT", "Epistles"],
+  ["Philippians", "NT", "Epistles"], ["Colossians", "NT", "Epistles"], ["1 Thessalonians", "NT", "Epistles"], ["2 Thessalonians", "NT", "Epistles"],
+  ["1 Timothy", "NT", "Epistles"], ["2 Timothy", "NT", "Epistles"], ["Titus", "NT", "Epistles"], ["Philemon", "NT", "Epistles"],
+  ["Hebrews", "NT", "Epistles"], ["James", "NT", "Epistles"], ["1 Peter", "NT", "Epistles"], ["2 Peter", "NT", "Epistles"],
+  ["1 John", "NT", "Epistles"], ["2 John", "NT", "Epistles"], ["3 John", "NT", "Epistles"], ["Jude", "NT", "Epistles"],
+  ["Revelation", "NT", "Apocalyptic"],
+];
+
+const BOOK_MATCHES = BIBLE_BOOKS.flatMap(([name, testament, genre, aliases]) =>
+  [name, ...(aliases || [])].map((alias) => ({ alias: alias.toLowerCase(), name, testament, genre })),
+).sort((a, b) => b.alias.length - a.alias.length);
+
+function passageBook(passage) {
+  const clean = String(passage || "").trim().toLowerCase();
+  if (!clean) return null;
+  return BOOK_MATCHES.find((book) => clean.startsWith(book.alias)) || null;
+}
+
+function dietSermons() {
+  const months = ui.dietRange === "all" ? null : Number(ui.dietRange);
+  const cutoff = months ? new Date(Date.now() - months * 30.4 * 86400000) : null;
+  return state.sermons.filter((sermon) => {
+    if (!sermon.date) return false;
+    const date = new Date(`${sermon.date}T00:00:00`);
+    if (date > new Date()) return false;
+    return !cutoff || date >= cutoff;
+  });
+}
+
+function dietBar(label, count, total, extra = "") {
+  const pct = total ? Math.round((count / total) * 100) : 0;
+  return `
+    <div class="pf-diet-row">
+      <span class="pf-diet-label">${escapeHtml(label)}</span>
+      <div class="pf-diet-track"><i style="width:${pct}%"></i></div>
+      <span class="pf-diet-count">${count}${extra}</span>
+    </div>
+  `;
+}
+
+function dietDigest(sermons) {
+  const byTestament = { OT: 0, NT: 0, Unknown: 0 };
+  const byGenre = {};
+  const books = new Set();
+  sermons.forEach((sermon) => {
+    const book = passageBook(sermon.passage);
+    if (!book) { byTestament.Unknown += 1; return; }
+    byTestament[book.testament] += 1;
+    byGenre[book.genre] = (byGenre[book.genre] || 0) + 1;
+    books.add(book.name);
+  });
+  const audiences = APPLICATION_AUDIENCES.map((audience) => [
+    audience,
+    sermons.filter((sermon) => worksheetValue(sermon, "application", audience).trim()).length,
+  ]);
+  const christ = sermons.filter((sermon) => worksheetValue(sermon, "gospel", "christ").trim()).length;
+  const invitation = sermons.filter((sermon) => phaseNoteText(sermon, PHASES.find((phase) => phase.id === "invitation")).trim()).length;
+  const bigIdea = sermons.filter((sermon) => worksheetValue(sermon, "aim", "burden").trim()).length;
+  const tagCounts = {};
+  sermons.forEach((sermon) => (sermon.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
+  const anchors = new Set();
+  state.series.forEach((series) => series.anchors.forEach((anchor) => anchors.add(anchor)));
+  return { byTestament, byGenre, books, audiences, christ, invitation, bigIdea, tagCounts, anchors };
+}
+
+function renderDietReview() {
+  const sermons = dietSermons();
+  const digest = dietDigest(sermons);
+  const total = sermons.length;
+  const ranges = [["3", "Last 3 months"], ["6", "Last 6 months"], ["12", "Last 12 months"], ["all", "All time"]];
+  const topTags = Object.entries(digest.tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  return `
+    <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+      <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Preaching Diet Review</span>
+      <h1 class="pf-h1">See what your church is being fed</h1>
+      <p class="pf-page-sub">Observe your preaching calendar over time — textual coverage, application patterns, and emphases. This is a mirror for a shepherd, not a report card.</p>
+    </div>
+    <div class="pf-filter-chips" style="margin-bottom:20px;">
+      ${ranges.map(([value, label]) => `<button class="pf-chip ${ui.dietRange === value ? "active" : ""}" data-action="diet-range" data-range="${value}">${label}</button>`).join("")}
+    </div>
+    ${
+      !total
+        ? `<div class="pf-empty">No dated, preached sermons in this window yet. As your pipeline fills and Sundays pass, this page starts telling the story of your pulpit.</div>`
+        : `
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Textual balance</span><span class="pf-checklist-count">${total} sermon${total === 1 ? "" : "s"}</span></div>
+        ${dietBar("Old Testament", digest.byTestament.OT, total)}
+        ${dietBar("New Testament", digest.byTestament.NT, total)}
+        ${digest.byTestament.Unknown ? dietBar("Unrecognized passage", digest.byTestament.Unknown, total) : ""}
+        <div style="height:10px;"></div>
+        ${Object.entries(digest.byGenre).sort((a, b) => b[1] - a[1]).map(([genre, count]) => dietBar(genre, count, total)).join("")}
+        <p class="pf-helper" style="margin-top:10px;">Books preached: ${digest.books.size ? escapeHtml([...digest.books].sort().join(", ")) : "—"} · ${66 - digest.books.size} of 66 books not yet in this window.</p>
+      </section>
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Application balance</span></div>
+        ${digest.audiences.map(([audience, count]) => dietBar(audience, count, total)).join("")}
+        <p class="pf-helper" style="margin-top:10px;">Counted from the Application Engine — sermons with counsel written for each audience.</p>
+      </section>
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Emphases</span></div>
+        ${dietBar("Christ connection recorded", digest.christ, total)}
+        ${dietBar("Invitation prepared", digest.invitation, total)}
+        ${dietBar("Big idea recorded", digest.bigIdea, total)}
+        ${topTags.length ? `<p class="pf-helper" style="margin-top:10px;">Recurring themes from your tags: ${topTags.map(([tag, count]) => `#${escapeHtml(tag)} (${count})`).join(" · ")}</p>` : ""}
+        ${digest.anchors.size ? `<p class="pf-helper">Doctrinal anchors from your series plans: ${escapeHtml([...digest.anchors].join(", "))}</p>` : ""}
+      </section>
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head" style="align-items:flex-start;">
+          <div style="min-width:0;">
+            <span class="pf-eyebrow">Pastoral review</span>
+            <p class="pf-ministry-desc">Ask Sermon Guide to consider this diet: strengths, potential imbalances, missing emphases, series and one-off suggestions, cautions, and encouragement.</p>
+          </div>
+          <button class="pf-btn" data-action="diet-review" ${ui.drafting ? "disabled" : ""}>${ui.drafting === "diet" ? "Reviewing…" : "Review Preaching Diet"}</button>
+        </div>
+        ${state.dietReview.text ? `<div class="pf-review-result" style="margin-top:8px;">${escapeHtml(state.dietReview.text)}</div><p class="pf-helper" style="margin-top:8px;">Reviewed ${state.dietReview.at ? escapeHtml(fmtDate(state.dietReview.at.slice(0, 10))) : ""}.</p>` : ""}
+      </section>
+    `
+    }
+  `;
+}
+
+async function reviewPreachingDiet() {
+  if (ui.drafting) return;
+  if (!requireOpenAIKey()) return;
+  const sermons = dietSermons();
+  if (!sermons.length) { showBanner("No dated sermons in this window yet."); return; }
+  const digest = dietDigest(sermons);
+  const lines = [
+    `PREACHING DIET (${ui.dietRange === "all" ? "all time" : `last ${ui.dietRange} months`}): ${sermons.length} sermons.`,
+    `Old Testament: ${digest.byTestament.OT}. New Testament: ${digest.byTestament.NT}.`,
+    `Genres: ${Object.entries(digest.byGenre).map(([genre, count]) => `${genre} ${count}`).join(", ") || "-"}.`,
+    `Books preached: ${[...digest.books].join(", ") || "-"}.`,
+    `Application audiences covered (sermons with written counsel): ${digest.audiences.map(([audience, count]) => `${audience} ${count}`).join(", ")}.`,
+    `Christ connection recorded: ${digest.christ}/${sermons.length}. Invitation prepared: ${digest.invitation}/${sermons.length}. Big idea recorded: ${digest.bigIdea}/${sermons.length}.`,
+    `Recurring tags: ${Object.entries(digest.tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([tag, count]) => `${tag}(${count})`).join(", ") || "-"}.`,
+    `Series doctrinal anchors: ${[...digest.anchors].join(", ") || "-"}.`,
+    "Recent sermons:",
+    ...sermons
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 15)
+      .map((sermon) => `- ${sermon.date} · ${sermon.passage}${sermon.title ? ` — ${sermon.title}` : ""}${worksheetValue(sermon, "aim", "burden").trim() ? ` | Big idea: ${worksheetValue(sermon, "aim", "burden").trim()}` : ""}`),
+    "",
+    ...lensSummaryLines(),
+  ];
+  ui.drafting = "diet";
+  render();
+  try {
+    const response = await fetch("./api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...openAIHeaders() },
+      body: JSON.stringify({
+        context: lines.join("\n"),
+        prompt:
+          "Review this preaching diet as a wise pastoral mentor. Cover: strengths to keep; potential imbalances to notice; emphases that may be missing; two or three future series worth considering; one or two one-off sermon ideas; pastoral cautions; and genuine encouragement. Observe and consider — never score, rank, or grade. Be concise and concrete.",
+      }),
+    });
+    const data = await response.json();
+    state.dietReview = { text: data.text || "", at: new Date().toISOString() };
+    saveState();
+  } catch {
+    showBanner("Could not reach Sermon Guide.");
+  } finally {
+    ui.drafting = "";
+    render();
+  }
+}
+
 function renderGoogleDocsModal(active) {
   const doc = active.googleDoc;
   const configured = ui.google.configured;
@@ -2117,6 +3180,24 @@ function searchAllNotes(query) {
         results.push({ sermonId: sermon.id, phaseId: "structure", label, where: "Outline", snippet: makeSnippet(text, query) });
       }
     });
+    for (const [storeName, whereLabel, cards] of MINISTRY_EXPORT_SECTIONS) {
+      const store = sermon[storeName] || {};
+      for (const [key, value] of Object.entries(store)) {
+        if (typeof value !== "string" || !value.trim()) continue;
+        const card = cards.find((item) => item.key === key);
+        if (card && !ministryFilled(store, key, card.fields)) continue;
+        if (value.toLowerCase().includes(q)) {
+          results.push({
+            sermonId: sermon.id,
+            phaseId: sermon.activePhase,
+            ministry: storeName,
+            label,
+            where: whereLabel,
+            snippet: makeSnippet(value, query),
+          });
+        }
+      }
+    }
     sermon.thread.forEach((message) => {
       if (message.role !== "meta" && message.content.toLowerCase().includes(q)) {
         results.push({
@@ -2142,7 +3223,7 @@ function renderSearchResults(query) {
           ? results
               .map(
                 (result) => `
-                  <button class="pf-note-group pf-search-hit" data-action="open-note-focus" data-sermon="${attr(result.sermonId)}" data-phase="${attr(result.phaseId)}">
+                  <button class="pf-note-group pf-search-hit" data-action="open-note-focus" data-sermon="${attr(result.sermonId)}" data-phase="${attr(result.phaseId)}" ${result.ministry ? `data-ministry="${attr(result.ministry)}"` : ""}>
                     <div class="pf-note-group-head" style="border-bottom:0;">
                       <span class="pf-note-phase">${escapeHtml(result.label)}</span>
                       <span class="pf-kind" style="margin-left:auto;">${escapeHtml(result.where)}</span>
@@ -2602,6 +3683,65 @@ function worksheetSummaryLines(sermon) {
   return lines;
 }
 
+const MINISTRY_EXPORT_SECTIONS = [
+  ["impact", "Sermon Impact Plan", IMPACT_CARDS],
+  ["shepherd", "Shepherding Follow-Up", SHEPHERD_CARDS],
+  ["pack", "Discipleship Pack", PACK_CARDS],
+  ["debrief", "Post-Sermon Debrief", DEBRIEF_CARDS],
+];
+
+function ministrySummaryLines(sermon) {
+  const lines = [];
+  for (const [storeName, title, cards] of MINISTRY_EXPORT_SECTIONS) {
+    const store = sermon[storeName] || {};
+    const filledCards = cards.filter((card) => ministryFilled(store, card.key, card.fields));
+    const responses = Array.isArray(store.responses) ? store.responses : [];
+    const plainFields =
+      storeName === "debrief"
+        ? DEBRIEF_FIELDS.filter(([key]) => typeof store[key] === "string" && store[key].trim())
+        : [];
+    const emphasis = storeName === "impact" && typeof store["summary.emphasis"] === "string" ? store["summary.emphasis"].trim() : "";
+    if (!filledCards.length && !responses.length && !plainFields.length && !emphasis) continue;
+    lines.push(title.toUpperCase());
+    if (emphasis) lines.push(`This week's ministry emphasis: ${emphasis}`);
+    if (responses.length) lines.push(`Responses: ${responses.join(", ")}`);
+    plainFields.forEach(([key, label]) => {
+      lines.push(`${label} ${store[key].trim()}`);
+    });
+    filledCards.forEach((card) => {
+      lines.push(`-- ${card.title} --`);
+      lines.push(store[card.key].trim());
+    });
+    lines.push("");
+  }
+  return lines;
+}
+
+function ministrySectionsHtml(sermon) {
+  let html = "";
+  for (const [storeName, title, cards] of MINISTRY_EXPORT_SECTIONS) {
+    const store = sermon[storeName] || {};
+    const filledCards = cards.filter((card) => ministryFilled(store, card.key, card.fields));
+    const responses = Array.isArray(store.responses) ? store.responses : [];
+    const plainFields =
+      storeName === "debrief"
+        ? DEBRIEF_FIELDS.filter(([key]) => typeof store[key] === "string" && store[key].trim())
+        : [];
+    const emphasis = storeName === "impact" && typeof store["summary.emphasis"] === "string" ? store["summary.emphasis"].trim() : "";
+    if (!filledCards.length && !responses.length && !plainFields.length && !emphasis) continue;
+    html += `<h2>${escapeHtml(title)}</h2>`;
+    if (emphasis) html += `<div class="note"><p><strong>This week's ministry emphasis:</strong> ${escapeHtml(emphasis)}</p></div>`;
+    if (responses.length) html += `<div class="note"><p><strong>Responses:</strong> ${escapeHtml(responses.join(", "))}</p></div>`;
+    plainFields.forEach(([key, label]) => {
+      html += `<h3>${escapeHtml(label)}</h3><div class="note"><p>${escapeHtml(store[key].trim()).replaceAll("\n", "<br>")}</p></div>`;
+    });
+    filledCards.forEach((card) => {
+      html += `<h3>${escapeHtml(card.title)}</h3><div class="note"><p>${escapeHtml(store[card.key].trim()).replaceAll("\n", "<br>")}</p></div>`;
+    });
+  }
+  return html;
+}
+
 function activeContext(active) {
   const phase = getPhase(active);
   const status = sermonStatus(active);
@@ -2789,6 +3929,8 @@ function exportMarkdown(sermon) {
     lines.push("");
   }
 
+  lines.push(...ministrySummaryLines(sermon));
+
   if (sermon.thread.length) {
     lines.push("## Sermon Guide Thread", "");
     for (const message of sermon.thread) {
@@ -2856,6 +3998,7 @@ function sermonSectionsHtml(sermon) {
       html += `<div class="note">${sanitizeRichHtml(phaseNoteHtml(sermon, phase))}</div>`;
     }
   }
+  html += ministrySectionsHtml(sermon);
   if (!html) html = `<p class="muted">No notes captured yet.</p>`;
   return html;
 }
@@ -3364,10 +4507,12 @@ async function loadCloudState() {
 function hasCloudContent(snapshot) {
   return Boolean(
     snapshot?.sermons?.length ||
+      snapshot?.series?.length ||
       snapshot?.journalEntries?.length ||
       snapshot?.reviewText ||
       snapshot?.reviewMeta?.passage ||
-      snapshot?.reviewMeta?.title,
+      snapshot?.reviewMeta?.title ||
+      (snapshot?.lens && Object.keys(snapshot.lens).length > 2),
   );
 }
 
@@ -3597,6 +4742,8 @@ function buildGoogleDocText(sermon) {
       lines.push("");
     }
   }
+
+  lines.push(...ministrySummaryLines(sermon));
 
   if (sermon.thread.length) {
     lines.push("SERMON GUIDE THREAD");
@@ -4187,6 +5334,149 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
+  if (action === "pipeline-tab") {
+    ui.pipelineTab = target.dataset.tab;
+    render();
+  }
+  if (action === "impact-tab") {
+    ui.impactTab = target.dataset.tab;
+    render();
+  }
+  if (action === "impact-tab-locked") {
+    showBanner("The debrief opens once the sermon is preached (or its date passes).");
+  }
+  if (action === "open-impact") {
+    state.view = "impact";
+    ui.impactTab = "plan";
+    saveState();
+    render();
+  }
+  if (action === "open-debrief") {
+    state.view = "impact";
+    ui.impactTab = "debrief";
+    saveState();
+    render();
+  }
+  if (action === "open-lens") {
+    state.view = "lens";
+    render();
+  }
+  if (action === "cf-new-sermon") {
+    ui.showNew = true;
+    state.view = "workspace";
+    render();
+  }
+  if (action === "cf-series") {
+    state.view = "pipeline";
+    ui.pipelineTab = "series";
+    saveState();
+    render();
+  }
+  if (action === "cf-lens") {
+    state.view = "lens";
+    render();
+  }
+  if (action === "min-chip") {
+    const store = ministryStore(target.dataset.store);
+    if (!store) return;
+    const field = target.dataset.field;
+    const value = target.dataset.value;
+    const arr = Array.isArray(store[field]) ? store[field] : (store[field] = []);
+    const idx = arr.indexOf(value);
+    if (idx === -1) arr.push(value);
+    else arr.splice(idx, 1);
+    touchMinistryStore(target.dataset.store);
+    render();
+  }
+  if (action === "min-chip-add") {
+    const input = target.parentElement?.querySelector('[data-action="min-chip-input"]');
+    const value = (input?.value || "").trim();
+    if (!value) return;
+    const store = ministryStore(target.dataset.store);
+    if (!store) return;
+    const field = target.dataset.field;
+    const arr = Array.isArray(store[field]) ? store[field] : (store[field] = []);
+    if (!arr.includes(value)) arr.push(value);
+    touchMinistryStore(target.dataset.store);
+    render();
+  }
+  if (action === "guide-draft") {
+    draftWithGuide(target.dataset.spec);
+  }
+  if (action === "ministry-copy") {
+    const store = ministryStore(target.dataset.store);
+    const value = store?.[target.dataset.key];
+    if (typeof value === "string" && value.trim()) copyText(value);
+    else showBanner("Nothing to copy yet.");
+  }
+  if (action === "series-new") {
+    const series = normalizeSeries({ id: genId() });
+    state.series.push(series);
+    ui.activeSeriesId = series.id;
+    saveState();
+    render();
+  }
+  if (action === "series-open") {
+    ui.activeSeriesId = target.dataset.series;
+    render();
+  }
+  if (action === "series-back") {
+    ui.activeSeriesId = "";
+    render();
+  }
+  if (action === "series-delete") {
+    const series = getSeries();
+    if (!series) return;
+    const ok = confirm(`Delete the series "${series.title || "Untitled series"}"? Sermons themselves are not deleted.`);
+    if (!ok) return;
+    state.series = state.series.filter((item) => item.id !== series.id);
+    ui.activeSeriesId = "";
+    saveState();
+    render();
+  }
+  if (action === "series-map-add") {
+    const series = getSeries();
+    if (!series) return;
+    series.map.push({ when: "", passage: "", title: "", idea: "", emphasis: "" });
+    touchMinistryStore("series");
+    render();
+  }
+  if (action === "series-map-remove") {
+    const series = getSeries();
+    if (!series) return;
+    series.map.splice(Number(target.dataset.index), 1);
+    touchMinistryStore("series");
+    render();
+  }
+  if (action === "series-map-up" || action === "series-map-down") {
+    const series = getSeries();
+    if (!series) return;
+    const index = Number(target.dataset.index);
+    const swap = action === "series-map-up" ? index - 1 : index + 1;
+    if (swap < 0 || swap >= series.map.length) return;
+    const tmp = series.map[index];
+    series.map[index] = series.map[swap];
+    series.map[swap] = tmp;
+    touchMinistryStore("series");
+    render();
+  }
+  if (action === "series-arc-review") {
+    reviewSeriesArc(ui.activeSeriesId);
+  }
+  if (action === "series-export-pdf" || action === "series-export-doc") {
+    const series = getSeries();
+    if (!series) return;
+    const name = `${series.title || "Series"} plan`;
+    if (action === "series-export-pdf") exportPdf(name, seriesDocHtml(series));
+    else exportDoc(name, seriesDocHtml(series));
+  }
+  if (action === "diet-range") {
+    ui.dietRange = target.dataset.range;
+    render();
+  }
+  if (action === "diet-review") {
+    reviewPreachingDiet();
+  }
   if (action === "notes-tag") {
     ui.notesQuery = ui.notesQuery === target.dataset.tag ? "" : target.dataset.tag;
     render();
@@ -4202,7 +5492,12 @@ document.addEventListener("click", (event) => {
       sermon.id === sermonId ? { ...sermon, activePhase: phaseId, updatedAt: new Date().toISOString() } : sermon,
     );
     state.activeId = sermonId;
-    state.view = "workspace";
+    if (target.dataset.ministry) {
+      state.view = "impact";
+      ui.impactTab = { impact: "plan", shepherd: "shepherd", pack: "pack", debrief: "debrief" }[target.dataset.ministry] || "plan";
+    } else {
+      state.view = "workspace";
+    }
     saveState();
     render();
   }
@@ -4259,6 +5554,19 @@ document.addEventListener("input", (event) => {
   if (action === "phase-editor" || action === "notes-editor") {
     persistPhaseEditor(target);
   }
+  if (action === "ministry-field") {
+    const store = ministryStore(target.dataset.store);
+    if (!store) return;
+    store[target.dataset.key] = target.value;
+    touchMinistryStore(target.dataset.store);
+  }
+  if (action === "series-map-field") {
+    const series = getSeries();
+    const row = series?.map[Number(target.dataset.index)];
+    if (!row) return;
+    row[target.dataset.field] = target.value;
+    touchMinistryStore("series");
+  }
   if (action === "worksheet-field") {
     const active = getActive();
     if (!active) return;
@@ -4307,6 +5615,11 @@ document.addEventListener("change", (event) => {
   }
   if (action === "import-file") {
     handleImportFile(target);
+  }
+  if (action === "lens-toggle") {
+    state.lens.enabled = target.checked;
+    saveState();
+    render();
   }
   if (action === "google-autosync") {
     state.google = { ...(state.google || {}), autoSync: target.checked };
