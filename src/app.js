@@ -491,6 +491,7 @@ const ui = {
   practice: { running: false, seconds: 0 },
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
+  refine: null,
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -1964,6 +1965,84 @@ function estPreachMinutes(words) {
   return words ? Math.max(1, Math.round(words / state.practiceWpm)) : 0;
 }
 
+// ---- Sermon Guide refinement tools ----
+// Selection- and section-based helps. Every result is a suggestion card the
+// preacher can copy, insert as a note, or dismiss — the manuscript is never
+// overwritten.
+const REFINE_ACTIONS = [
+  ["clarify", "Clarify this section", "Suggest how to make this clearer without changing the preacher's voice. Point at what is unclear and offer a clarified rendering as a suggestion — do not expand it."],
+  ["tighten", "Tighten wording", "Suggest a tighter version: remove filler, repetition, and unnecessary length while keeping the preacher's voice and conviction. Show the tightened text as a suggestion."],
+  ["transition", "Strengthen transition", "Evaluate the transition into and out of this section and suggest one or two stronger ways to connect the movements. Do not rewrite the sections themselves."],
+  ["check-text", "Check against the text", "Ask whether each claim here is clearly supported by the passage being preached. Flag anything the text does not say, and note what would need to change to stay faithful."],
+  ["big-idea", "Pressure-test the big idea", "Evaluate the sermon's big idea: faithful to the passage, clear, memorable, text-driven? Push where it is weak. Affirm what is genuinely strong."],
+  ["application", "Strengthen application", "Evaluate the application: specific and pastoral, or generic and religious? Suggest how to make it concrete for real people this week — name the kinds of people it should reach."],
+  ["gospel", "Check gospel clarity", "Evaluate whether grace, repentance, faith, and Christ come through clearly here — without forcing the text. Note what is missing or muddy."],
+  ["weak-spots", "Identify weak spots", "Find unclear logic, unsupported claims, thin application, overexplaining, missing transitions, or a vague call to respond. List them plainly with a pointer for each."],
+  ["preach-ready", "Make this more preach-ready", "Suggest how to improve this for oral delivery: shorter sentences, spoken cadence, concrete words — in the preacher's own voice, offered as a suggestion."],
+  ["questions", "Create discussion questions", "Draft four to six group discussion questions from this section: observation, meaning, application, and heart. Questions only — no commentary."],
+];
+
+async function runRefine(kind) {
+  if (!requireOpenAIKey()) return;
+  const active = getActive();
+  if (!active) return;
+  const def = REFINE_ACTIONS.find(([key]) => key === kind);
+  if (!def) return;
+  const selection = window.getSelection();
+  const raw = selection ? selection.toString().trim() : "";
+  const inEditor = raw && selection.anchorNode?.parentElement?.closest('[data-action="phase-editor"]');
+  const source = inEditor ? raw : phaseNoteText(active, manuscriptPhaseDef()).slice(0, 4500);
+  const scope = inEditor ? "selected section" : "whole sermon";
+  if (!source.trim()) {
+    showBanner("Write something first — refinement works on your words.");
+    return;
+  }
+  ui.refine = { loading: true, label: def[1], text: "", scope };
+  render();
+  try {
+    const response = await fetch("./api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...openAIHeaders() },
+      body: JSON.stringify({
+        context: `${sermonDraftContext(active)}\n\nTHE PREACHER'S TEXT (${scope}):\n${source}`,
+        prompt: `${def[2]} Respond as a brief, concrete suggestion for the preacher to weigh — clearly theirs to accept or reject. Never present your words as the sermon itself.`,
+      }),
+    });
+    const data = await response.json();
+    ui.refine = { loading: false, label: def[1], text: data.text || "No suggestion came back — try again.", scope };
+  } catch {
+    ui.refine = null;
+    showBanner("Could not reach Sermon Guide.");
+  }
+  render();
+}
+
+function renderRefineCard() {
+  const refine = ui.refine;
+  if (!refine) return "";
+  return `
+    <section class="pf-card-box pf-refine-card" aria-live="polite">
+      <div class="pf-checklist-head" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · ${escapeHtml(refine.label)}</span>
+          <p class="pf-helper" style="margin-top:2px;">Reviewing the ${escapeHtml(refine.scope)} — a suggestion, never an overwrite.</p>
+        </div>
+        <button class="pf-btn pf-btn-ghost" data-action="refine-dismiss">Dismiss</button>
+      </div>
+      ${
+        refine.loading
+          ? `<p class="pf-ministry-desc">Weighing your words…</p>`
+          : `
+        <div class="pf-review-result" style="margin-top:6px;">${escapeHtml(refine.text)}</div>
+        <div class="pf-modal-actions" style="margin-top:12px;">
+          <button class="pf-btn" data-action="refine-copy">Copy suggestion</button>
+          <button class="pf-btn pf-btn-ghost" data-action="refine-insert-note">Insert as personal note</button>
+        </div>`
+      }
+    </section>
+  `;
+}
+
 // ---- Insert Scripture + structured blocks ----
 // Reference parser: "John 3:16", "John 3:16-18", "Psalm 23", "Romans 8:1-4",
 // "1 Corinthians 13:1-7". Validated against the canonical book list.
@@ -2173,6 +2252,7 @@ function renderEditorPage(active) {
         <button class="pf-inline-link" data-view="workspace">back to the Workspace</button>
       </div>
       ${renderFormatToolbar({ full: true })}
+      ${renderRefineCard()}
       <div
         class="pf-editor pf-doc-canvas"
         contenteditable="true"
@@ -3148,6 +3228,12 @@ function renderFormatToolbar(options = {}) {
           </span>
         </span>
         <button class="pf-tool-pill" data-action="open-scripture" title="Insert a Bible passage">Scripture ＋</button>
+        <span class="pf-tool-menu-wrap">
+          <button class="pf-tool-pill" data-action="heading-menu" title="Refine with Sermon Guide" aria-haspopup="true">Refine ✦ ${menuChevron}</button>
+          <span class="pf-tool-menu" data-tool-menu>
+            ${REFINE_ACTIONS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="refine" data-kind="${kind}">${label}</button>`).join("")}
+          </span>
+        </span>
         <span class="pf-tool-menu-wrap">
           <button class="pf-tool-pill" data-action="heading-menu" title="Font size" aria-haspopup="true">Size ${menuChevron}</button>
           <span class="pf-tool-menu" data-tool-menu>
@@ -7152,6 +7238,23 @@ document.addEventListener("click", (event) => {
     ui.scripture.attribution = "";
     render();
   }
+  if (action === "refine") {
+    closeToolMenus();
+    runRefine(target.dataset.kind);
+  }
+  if (action === "refine-dismiss") {
+    ui.refine = null;
+    render();
+  }
+  if (action === "refine-copy") {
+    if (ui.refine?.text) copyText(ui.refine.text);
+  }
+  if (action === "refine-insert-note") {
+    if (!ui.refine?.text) return;
+    insertIntoEditor(`<div class="pf-b pf-b-note"><p>${escapeHtml(ui.refine.text)}</p></div><p><br></p>`);
+    ui.refine = null;
+    render();
+  }
   if (action === "insert-block") {
     saveEditorRange();
     closeToolMenus();
@@ -7722,7 +7825,7 @@ document.addEventListener("change", (event) => {
 
 // Keep the contenteditable's selection when a toolbar button is pressed.
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"]')) {
+  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"], [data-action="refine"], [data-action="insert-block"], [data-action="open-scripture"]')) {
     event.preventDefault();
   }
 });

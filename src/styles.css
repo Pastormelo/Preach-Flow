@@ -3346,3 +3346,10 @@ p {
 .pf-slide-title { font-family: var(--font-display); font-weight: 800; font-size: 0.9em; }
 .pf-scripture-flags { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
 .pf-scripture-flags .pf-toggle-row { flex: 0 0 auto; }
+
+/* ---- Sermon Guide refine card ---- */
+.pf-refine-card {
+  max-width: 860px;
+  margin: 0 auto 14px;
+  border-left: 3px solid var(--brand);
+}
