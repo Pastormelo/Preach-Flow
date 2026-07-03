@@ -3294,3 +3294,55 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .pf-pulpit-controls { transition: none; }
 }
+
+/* ---- structured sermon blocks ---- */
+.pf-b {
+  position: relative;
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  border-radius: 0 12px 12px 0;
+  padding: 10px 14px 10px 16px;
+  margin: 14px 0;
+  background: var(--surface-sunken);
+}
+.pf-b::before {
+  content: "Block";
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.pf-b-scripture { border-left-color: var(--brand); background: var(--brand-soft); }
+.pf-b-scripture::before { content: "Scripture"; color: var(--text-brand); }
+.pf-b-illustration::before { content: "Illustration"; }
+.pf-b-application { border-left-color: #4f9d69; }
+.pf-b-application::before { content: "Application"; color: #4f9d69; }
+.pf-b-transition::before { content: "Transition"; }
+.pf-b-transition { border-style: dashed; }
+.pf-b-prayer::before { content: "Prayer"; }
+.pf-b-quote::before { content: "Quote"; }
+.pf-b-cue { border-left-color: #7b68ae; }
+.pf-b-cue::before { content: "Media cue"; color: #7b68ae; }
+.pf-b-slide { border-left-color: #7b68ae; }
+.pf-b-slide::before { content: "Slide cue"; color: #7b68ae; }
+.pf-b-note { opacity: 0.85; }
+.pf-b-note::before { content: "Personal note"; }
+.pf-b-public::before { content: "Public note"; }
+.pf-b-respond { border-left-color: var(--ofc-danger); }
+.pf-b-respond::before { content: "Call to respond"; color: var(--ofc-danger); }
+.pf-scripture-ref {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.82em;
+  color: var(--text-brand);
+  margin-bottom: 4px;
+}
+.pf-scripture-text { font-style: italic; }
+.pf-scripture-attr { font-size: 0.72em; color: var(--text-muted); margin-top: 4px; }
+.pf-slide-title { font-family: var(--font-display); font-weight: 800; font-size: 0.9em; }
+.pf-scripture-flags { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.pf-scripture-flags .pf-toggle-row { flex: 0 0 auto; }

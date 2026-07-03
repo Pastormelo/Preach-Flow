@@ -490,6 +490,7 @@ const ui = {
   confirmDeleteId: "",
   practice: { running: false, seconds: 0 },
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
+  scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -554,6 +555,7 @@ state.practiceWpm = normalizeWpm(state.practiceWpm);
 state.practiceFont = normalizeFontStep(state.practiceFont);
 state.preachingProfile = normalizePreachingProfile(state.preachingProfile);
 state.pulpitPrefs = normalizePulpitPrefs(state.pulpitPrefs);
+state.bibleProvider = normalizeBibleProvider(state.bibleProvider);
 
 function loadTheme() {
   const stored = localStorage.getItem(THEME_STORE);
@@ -589,6 +591,7 @@ function loadState() {
       practiceFont: normalizeFontStep(parsed.practiceFont),
       preachingProfile: normalizePreachingProfile(parsed.preachingProfile),
       pulpitPrefs: normalizePulpitPrefs(parsed.pulpitPrefs),
+      bibleProvider: normalizeBibleProvider(parsed.bibleProvider),
     };
   } catch {
     return {
@@ -642,6 +645,7 @@ function stateSnapshot() {
     practiceFont: state.practiceFont,
     preachingProfile: state.preachingProfile,
     pulpitPrefs: state.pulpitPrefs,
+    bibleProvider: state.bibleProvider,
   };
 }
 
@@ -667,6 +671,7 @@ function applyStateSnapshot(snapshot) {
   state.practiceFont = normalizeFontStep(snapshot?.practiceFont);
   state.preachingProfile = normalizePreachingProfile(snapshot?.preachingProfile);
   state.pulpitPrefs = normalizePulpitPrefs(snapshot?.pulpitPrefs);
+  state.bibleProvider = normalizeBibleProvider(snapshot?.bibleProvider);
 }
 
 function normalizeSermon(sermon) {
@@ -820,6 +825,21 @@ function normalizeFontStep(value) {
   return Number.isInteger(step) && step >= -2 && step <= 3 ? step : 0;
 }
 
+// Bible provider settings. PreachFlow never scrapes Bible sites and never
+// bundles copyrighted translations: the built-in provider serves public-
+// domain texts (WEB, KJV) via bible-api.com, and manual paste with
+// attribution covers everything else.
+function normalizeBibleProvider(settings) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const provider = ["public-domain", "manual"].includes(source.provider) ? source.provider : "public-domain";
+  return {
+    provider,
+    translation: ["WEB", "KJV"].includes(source.translation) ? source.translation : "WEB",
+    apiKey: typeof source.apiKey === "string" ? source.apiKey : "",
+    attribution: typeof source.attribution === "boolean" ? source.attribution : true,
+  };
+}
+
 // Pulpit View display preferences (user-level; persisted and synced).
 function normalizePulpitPrefs(prefs) {
   const source = prefs && typeof prefs === "object" ? prefs : {};
@@ -865,6 +885,30 @@ function attr(value) {
   return escapeHtml(value);
 }
 
+// Structured sermon-block classes that survive sanitization. Everything
+// else is stripped to plain rich text.
+const BLOCK_CLASSES = new Set([
+  "pf-b",
+  "pf-b-scripture",
+  "pf-b-point",
+  "pf-b-sub",
+  "pf-b-illustration",
+  "pf-b-application",
+  "pf-b-transition",
+  "pf-b-prayer",
+  "pf-b-quote",
+  "pf-b-cue",
+  "pf-b-slide",
+  "pf-b-note",
+  "pf-b-public",
+  "pf-b-respond",
+  "pf-scripture-ref",
+  "pf-scripture-text",
+  "pf-scripture-attr",
+  "pf-slide-title",
+]);
+const BLOCK_DATA_ATTRS = new Set(["data-ref", "data-translation", "data-slide", "data-pulpit", "data-production"]);
+
 function sanitizeRichHtml(value) {
   const template = document.createElement("template");
   template.innerHTML = String(value || "");
@@ -888,13 +932,19 @@ function sanitizeRichHtml(value) {
       }
       continue;
     }
-    const sizeClass = node.tagName === "SPAN" && /^pf-size-[1-7]$/.test(node.className) ? node.className : "";
+    const keptClasses = String(node.className || "")
+      .split(/\s+/)
+      .filter((token) => BLOCK_CLASSES.has(token) || /^pf-size-[1-7]$/.test(token))
+      .join(" ");
+    const keptData = [...node.attributes]
+      .filter((attrNode) => BLOCK_DATA_ATTRS.has(attrNode.name))
+      .map((attrNode) => [attrNode.name, attrNode.value.slice(0, 120)]);
     for (const attrNode of [...node.attributes]) {
       node.removeAttribute(attrNode.name);
     }
-    if (sizeClass) {
-      node.className = sizeClass;
-    } else if (node.tagName === "SPAN") {
+    if (keptClasses) node.className = keptClasses;
+    for (const [name, dataValue] of keptData) node.setAttribute(name, dataValue);
+    if (node.tagName === "SPAN" && !keptClasses) {
       node.replaceWith(...node.childNodes);
     }
   }
@@ -1033,6 +1083,7 @@ function render() {
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
+    ${ui.scripture.show ? renderScriptureModal() : ""}
     ${renderOnboarding()}
   `;
 
@@ -1587,6 +1638,19 @@ function renderProfileDefaultsTab() {
         ${profileSelect("seriesBehavior", "Default series behavior", PROFILE_OPTIONS.seriesBehavior)}
       </div>
     `)}
+    ${profileSection("Bible provider", "How Insert Scripture gets passage text. No scraping, no bundled copyrighted translations.", `
+      <div class="pf-account-row" style="border:0;padding:0 0 10px;">
+        <div style="flex:1;">
+          <div class="pf-account-label">Provider</div>
+          <div class="pf-account-meta">${state.bibleProvider.provider === "manual" ? "Manual paste with attribution" : `Public-domain API (${state.bibleProvider.translation})`}</div>
+        </div>
+      </div>
+      <label class="pf-toggle-row" style="margin-top:0;">
+        <input type="checkbox" data-action="bible-attribution" ${state.bibleProvider.attribution ? "checked" : ""} />
+        <span><strong>Show attribution on Scripture blocks</strong> — translation credit stays with the text</span>
+      </label>
+      <p class="pf-helper" style="margin-top:8px;">Built-in fetching covers public-domain texts (WEB, KJV). For licensed translations, use manual paste inside Insert Scripture — support for licensed API providers can plug into this setting later.</p>
+    `)}
     ${profileSection("Output defaults", "What you usually produce from a sermon and who it's for.", `
       <div class="pf-form-grid" style="margin-bottom:14px;">
         ${profileSelect("exportFormat", "Default export format", PROFILE_OPTIONS.exportFormat)}
@@ -1898,6 +1962,186 @@ function manuscriptWordCount(sermon) {
 
 function estPreachMinutes(words) {
   return words ? Math.max(1, Math.round(words / state.practiceWpm)) : 0;
+}
+
+// ---- Insert Scripture + structured blocks ----
+// Reference parser: "John 3:16", "John 3:16-18", "Psalm 23", "Romans 8:1-4",
+// "1 Corinthians 13:1-7". Validated against the canonical book list.
+function parseBibleRef(input) {
+  const clean = String(input || "").trim().replace(/\s+/g, " ");
+  const match = clean.match(/^((?:[1-3]\s)?[A-Za-z][A-Za-z .]+?)\s+(\d{1,3})(?::(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?$/);
+  if (!match) return null;
+  const book = passageBook(match[1]);
+  if (!book) return null;
+  return {
+    book: book.name,
+    chapter: Number(match[2]),
+    verseStart: match[3] ? Number(match[3]) : null,
+    verseEnd: match[4] ? Number(match[4]) : null,
+    reference: `${book.name} ${match[2]}${match[3] ? `:${match[3]}${match[4] ? `-${match[4]}` : ""}` : ""}`,
+  };
+}
+
+// Public-domain provider (bible-api.com — WEB and KJV only).
+async function fetchScripturePassage(reference, translation) {
+  const url = `https://bible-api.com/${encodeURIComponent(reference)}?translation=${translation === "KJV" ? "kjv" : "web"}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Provider returned ${response.status}`);
+  const data = await response.json();
+  if (!data.text) throw new Error("Passage not found");
+  return {
+    reference: data.reference || reference,
+    text: String(data.text).replace(/\s*\n\s*/g, " ").trim(),
+    attribution: translation === "KJV" ? "KJV · Public domain" : "World English Bible · Public domain",
+  };
+}
+
+function scriptureBlockHtml({ reference, translation, text, attribution, slide, pulpit, production }) {
+  return (
+    `<div class="pf-b pf-b-scripture" data-ref="${attr(reference)}" data-translation="${attr(translation)}"` +
+    ` data-slide="${slide ? "1" : "0"}" data-pulpit="${pulpit ? "1" : "0"}" data-production="${production ? "1" : "0"}">` +
+    `<p class="pf-scripture-ref">${escapeHtml(reference)} · ${escapeHtml(translation)}</p>` +
+    `<p class="pf-scripture-text">${escapeHtml(text)}</p>` +
+    (state.bibleProvider.attribution && attribution ? `<p class="pf-scripture-attr">${escapeHtml(attribution)}</p>` : "") +
+    `</div><p><br></p>`
+  );
+}
+
+// Block palette: structured, styled blocks inserted into the manuscript.
+// Points/subpoints are real headings so Pulpit View and slides see them.
+const EDITOR_BLOCKS = [
+  ["point", "Sermon Point"],
+  ["sub", "Subpoint"],
+  ["illustration", "Illustration"],
+  ["application", "Application"],
+  ["transition", "Transition"],
+  ["prayer", "Prayer"],
+  ["quote", "Quote"],
+  ["cue", "Media Cue"],
+  ["slide", "Slide Cue"],
+  ["note", "Personal Note"],
+  ["public", "Public Note"],
+  ["respond", "Call to Respond"],
+];
+
+function editorBlockHtml(kind) {
+  if (kind === "point") return `<h3>New point…</h3><p><br></p>`;
+  if (kind === "sub") return `<h4>Subpoint…</h4><p><br></p>`;
+  if (kind === "slide") {
+    return `<div class="pf-b pf-b-slide" data-slide="1"><p class="pf-slide-title">Slide: title…</p><p>On-screen text…</p></div><p><br></p>`;
+  }
+  const labels = Object.fromEntries(EDITOR_BLOCKS);
+  return `<div class="pf-b pf-b-${attr(kind)}"><p>${escapeHtml(labels[kind] || "Note")}…</p></div><p><br></p>`;
+}
+
+// Remember where the cursor was in the manuscript editor so modal-driven
+// inserts land in the right place.
+let savedEditorRange = null;
+
+function saveEditorRange() {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  const editor = range.startContainer.parentElement?.closest('[data-action="phase-editor"]');
+  savedEditorRange = editor ? range.cloneRange() : null;
+}
+
+function insertIntoEditor(html) {
+  const editor = document.querySelector('[data-action="phase-editor"]');
+  if (!editor) {
+    showBanner("Open the Sermon Editor first.");
+    return;
+  }
+  editor.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  if (savedEditorRange) {
+    selection.removeAllRanges();
+    selection.addRange(savedEditorRange);
+  } else {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  try {
+    document.execCommand("insertHTML", false, html);
+  } catch {
+    editor.insertAdjacentHTML("beforeend", html);
+  }
+  savedEditorRange = null;
+  persistPhaseEditor(editor);
+  updateEditorStats();
+}
+
+function renderScriptureModal() {
+  const modal = ui.scripture;
+  const provider = state.bibleProvider;
+  const manualOnly = provider.provider === "manual";
+  return `
+    <div class="pf-overlay" data-action="scripture-close" data-overlay>
+      <div class="pf-modal" data-stop style="max-width:560px;">
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow pf-eyebrow-brand">Insert Scripture</span>
+        </div>
+        <div class="pf-form-grid" style="margin-bottom:12px;">
+          <div class="pf-field full" style="margin-bottom:0;">
+            <label class="pf-label" for="scripture-ref">Reference</label>
+            <input id="scripture-ref" class="pf-input" data-action="scripture-ref" value="${attr(modal.ref)}" placeholder="John 3:16 · Psalm 23 · Romans 8:1-4" />
+          </div>
+          <div class="pf-field" style="margin-bottom:0;">
+            <label class="pf-label">Translation</label>
+            <select class="pf-select" data-action="scripture-translation">
+              ${["WEB", "KJV"].map((code) => `<option ${provider.translation === code ? "selected" : ""}>${code}</option>`).join("")}
+              <option ${manualOnly ? "selected" : ""} value="manual">Other (paste below)</option>
+            </select>
+          </div>
+          <div class="pf-field" style="margin-bottom:0;display:flex;align-items:flex-end;">
+            <button class="pf-btn pf-btn-primary" data-action="scripture-fetch" ${modal.loading ? "disabled" : ""} style="width:100%;">${modal.loading ? "Fetching…" : "Fetch passage"}</button>
+          </div>
+        </div>
+        ${modal.error ? `<p class="pf-helper" style="color:var(--ofc-danger);margin-bottom:10px;">${escapeHtml(modal.error)} You can paste the passage below with attribution instead.</p>` : ""}
+        <div class="pf-ws-field">
+          <label class="pf-label">Passage text ${manualOnly ? "(paste from your licensed copy)" : ""}</label>
+          <textarea class="pf-ws-input" rows="5" data-action="scripture-text" placeholder="Fetched text appears here — or paste the passage from a translation you have rights to use.">${escapeHtml(modal.text)}</textarea>
+        </div>
+        <div class="pf-scripture-flags">
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="slide" ${modal.slide ? "checked" : ""} /> <span>Include in slides</span></label>
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="pulpit" ${modal.pulpit ? "checked" : ""} /> <span>Show in Pulpit View</span></label>
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="production" ${modal.production ? "checked" : ""} /> <span>Include in Production Link</span></label>
+        </div>
+        <p class="pf-helper" style="margin:8px 0 0;">Built-in fetching serves public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use — attribution is kept with the block.</p>
+        <div class="pf-modal-actions">
+          <button class="pf-btn" data-action="scripture-close">Cancel</button>
+          <button class="pf-btn pf-btn-primary" data-action="scripture-insert" ${modal.text.trim() ? "" : "disabled"}>Insert Scripture block</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function fetchScriptureIntoModal() {
+  const parsed = parseBibleRef(ui.scripture.ref);
+  if (!parsed) {
+    ui.scripture.error = "That reference didn't parse — try the form “John 3:16-18”.";
+    render();
+    return;
+  }
+  ui.scripture.ref = parsed.reference;
+  ui.scripture.loading = true;
+  ui.scripture.error = "";
+  render();
+  try {
+    const passage = await fetchScripturePassage(parsed.reference, state.bibleProvider.translation);
+    ui.scripture.text = passage.text;
+    ui.scripture.attribution = passage.attribution;
+    ui.scripture.ref = passage.reference;
+  } catch (error) {
+    ui.scripture.error = `Could not fetch the passage (${error.message || "network error"}).`;
+  } finally {
+    ui.scripture.loading = false;
+    render();
+  }
 }
 
 function renderEditorPage(active) {
@@ -2897,6 +3141,13 @@ function renderFormatToolbar(options = {}) {
       ${
         full
           ? `
+        <span class="pf-tool-menu-wrap">
+          <button class="pf-tool-pill" data-action="heading-menu" title="Insert a sermon block" aria-haspopup="true">+ Block ${menuChevron}</button>
+          <span class="pf-tool-menu" data-tool-menu>
+            ${EDITOR_BLOCKS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="insert-block" data-kind="${kind}">${label}</button>`).join("")}
+          </span>
+        </span>
+        <button class="pf-tool-pill" data-action="open-scripture" title="Insert a Bible passage">Scripture ＋</button>
         <span class="pf-tool-menu-wrap">
           <button class="pf-tool-pill" data-action="heading-menu" title="Font size" aria-haspopup="true">Size ${menuChevron}</button>
           <span class="pf-tool-menu" data-tool-menu>
@@ -6869,6 +7120,44 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
+  if (action === "open-scripture") {
+    saveEditorRange();
+    ui.scripture = { ...ui.scripture, show: true, error: "", loading: false };
+    render();
+  }
+  if (action === "scripture-close") {
+    ui.scripture.show = false;
+    render();
+  }
+  if (action === "scripture-fetch") {
+    fetchScriptureIntoModal();
+  }
+  if (action === "scripture-insert") {
+    const modal = ui.scripture;
+    if (!modal.text.trim()) return;
+    const translation = state.bibleProvider.provider === "manual" ? (state.preachingProfile.translation || "—") : state.bibleProvider.translation;
+    ui.scripture.show = false;
+    insertIntoEditor(
+      scriptureBlockHtml({
+        reference: modal.ref.trim() || "Passage",
+        translation,
+        text: modal.text.trim(),
+        attribution: modal.attribution || (state.bibleProvider.provider === "manual" ? `${translation} — used with permission` : ""),
+        slide: modal.slide,
+        pulpit: modal.pulpit,
+        production: modal.production,
+      }),
+    );
+    ui.scripture.text = "";
+    ui.scripture.attribution = "";
+    render();
+  }
+  if (action === "insert-block") {
+    saveEditorRange();
+    closeToolMenus();
+    insertIntoEditor(editorBlockHtml(target.dataset.kind));
+    render();
+  }
   if (action === "pulpit-mark") {
     const active = getActive();
     if (!active) return;
@@ -7300,6 +7589,14 @@ document.addEventListener("input", (event) => {
     state.preachingProfile[target.dataset.key] = target.value;
     saveState();
   }
+  if (action === "scripture-ref") {
+    ui.scripture.ref = target.value;
+  }
+  if (action === "scripture-text") {
+    ui.scripture.text = target.value;
+    const insertBtn = document.querySelector('[data-action="scripture-insert"]');
+    if (insertBtn) insertBtn.disabled = !target.value.trim();
+  }
   if (action === "pulpit-notes") {
     const active = getActive();
     if (!active) return;
@@ -7383,6 +7680,23 @@ document.addEventListener("change", (event) => {
   }
   if (action === "rubric-toggle") {
     state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
+    saveState();
+  }
+  if (action === "scripture-translation") {
+    if (target.value === "manual") {
+      state.bibleProvider.provider = "manual";
+    } else {
+      state.bibleProvider.provider = "public-domain";
+      state.bibleProvider.translation = target.value;
+    }
+    saveState();
+    render();
+  }
+  if (action === "scripture-flag") {
+    ui.scripture[target.dataset.key] = target.checked;
+  }
+  if (action === "bible-attribution") {
+    state.bibleProvider.attribution = target.checked;
     saveState();
   }
   if (action === "pulpit-pref-toggle") {
