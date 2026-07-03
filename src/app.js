@@ -489,6 +489,7 @@ const ui = {
   debriefQuery: "",
   confirmDeleteId: "",
   practice: { running: false, seconds: 0 },
+  pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -552,6 +553,7 @@ if (!state.resources || typeof state.resources !== "object") state.resources = {
 state.practiceWpm = normalizeWpm(state.practiceWpm);
 state.practiceFont = normalizeFontStep(state.practiceFont);
 state.preachingProfile = normalizePreachingProfile(state.preachingProfile);
+state.pulpitPrefs = normalizePulpitPrefs(state.pulpitPrefs);
 
 function loadTheme() {
   const stored = localStorage.getItem(THEME_STORE);
@@ -586,6 +588,7 @@ function loadState() {
       practiceWpm: normalizeWpm(parsed.practiceWpm),
       practiceFont: normalizeFontStep(parsed.practiceFont),
       preachingProfile: normalizePreachingProfile(parsed.preachingProfile),
+      pulpitPrefs: normalizePulpitPrefs(parsed.pulpitPrefs),
     };
   } catch {
     return {
@@ -638,6 +641,7 @@ function stateSnapshot() {
     practiceWpm: state.practiceWpm,
     practiceFont: state.practiceFont,
     preachingProfile: state.preachingProfile,
+    pulpitPrefs: state.pulpitPrefs,
   };
 }
 
@@ -662,6 +666,7 @@ function applyStateSnapshot(snapshot) {
   state.practiceWpm = normalizeWpm(snapshot?.practiceWpm);
   state.practiceFont = normalizeFontStep(snapshot?.practiceFont);
   state.preachingProfile = normalizePreachingProfile(snapshot?.preachingProfile);
+  state.pulpitPrefs = normalizePulpitPrefs(snapshot?.pulpitPrefs);
 }
 
 function normalizeSermon(sermon) {
@@ -691,8 +696,10 @@ function normalizeSermon(sermon) {
             runs: Number(sermon.practice.runs) || 0,
             lastSeconds: Number(sermon.practice.lastSeconds) || 0,
             lastAt: sermon.practice.lastAt || "",
+            notes: typeof sermon.practice.notes === "string" ? sermon.practice.notes : "",
+            marks: sermon.practice.marks && typeof sermon.practice.marks === "object" ? sermon.practice.marks : {},
           }
-        : { runs: 0, lastSeconds: 0, lastAt: "" },
+        : { runs: 0, lastSeconds: 0, lastAt: "", notes: "", marks: {} },
     impact: sermon.impact && typeof sermon.impact === "object" ? sermon.impact : {},
     shepherd:
       sermon.shepherd && typeof sermon.shepherd === "object"
@@ -807,10 +814,29 @@ function normalizeWpm(value) {
   return PRACTICE_WPM_CHOICES.includes(wpm) ? wpm : 130;
 }
 
-// Practice-mode font: 2 steps down, 3 steps up from the base size.
+// Reading font: 2 steps down, 3 steps up from the base size.
 function normalizeFontStep(value) {
   const step = Number(value);
   return Number.isInteger(step) && step >= -2 && step <= 3 ? step : 0;
+}
+
+// Pulpit View display preferences (user-level; persisted and synced).
+function normalizePulpitPrefs(prefs) {
+  const source = prefs && typeof prefs === "object" ? prefs : {};
+  const pick = (value, options, fallback) => (options.includes(value) ? value : fallback);
+  const flag = (value, fallback) => (typeof value === "boolean" ? value : fallback);
+  return {
+    fontStep: normalizeFontStep(source.fontStep),
+    lineHeight: pick(source.lineHeight, ["compact", "comfortable", "spacious"], "comfortable"),
+    theme: pick(source.theme, ["light", "dark", "contrast"], "dark"),
+    width: pick(source.width, ["narrow", "wide"], "narrow"),
+    focusMode: flag(source.focusMode, true),
+    showNotes: flag(source.showNotes, true),
+    showCues: flag(source.showCues, true),
+    showRefs: flag(source.showRefs, true),
+    showTimer: flag(source.showTimer, true),
+    showProgress: flag(source.showProgress, true),
+  };
 }
 
 function normalizeLens(lens) {
@@ -1021,6 +1047,17 @@ function render() {
     return;
   }
 
+  if (state.view === "pulpit" || state.view === "practice") {
+    app.innerHTML = `
+      <div class="pf-root" data-theme="${attr(state.theme)}">
+        ${renderPulpitView(active)}
+        ${overlays}
+      </div>
+    `;
+    restoreFocus(focus);
+    return;
+  }
+
   app.innerHTML = `
     <div class="pf-root" data-theme="${attr(state.theme)}">
       ${renderTopbar(active)}
@@ -1082,7 +1119,7 @@ const BRAND_MARK_SVG = pfMarkSvg(22);
 const NAV_ITEMS = [
   ["workspace", "Workspace"],
   ["editor", "Editor"],
-  ["practice", "Practice"],
+  ["pulpit", "Pulpit"],
   ["library", "Library"],
 ];
 
@@ -1625,7 +1662,6 @@ function renderMain(active) {
   if (state.view === "series") return renderSeriesPage();
   if (state.view === "diet") return renderDietPage();
   if (state.view === "editor") return renderEditorPage(active);
-  if (state.view === "practice") return renderPracticePage(active);
   if (state.view === "library") return renderLibrary();
   if (state.view === "debrief") return renderDebriefPage();
   if (active) return renderWorkspace(active);
@@ -1881,6 +1917,7 @@ function renderEditorPage(active) {
         <div class="pf-editor-actions">
           <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync"><span class="pf-sync-dot"></span>${escapeHtml(sync.text)}</button>
           <button class="pf-btn" data-view="practice">Practice ▸</button>
+          <button class="pf-btn" data-view="pulpit">Pulpit View ▸</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-doc">Word</button>
         </div>
@@ -1944,41 +1981,242 @@ function fmtClock(totalSeconds) {
   return `${h ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 
-function renderPracticePage(active) {
-  if (!active) return renderNeedSermon("Practice mode reads the manuscript of your current sermon — start one first.");
-  const words = manuscriptWordCount(active);
-  const est = estPreachMinutes(words);
-  const target = Number(active.length) || 0;
-  const html = sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()));
-  const running = ui.practice.running;
-  const over = target && ui.practice.seconds > target * 60;
-  return `
-    <div class="pf-page pf-page-wide pf-fade pf-practice-page">
-      <div class="pf-practice-bar">
-        <div class="pf-practice-timer ${over ? "over" : ""}" data-practice-timer>${fmtClock(ui.practice.seconds)}</div>
-        <div class="pf-practice-controls">
-          <button class="pf-btn pf-btn-primary" data-action="practice-toggle">${running ? "Pause" : ui.practice.seconds ? "Resume" : "Start run-through"}</button>
-          <button class="pf-btn pf-btn-ghost" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"}>Reset</button>
-        </div>
-        <div class="pf-practice-meta">
-          <span class="${target && est > target ? "pf-practice-over-est" : ""}">≈ ${est || "—"} min · ${words.toLocaleString()} words</span>
-          <select class="pf-select pf-practice-pace" data-action="practice-pace" title="Speaking pace">
-            ${PRACTICE_WPM_CHOICES.map((wpm) => `<option value="${wpm}" ${wpm === state.practiceWpm ? "selected" : ""}>${wpm} wpm</option>`).join("")}
-          </select>
-          <span>target ${target ? `${target} min` : "—"}</span>
-        </div>
-        <div class="pf-practice-font">
-          <button class="pf-font-btn" data-action="practice-font" data-delta="-1" ${state.practiceFont <= -2 ? "disabled" : ""} title="Smaller text">A−</button>
-          <button class="pf-font-btn" data-action="practice-font" data-delta="1" ${state.practiceFont >= 3 ? "disabled" : ""} title="Larger text">A+</button>
+// ---- Pulpit View ----
+// A focused preaching interface: Practice mode to rehearse against the
+// clock, Live mode to take to the pulpit. Read-only by design — Sermon
+// Guide never interrupts live preaching.
+const PULPIT_FONT_SIZES = [18, 20, 23, 27, 32, 38];
+const PULPIT_LINE_HEIGHTS = { compact: 1.55, comfortable: 1.75, spacious: 2.0 };
+const PULPIT_MARKS = [
+  ["strong", "Strong"],
+  ["rushed", "Rushed"],
+  ["unclear", "Unclear"],
+  ["long", "Too long"],
+];
+
+// Split the manuscript into preachable sections at headings; fall back to
+// the outline, then to a single section.
+function pulpitSections(sermon) {
+  const html = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const raw = [];
+  let current = { title: "", nodes: [] };
+  for (const node of [...template.content.childNodes]) {
+    const tag = node.nodeType === 1 ? node.tagName : "";
+    if (tag === "H2" || tag === "H3") {
+      if (current.title || current.nodes.length) raw.push(current);
+      current = { title: node.textContent.trim(), nodes: [] };
+    } else {
+      current.nodes.push(node);
+    }
+  }
+  if (current.title || current.nodes.length) raw.push(current);
+  const sections = raw
+    .map((section, index) => {
+      const wrap = document.createElement("div");
+      section.nodes.forEach((node) => wrap.appendChild(node));
+      return {
+        title: section.title || (index === 0 ? "Opening" : `Section ${index + 1}`),
+        html: wrap.innerHTML,
+      };
+    })
+    .filter((section) => section.title.trim() || richHtmlToText(section.html));
+  if (sections.length) return sections;
+  const movements = (sermon.outline || []).filter((movement) => movement.title.trim());
+  if (movements.length) {
+    return movements.map((movement) => ({
+      title: movement.title,
+      html: movement.sub ? `<p>${escapeHtml(movement.sub)}</p>` : "",
+    }));
+  }
+  return [];
+}
+
+function pulpitReady(sermon) {
+  return Boolean(sermon && sermon.passage.trim() && pulpitSections(sermon).length);
+}
+
+function pulpitFontPx() {
+  return PULPIT_FONT_SIZES[state.pulpitPrefs.fontStep + 2] || 23;
+}
+
+function fmtWallClock(date) {
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function pulpitTargetEnd(sermon) {
+  const target = Number(sermon.length) || 0;
+  if (!target || !ui.practice.running || !ui.pulpit.startedAt) return "";
+  const end = new Date(new Date(ui.pulpit.startedAt).getTime() + target * 60000);
+  return fmtWallClock(end);
+}
+
+function renderPulpitView(active) {
+  if (!active) {
+    return `<div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">${renderNeedSermon("Pulpit View opens your current sermon — start one first.")}</div>`;
+  }
+  const sections = pulpitSections(active);
+  if (!sections.length) {
+    return `
+      <div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">
+        <div class="pf-empty">Pulpit View opens once this sermon has content — a manuscript with headings, or an outline.
+          <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button class="pf-btn pf-btn-primary" data-view="editor">Write the manuscript</button>
+            <button class="pf-btn" data-view="workspace">Back to the Workspace</button>
+          </div>
         </div>
       </div>
-      ${
-        words
-          ? `<div class="pf-practice-doc" style="font-size:${practiceFontPx()}px;">${html}</div>`
-          : `<div class="pf-empty" style="margin-top:20px;">No manuscript yet. Write it in the <button class="pf-inline-link" data-view="editor">Sermon Editor</button> (or the Manuscript phase) and come back to rehearse.</div>`
-      }
-      <p class="pf-helper" style="margin-top:16px;">The clock turns red once you pass your target time. The estimate assumes ${state.practiceWpm} words per minute — adjust the pace to match how you actually preach. Runs of a minute or more are remembered for the Delivery Prep checklist.</p>
+    `;
+  }
+
+  const prefs = state.pulpitPrefs;
+  const mode = ui.pulpit.mode === "practice" ? "practice" : "live";
+  const index = Math.min(Math.max(0, ui.pulpit.section), sections.length - 1);
+  const section = sections[index];
+  const next = sections[index + 1] || null;
+  const target = Number(active.length) || 0;
+  const words = manuscriptWordCount(active);
+  const over = target && ui.practice.seconds > target * 60;
+  const bodyStyle = `font-size:${pulpitFontPx()}px;line-height:${PULPIT_LINE_HEIGHTS[prefs.lineHeight]};`;
+  const mark = active.practice.marks?.[index] || "";
+
+  return `
+    <div class="pf-pulpit theme-${attr(prefs.theme)} ${prefs.width === "narrow" ? "narrow" : "wide"} ${prefs.showNotes ? "" : "hide-notes"} ${prefs.showCues ? "" : "hide-cues"} ${prefs.showRefs ? "" : "hide-refs"} controls-on" data-pulpit>
+      <header class="pf-pulpit-bar pf-pulpit-controls">
+        <button class="pf-pulpit-btn" data-action="pulpit-exit" aria-label="Leave Pulpit View">&larr; Exit</button>
+        <div class="pf-pulpit-modes" role="tablist" aria-label="Pulpit mode">
+          <button class="pf-pulpit-chip ${mode === "practice" ? "active" : ""}" data-action="pulpit-mode" data-mode="practice">Practice</button>
+          <button class="pf-pulpit-chip ${mode === "live" ? "active" : ""}" data-action="pulpit-mode" data-mode="live">Live</button>
+        </div>
+        <span class="pf-pulpit-id">${escapeHtml(active.passage)}${active.title ? ` — ${escapeHtml(active.title)}` : ""}</span>
+        <div class="pf-pulpit-tools">
+          <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="-1" ${prefs.fontStep <= -2 ? "disabled" : ""} aria-label="Smaller text">A−</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="1" ${prefs.fontStep >= 3 ? "disabled" : ""} aria-label="Larger text">A+</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-theme" aria-label="Switch theme" title="Theme: ${attr(prefs.theme)}">◐</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-focus" aria-label="Toggle focus mode" title="${prefs.focusMode ? "One section at a time" : "Continuous scroll"}">${prefs.focusMode ? "☰" : "▭"}</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-fullscreen" aria-label="Fullscreen">⛶</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-settings" aria-label="Display settings" aria-haspopup="true">⚙</button>
+        </div>
+      </header>
+
+      ${ui.pulpit.showSettings ? renderPulpitSettings(prefs) : ""}
+      ${prefs.showProgress ? `<div class="pf-pulpit-progress" aria-hidden="true"><i style="width:${Math.round(((index + 1) / sections.length) * 100)}%"></i></div>` : ""}
+
+      <main class="pf-pulpit-body" style="${bodyStyle}" data-pulpit-body>
+        <div class="pf-pulpit-head">
+          <span class="pf-pulpit-passage">${escapeHtml(active.passage)}</span>
+          ${worksheetValue(active, "aim", "burden").trim() ? `<span class="pf-pulpit-idea">${escapeHtml(worksheetValue(active, "aim", "burden"))}</span>` : ""}
+        </div>
+        ${
+          prefs.focusMode
+            ? `
+              <section class="pf-pulpit-section" aria-label="${attr(section.title)}">
+                <h2 class="pf-pulpit-title">${escapeHtml(section.title)}</h2>
+                ${section.html}
+              </section>
+              ${next ? `<footer class="pf-pulpit-next">Next: ${escapeHtml(next.title)}</footer>` : `<footer class="pf-pulpit-next">Last section — land it.</footer>`}
+            `
+            : sections
+                .map(
+                  (item, itemIndex) => `
+                    <section class="pf-pulpit-section ${itemIndex === index ? "current" : ""}" id="pulpit-section-${itemIndex}">
+                      <h2 class="pf-pulpit-title">${escapeHtml(item.title)}</h2>
+                      ${item.html}
+                    </section>
+                  `,
+                )
+                .join("")
+        }
+      </main>
+
+      <button class="pf-pulpit-zone left" data-action="pulpit-prev" aria-label="Previous section"></button>
+      <button class="pf-pulpit-zone right" data-action="pulpit-next" aria-label="Next section"></button>
+
+      <footer class="pf-pulpit-bar bottom pf-pulpit-controls">
+        <div class="pf-pulpit-nav">
+          <button class="pf-pulpit-btn" data-action="pulpit-prev" ${index === 0 ? "disabled" : ""}>‹ Prev</button>
+          <span class="pf-pulpit-count">${index + 1} / ${sections.length}</span>
+          <button class="pf-pulpit-btn" data-action="pulpit-next" ${index >= sections.length - 1 ? "disabled" : ""}>Next ›</button>
+        </div>
+        ${
+          prefs.showTimer
+            ? `
+          <div class="pf-pulpit-timing">
+            <button class="pf-pulpit-timer ${over ? "over" : ""}" data-action="practice-toggle" data-practice-timer title="${ui.practice.running ? "Pause" : "Start"} (T)">${fmtClock(ui.practice.seconds)}</button>
+            <span class="pf-pulpit-meta"><span data-pulpit-clock>${fmtWallClock(new Date())}</span>${target ? ` · target ${target} min${pulpitTargetEnd(active) ? ` · ends ${pulpitTargetEnd(active)}` : ""}` : ""}</span>
+            <button class="pf-pulpit-btn" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"} aria-label="Reset timer">↺</button>
+          </div>`
+            : ""
+        }
+        ${
+          mode === "practice"
+            ? `
+          <div class="pf-pulpit-marks" role="group" aria-label="Mark this section">
+            ${PULPIT_MARKS.map(([key, label]) => `<button class="pf-pulpit-chip ${mark === key ? "active" : ""}" data-action="pulpit-mark" data-mark="${key}">${label}</button>`).join("")}
+          </div>`
+            : `<span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "—"} min</span>`
+        }
+      </footer>
+
+      ${mode === "practice" ? renderPulpitPracticePanel(active) : ""}
     </div>
+  `;
+}
+
+function renderPulpitSettings(prefs) {
+  const toggles = [
+    ["showNotes", "Show personal notes"],
+    ["showCues", "Show slide cues"],
+    ["showRefs", "Show Scripture references"],
+    ["showTimer", "Show timer"],
+    ["showProgress", "Show progress"],
+  ];
+  return `
+    <div class="pf-pulpit-settings" data-stop>
+      <div class="pf-pulpit-settings-row">
+        <span>Line height</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-lineheight">${escapeHtml(prefs.lineHeight)}</button>
+      </div>
+      <div class="pf-pulpit-settings-row">
+        <span>Reading column</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-width">${prefs.width === "narrow" ? "narrow" : "wide"}</button>
+      </div>
+      <div class="pf-pulpit-settings-row">
+        <span>Pace</span>
+        <select class="pf-select pf-practice-pace" data-action="practice-pace">
+          ${PRACTICE_WPM_CHOICES.map((wpm) => `<option value="${wpm}" ${wpm === state.practiceWpm ? "selected" : ""}>${wpm} wpm</option>`).join("")}
+        </select>
+      </div>
+      ${toggles
+        .map(
+          ([key, label]) => `
+            <label class="pf-pulpit-settings-row">
+              <span>${label}</span>
+              <input type="checkbox" data-action="pulpit-pref-toggle" data-key="${key}" ${prefs[key] ? "checked" : ""} />
+            </label>
+          `,
+        )
+        .join("")}
+      <div class="pf-pulpit-settings-row">
+        <span>Emergency change?</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-unlock-edit">Unlock quick edit</button>
+      </div>
+    </div>
+  `;
+}
+
+// Practice-mode side panel: run history + debrief notes. Never shown live.
+function renderPulpitPracticePanel(active) {
+  const practice = active.practice;
+  return `
+    <aside class="pf-pulpit-practice pf-pulpit-controls">
+      <div class="pf-pulpit-practice-head">
+        <strong>Practice</strong>
+        <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} · last ${fmtClock(practice.lastSeconds)}` : "No timed runs yet"}</span>
+      </div>
+      <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>
+    </aside>
   `;
 }
 
@@ -2080,6 +2318,7 @@ function renderLibraryCard(sermon) {
       <div class="pf-lib-actions">
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="workspace" data-sermon="${attr(sermon.id)}">Open</button>
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="editor" data-sermon="${attr(sermon.id)}">Editor</button>
+        <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="pulpit" data-sermon="${attr(sermon.id)}">Pulpit</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief</button>
         <button class="pf-btn pf-btn-ghost pf-lib-delete" data-action="delete-sermon" data-sermon="${attr(sermon.id)}" title="Delete this sermon">Delete</button>
       </div>
@@ -2518,6 +2757,7 @@ function renderCanvas(active, phase) {
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
           ${complete ? "Phase complete · undo" : checklistReady ? "Mark phase complete" : `Checklist ${checkedCount}/${phase.doItems.length} — finish to complete`}
         </button>
+        <button class="pf-btn pf-btn-ghost" data-view="pulpit">Open Pulpit View</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-impact">Impact Plan</button>
         ${debriefAvailable(active) ? `<button class="pf-btn pf-btn-ghost" data-action="open-debrief">Debrief</button>` : ""}
         <button class="pf-btn pf-btn-ghost" data-action="open-slides">Slides doc</button>
@@ -6333,6 +6573,16 @@ document.addEventListener("click", (event) => {
 
   if (target.dataset.view) {
     state.view = target.dataset.view;
+    if (state.view === "practice") {
+      state.view = "pulpit";
+      ui.pulpit.mode = "practice";
+      ui.pulpit.section = 0;
+      requestPracticeWakeLock();
+    } else if (state.view === "pulpit") {
+      ui.pulpit.section = 0;
+      ui.pulpit.showSettings = false;
+      requestPracticeWakeLock();
+    }
     ui.showNew = false;
     closeOverlays();
     saveState();
@@ -6560,12 +6810,72 @@ document.addEventListener("click", (event) => {
     else exportDoc(name, manuscriptDocHtml(active));
   }
   if (action === "practice-toggle") {
-    ui.practice.running = !ui.practice.running;
-    if (ui.practice.running) requestPracticeWakeLock();
-    else {
-      releasePracticeWakeLock();
-      recordPracticeRun();
-    }
+    togglePracticeTimer();
+  }
+  if (action === "pulpit-exit") {
+    releasePracticeWakeLock();
+    state.view = "workspace";
+    saveState();
+    render();
+  }
+  if (action === "pulpit-mode") {
+    ui.pulpit.mode = target.dataset.mode === "practice" ? "practice" : "live";
+    ui.pulpit.showSettings = false;
+    render();
+  }
+  if (action === "pulpit-next") {
+    pulpitStep(1);
+  }
+  if (action === "pulpit-prev") {
+    pulpitStep(-1);
+  }
+  if (action === "pulpit-font") {
+    state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep + Number(target.dataset.delta));
+    saveState();
+    render();
+  }
+  if (action === "pulpit-theme") {
+    const order = ["dark", "light", "contrast"];
+    state.pulpitPrefs.theme = order[(order.indexOf(state.pulpitPrefs.theme) + 1) % order.length];
+    saveState();
+    render();
+  }
+  if (action === "pulpit-lineheight") {
+    const order = ["compact", "comfortable", "spacious"];
+    state.pulpitPrefs.lineHeight = order[(order.indexOf(state.pulpitPrefs.lineHeight) + 1) % order.length];
+    saveState();
+    render();
+  }
+  if (action === "pulpit-width") {
+    state.pulpitPrefs.width = state.pulpitPrefs.width === "narrow" ? "wide" : "narrow";
+    saveState();
+    render();
+  }
+  if (action === "pulpit-focus") {
+    state.pulpitPrefs.focusMode = !state.pulpitPrefs.focusMode;
+    saveState();
+    render();
+  }
+  if (action === "pulpit-fullscreen") {
+    pulpitFullscreen();
+  }
+  if (action === "pulpit-settings") {
+    ui.pulpit.showSettings = !ui.pulpit.showSettings;
+    render();
+  }
+  if (action === "pulpit-unlock-edit") {
+    ui.pulpit.showSettings = false;
+    state.view = "editor";
+    saveState();
+    render();
+  }
+  if (action === "pulpit-mark") {
+    const active = getActive();
+    if (!active) return;
+    const current = active.practice.marks[ui.pulpit.section];
+    active.practice.marks = { ...active.practice.marks, [ui.pulpit.section]: current === target.dataset.mark ? "" : target.dataset.mark };
+    active.updatedAt = new Date().toISOString();
+    saveState();
     render();
   }
   if (action === "practice-reset") {
@@ -6581,7 +6891,11 @@ document.addEventListener("click", (event) => {
   }
   if (action === "lib-open") {
     state.activeId = target.dataset.sermon;
-    state.view = target.dataset.mode === "editor" ? "editor" : "workspace";
+    state.view = target.dataset.mode === "editor" ? "editor" : target.dataset.mode === "pulpit" ? "pulpit" : "workspace";
+    if (state.view === "pulpit") {
+      ui.pulpit.section = 0;
+      requestPracticeWakeLock();
+    }
     saveState();
     render();
   }
@@ -6986,6 +7300,13 @@ document.addEventListener("input", (event) => {
     state.preachingProfile[target.dataset.key] = target.value;
     saveState();
   }
+  if (action === "pulpit-notes") {
+    const active = getActive();
+    if (!active) return;
+    active.practice.notes = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+  }
   if (action === "series-map-field") {
     const series = getSeries();
     const row = series?.map[Number(target.dataset.index)];
@@ -7064,6 +7385,11 @@ document.addEventListener("change", (event) => {
     state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
     saveState();
   }
+  if (action === "pulpit-pref-toggle") {
+    state.pulpitPrefs[target.dataset.key] = target.checked;
+    saveState();
+    render();
+  }
   if (action === "practice-pace") {
     state.practiceWpm = normalizeWpm(target.value);
     saveState();
@@ -7139,6 +7465,48 @@ document.addEventListener("mouseup", (event) => {
 document.addEventListener("scroll", hideFindChip, true);
 
 document.addEventListener("keydown", (event) => {
+  if (
+    (state.view === "pulpit" || state.view === "practice") &&
+    !event.target.closest("input, textarea, select, [contenteditable=true]")
+  ) {
+    const key = event.key;
+    if (key === "ArrowRight" || key === " ") {
+      event.preventDefault();
+      pulpitStep(1);
+      return;
+    }
+    if (key === "ArrowLeft") {
+      event.preventDefault();
+      pulpitStep(-1);
+      return;
+    }
+    if (key === "t" || key === "T") {
+      togglePracticeTimer();
+      return;
+    }
+    if (key === "f" || key === "F") {
+      pulpitFullscreen();
+      return;
+    }
+    if (key === "+" || key === "=") {
+      state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep + 1);
+      saveState();
+      render();
+      return;
+    }
+    if (key === "-") {
+      state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep - 1);
+      saveState();
+      render();
+      return;
+    }
+    if (key === "d" || key === "D") {
+      state.pulpitPrefs.theme = state.pulpitPrefs.theme === "dark" ? "light" : "dark";
+      saveState();
+      render();
+      return;
+    }
+  }
   if (event.target.dataset?.action === "coach-input" && event.key === "Enter") {
     event.preventDefault();
     send();
@@ -7240,6 +7608,44 @@ function releasePracticeWakeLock() {
   practiceWakeLock = null;
 }
 
+function togglePracticeTimer() {
+  ui.practice.running = !ui.practice.running;
+  if (ui.practice.running) {
+    ui.pulpit.startedAt = new Date(Date.now() - ui.practice.seconds * 1000).toISOString();
+    requestPracticeWakeLock();
+  } else {
+    releasePracticeWakeLock();
+    recordPracticeRun();
+  }
+  render();
+}
+
+function pulpitStep(delta) {
+  const active = getActive();
+  if (!active) return;
+  const total = pulpitSections(active).length;
+  const next = Math.min(total - 1, Math.max(0, ui.pulpit.section + delta));
+  if (next === ui.pulpit.section) return;
+  ui.pulpit.section = next;
+  render();
+  requestAnimationFrame(() => {
+    if (state.pulpitPrefs.focusMode) {
+      document.querySelector("[data-pulpit-body]")?.scrollTo(0, 0);
+    } else {
+      document.getElementById(`pulpit-section-${next}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  });
+}
+
+function pulpitFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  } catch {
+    /* fullscreen unavailable */
+  }
+}
+
 function recordPracticeRun() {
   const active = getActive();
   if (!active || ui.practice.seconds < 60) return;
@@ -7253,6 +7659,8 @@ function recordPracticeRun() {
 }
 
 setInterval(() => {
+  const clock = document.querySelector("[data-pulpit-clock]");
+  if (clock) clock.textContent = fmtWallClock(new Date());
   if (!ui.practice.running) return;
   ui.practice.seconds += 1;
   const display = document.querySelector("[data-practice-timer]");
@@ -7261,6 +7669,24 @@ setInterval(() => {
   const target = Number(getActive()?.length) || 0;
   display.classList.toggle("over", Boolean(target && ui.practice.seconds > target * 60));
 }, 1000);
+
+// Pulpit View quiet controls: chrome fades after a few idle seconds and
+// returns on any pointer or key activity.
+let pulpitIdleTimer = null;
+["pointermove", "pointerdown", "touchstart", "keydown"].forEach((eventName) =>
+  document.addEventListener(
+    eventName,
+    () => {
+      if (state.view !== "pulpit" && state.view !== "practice") return;
+      const root = document.querySelector("[data-pulpit]");
+      if (!root) return;
+      root.classList.add("controls-on");
+      clearTimeout(pulpitIdleTimer);
+      pulpitIdleTimer = setTimeout(() => root.classList.remove("controls-on"), 3500);
+    },
+    { passive: true },
+  ),
+);
 
 ["mousedown", "keydown", "mousemove", "wheel", "touchstart"].forEach((eventName) =>
   document.addEventListener(eventName, () => {
