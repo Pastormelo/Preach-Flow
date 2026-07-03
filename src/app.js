@@ -2155,21 +2155,26 @@ function insertIntoEditor(html) {
     return;
   }
   editor.focus({ preventScroll: true });
-  const selection = window.getSelection();
-  if (savedEditorRange) {
-    selection.removeAllRanges();
-    selection.addRange(savedEditorRange);
+  // execCommand("insertHTML") flattens block markup into styled spans, so
+  // insert real nodes at the nearest top-level block boundary instead.
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const fragment = template.content;
+  const lastNode = fragment.lastChild;
+  let anchor = savedEditorRange && editor.contains(savedEditorRange.startContainer) ? savedEditorRange.startContainer : null;
+  while (anchor && anchor.parentNode && anchor.parentNode !== editor) anchor = anchor.parentNode;
+  if (anchor && anchor.parentNode === editor) {
+    anchor.after(fragment);
   } else {
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    editor.appendChild(fragment);
   }
-  try {
-    document.execCommand("insertHTML", false, html);
-  } catch {
-    editor.insertAdjacentHTML("beforeend", html);
+  if (lastNode) {
+    const selection = window.getSelection();
+    const caret = document.createRange();
+    caret.setStartAfter(lastNode);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
   }
   savedEditorRange = null;
   persistPhaseEditor(editor);
