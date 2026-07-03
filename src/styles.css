@@ -3494,3 +3494,105 @@ p {
   .pf-share-grid { grid-template-columns: 1fr; }
   .pf-share-sections { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+   Mobile & tablet audit: sheets, touch targets, breathing room
+   ===================================================================== */
+@media (max-width: 880px) {
+  /* modals become bottom sheets */
+  .pf-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .pf-modal {
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  }
+
+  /* touch targets */
+  .pf-btn,
+  .pf-chip,
+  .pf-nav-btn,
+  .pf-nav-menu-item,
+  .pf-tool-pill,
+  .pf-outline-btn,
+  .pf-check-item {
+    min-height: 44px;
+  }
+  .pf-tool-btn,
+  .pf-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .pf-toggle-row input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* editor + toolbar breathing room */
+  .pf-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pf-editor-statbar {
+    gap: 10px;
+    font-size: 12.5px;
+  }
+  .pf-editor-actions .pf-btn {
+    padding: 10px 14px;
+  }
+
+  /* grids collapse */
+  .pf-impact-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .pf-series-row-grid {
+    grid-template-columns: 1fr;
+  }
+  .pf-deck-controls .pf-btn {
+    flex: 1 1 auto;
+  }
+
+  /* inputs stay readable (avoids iOS zoom-on-focus) */
+  .pf-input,
+  .pf-select,
+  .pf-ws-input {
+    font-size: 16px;
+  }
+
+  /* coach composer + page bottoms respect the home indicator */
+  .pf-coach-wrap {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pf-page {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+
+  /* library / delivery action rows wrap without crowding */
+  .pf-lib-actions .pf-btn,
+  .pf-delivery-actions .pf-btn {
+    min-height: 40px;
+  }
+}
+
+/* iPad landscape: keep two-column layouts but relax gutters */
+@media (min-width: 881px) and (max-width: 1120px) {
+  .pf-doc-canvas {
+    padding: 40px 36px 70px;
+  }
+  .pf-lens-explain,
+  .pf-tool-cards {
+    gap: 14px;
+  }
+  .pf-deck-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
