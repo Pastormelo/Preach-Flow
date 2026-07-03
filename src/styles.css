@@ -3353,3 +3353,92 @@ p {
   margin: 0 auto 14px;
   border-left: 3px solid var(--brand);
 }
+
+/* ---- Slide Builder ---- */
+.pf-deck-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.pf-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.pf-slide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 12px;
+}
+.pf-slide-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+.pf-slide-card.theme-dark .pf-slide-thumb { background: #16181c; color: #f4f1ea; }
+.pf-slide-card.theme-light .pf-slide-thumb { background: #ffffff; color: #20242a; border: 1px solid var(--border-subtle); }
+.pf-slide-card.theme-brand .pf-slide-thumb { background: var(--brand); color: #20242a; }
+.pf-slide-type {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+.pf-slide-heavy {
+  font-style: normal;
+  color: #ff6b62;
+  opacity: 1;
+}
+.pf-slide-title-input,
+.pf-slide-text-input {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  width: 100%;
+  font-family: var(--font-display);
+  resize: none;
+}
+.pf-slide-title-input { font-weight: 800; font-size: 17px; }
+.pf-slide-text-input { font-family: var(--font-body); font-size: 13px; line-height: 1.45; flex: 1; }
+.pf-slide-thumb.scale-0 .pf-slide-title-input { font-size: 14px; }
+.pf-slide-thumb.scale-0 .pf-slide-text-input { font-size: 11.5px; }
+.pf-slide-thumb.scale-2 .pf-slide-title-input { font-size: 20px; }
+.pf-slide-thumb.scale-2 .pf-slide-text-input { font-size: 15px; }
+.pf-slide-title-input:focus,
+.pf-slide-text-input:focus { outline: 1px dashed var(--brand); border-radius: 4px; }
+.pf-slide-notes { font-size: 12.5px; padding: 8px 10px; }
+.pf-slide-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-slide-num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.pf-slide-add {
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  border-style: dashed;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-slide-add:hover { border-color: var(--brand); color: var(--text-brand); }

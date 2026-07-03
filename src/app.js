@@ -695,6 +695,23 @@ function normalizeSermon(sermon) {
       : [],
     tags: Array.isArray(sermon.tags) ? sermon.tags.filter(Boolean).map(String) : [],
     slidesDoc: typeof sermon.slidesDoc === "string" ? sermon.slidesDoc : "",
+    slideDeck:
+      sermon.slideDeck && typeof sermon.slideDeck === "object"
+        ? {
+            theme: ["dark", "light", "brand"].includes(sermon.slideDeck.theme) ? sermon.slideDeck.theme : "dark",
+            fontScale: [0, 1, 2].includes(sermon.slideDeck.fontScale) ? sermon.slideDeck.fontScale : 1,
+            builtAt: sermon.slideDeck.builtAt || "",
+            slides: Array.isArray(sermon.slideDeck.slides)
+              ? sermon.slideDeck.slides.map((slide) => ({
+                  id: slide.id || genId(),
+                  type: slide.type || "custom",
+                  title: typeof slide.title === "string" ? slide.title : "",
+                  text: typeof slide.text === "string" ? slide.text : "",
+                  notes: typeof slide.notes === "string" ? slide.notes : "",
+                }))
+              : [],
+          }
+        : { theme: "dark", fontScale: 1, builtAt: "", slides: [] },
     timeSpent: Number.isFinite(sermon.timeSpent) && sermon.timeSpent > 0 ? Math.round(sermon.timeSpent) : 0,
     practice:
       sermon.practice && typeof sermon.practice === "object"
@@ -1727,6 +1744,7 @@ function renderMain(active) {
   if (state.view === "series") return renderSeriesPage();
   if (state.view === "diet") return renderDietPage();
   if (state.view === "editor") return renderEditorPage(active);
+  if (state.view === "slides") return renderSlideBuilder(active);
   if (state.view === "library") return renderLibrary();
   if (state.view === "debrief") return renderDebriefPage();
   if (active) return renderWorkspace(active);
@@ -2241,6 +2259,7 @@ function renderEditorPage(active) {
           <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync"><span class="pf-sync-dot"></span>${escapeHtml(sync.text)}</button>
           <button class="pf-btn" data-view="practice">Practice ▸</button>
           <button class="pf-btn" data-view="pulpit">Pulpit View ▸</button>
+          <button class="pf-btn pf-btn-ghost" data-view="slides">Slides</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-doc">Word</button>
         </div>
@@ -3084,7 +3103,7 @@ function renderCanvas(active, phase) {
         <button class="pf-btn pf-btn-ghost" data-view="pulpit">Open Pulpit View</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-impact">Impact Plan</button>
         ${debriefAvailable(active) ? `<button class="pf-btn pf-btn-ghost" data-action="open-debrief">Debrief</button>` : ""}
-        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Slides doc</button>
+        <button class="pf-btn pf-btn-ghost" data-view="slides">Slide Builder</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active-doc">Word</button>
         <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
@@ -3490,6 +3509,175 @@ function generateSlidesDoc(sermon) {
     `<p><strong>Notes for production:</strong> </p>`,
   ];
   return pieces.join("");
+}
+
+// ---- Slide Builder ----
+// Slides serve preaching, not the other way around: short lines, readable
+// Scripture with attribution, and a warning when a slide gets text-heavy.
+const SLIDE_TYPES = {
+  title: "Title",
+  passage: "Passage",
+  bigidea: "Big idea",
+  point: "Point",
+  scripture: "Scripture",
+  quote: "Quote",
+  application: "Application",
+  respond: "Response",
+  closing: "Closing",
+  custom: "Custom",
+};
+
+// Build the deck from what the sermon already marked slide-worthy.
+function buildSlideDeck(sermon) {
+  const slides = [];
+  const push = (type, title, text = "", notes = "") => slides.push({ id: genId(), type, title, text, notes });
+  push("title", sermon.title || sermon.passage || "Sermon", [sermon.passage, sermon.series].filter(Boolean).join(" · "));
+  if (sermon.passage) push("passage", sermon.passage, "");
+  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
+  if (bigIdea) push("bigidea", "Big idea", bigIdea);
+
+  const template = document.createElement("template");
+  template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+  let sawHeadings = false;
+  for (const node of [...template.content.querySelectorAll("h3, .pf-b-scripture, .pf-b-slide, .pf-b-quote, .pf-b-respond")]) {
+    if (node.tagName === "H3") {
+      sawHeadings = true;
+      const text = node.textContent.trim();
+      if (text) push("point", text);
+    } else if (node.classList.contains("pf-b-scripture")) {
+      if (node.getAttribute("data-slide") !== "1") continue;
+      const ref = node.getAttribute("data-ref") || node.querySelector(".pf-scripture-ref")?.textContent || "Scripture";
+      const body = node.querySelector(".pf-scripture-text")?.textContent.trim() || "";
+      const attribution = node.querySelector(".pf-scripture-attr")?.textContent.trim() || "";
+      push("scripture", ref, body, attribution);
+    } else if (node.classList.contains("pf-b-slide")) {
+      const title = (node.querySelector(".pf-slide-title")?.textContent || "").replace(/^slide:\s*/i, "").trim();
+      const body = [...node.querySelectorAll("p:not(.pf-slide-title)")].map((p) => p.textContent.trim()).filter(Boolean).join("\n");
+      push("custom", title || "Slide", body);
+    } else if (node.classList.contains("pf-b-quote")) {
+      const body = node.textContent.trim();
+      if (body) push("quote", "Quote", body);
+    } else if (node.classList.contains("pf-b-respond")) {
+      const body = node.textContent.trim();
+      if (body) push("respond", "Respond", body);
+    }
+  }
+  if (!sawHeadings) {
+    (sermon.outline || [])
+      .filter((movement) => movement.title.trim())
+      .forEach((movement) => push("point", movement.title.trim(), movement.sub.trim()));
+  }
+  if (bigIdea) push("closing", "Walk away with this", bigIdea);
+  return { theme: sermon.slideDeck?.theme || "dark", fontScale: sermon.slideDeck?.fontScale ?? 1, builtAt: new Date().toISOString(), slides };
+}
+
+function slideTooHeavy(slide) {
+  const words = `${slide.title} ${slide.text}`.split(/\s+/).filter(Boolean).length;
+  return words > 34 || slide.text.split("\n").length > 6;
+}
+
+function deckPlainText(sermon) {
+  return sermon.slideDeck.slides
+    .map((slide, index) => {
+      const lines = [`[${index + 1} · ${SLIDE_TYPES[slide.type] || "Slide"}] ${slide.title}`];
+      if (slide.text.trim()) lines.push(slide.text.trim());
+      if (slide.notes.trim()) lines.push(`(production: ${slide.notes.trim()})`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+function deckMarkdown(sermon) {
+  return `# ${sermon.title || sermon.passage || "Sermon"} — slides\n\n${sermon.slideDeck.slides
+    .map((slide, index) => {
+      const lines = [`## ${index + 1}. ${slide.title || SLIDE_TYPES[slide.type]}`];
+      if (slide.text.trim()) lines.push(slide.text.trim());
+      if (slide.notes.trim()) lines.push(`> production: ${slide.notes.trim()}`);
+      return lines.join("\n\n");
+    })
+    .join("\n\n")}\n`;
+}
+
+function deckPrintHtml(sermon) {
+  const dark = sermon.slideDeck.theme !== "light";
+  const bg = sermon.slideDeck.theme === "brand" ? "#FF953E" : dark ? "#16181c" : "#ffffff";
+  const fg = sermon.slideDeck.theme === "brand" ? "#20242a" : dark ? "#f4f1ea" : "#20242a";
+  const scale = [0.85, 1, 1.2][sermon.slideDeck.fontScale] || 1;
+  return sermon.slideDeck.slides
+    .map(
+      (slide) => `
+        <div style="page-break-after:always;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:92vh;background:${bg};color:${fg};padding:6vh 8vw;border-radius:6px;">
+          <div style="font-size:${Math.round(14 * scale)}px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:18px;">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}</div>
+          <div style="font-weight:800;font-size:${Math.round(44 * scale)}px;line-height:1.15;margin-bottom:20px;">${escapeHtml(slide.title)}</div>
+          ${slide.text.trim() ? `<div style="font-size:${Math.round(26 * scale)}px;line-height:1.4;white-space:pre-wrap;">${escapeHtml(slide.text)}</div>` : ""}
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function ensureDeck(sermon) {
+  if (!sermon.slideDeck.slides.length) {
+    sermon.slideDeck = buildSlideDeck(sermon);
+    saveState();
+  }
+  return sermon.slideDeck;
+}
+
+function renderSlideBuilder(active) {
+  if (!active) return renderNeedSermon("Slide Builder creates slides from your current sermon — start one first.");
+  const deck = ensureDeck(active);
+  return `
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Slide Builder</span>
+        <h1 class="pf-h1">Create clean sermon slides from the message you already prepared</h1>
+        <p class="pf-page-sub">Everything you marked while writing — points, Scripture blocks, slide cues, the big idea — becomes a deck. Edit, reorder, and export; slides serve the preaching, not the other way around.</p>
+      </div>
+
+      <div class="pf-deck-controls">
+        <button class="pf-btn pf-btn-primary" data-action="deck-rebuild" title="Rebuild the deck from the sermon (replaces slide edits)">Rebuild from sermon</button>
+        <select class="pf-select" data-action="deck-theme" style="width:auto;" title="Slide theme">
+          ${["dark", "light", "brand"].map((theme) => `<option value="${theme}" ${deck.theme === theme ? "selected" : ""}>${theme[0].toUpperCase()}${theme.slice(1)} theme</option>`).join("")}
+        </select>
+        <div class="pf-practice-font" style="margin-left:0;">
+          <button class="pf-font-btn" data-action="deck-font" data-scale="0" ${deck.fontScale === 0 ? "disabled" : ""}>A−</button>
+          <button class="pf-font-btn" data-action="deck-font" data-scale="2" ${deck.fontScale === 2 ? "disabled" : ""}>A+</button>
+        </div>
+        <span style="flex:1;"></span>
+        <button class="pf-btn" data-action="deck-export-pdf">PDF deck</button>
+        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Production doc</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-export-md">Markdown</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-export-txt">Slide list (.txt)</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-copy">Copy all text</button>
+      </div>
+      <p class="pf-helper" style="margin-bottom:18px;">The slide list exports production-ready text for your presentation software. ${deck.builtAt ? `Deck built ${escapeHtml(fmtDate(deck.builtAt.slice(0, 10)))}.` : ""}</p>
+
+      <div class="pf-deck-grid">
+        ${deck.slides
+          .map(
+            (slide, index) => `
+              <div class="pf-slide-card theme-${attr(deck.theme)}" data-slide-card>
+                <div class="pf-slide-thumb scale-${deck.fontScale}">
+                  <span class="pf-slide-type">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}${slideTooHeavy(slide) ? ` <em class="pf-slide-heavy" title="This slide is text-heavy — prefer short, readable lines">Heavy text</em>` : ""}</span>
+                  <input class="pf-slide-title-input" data-action="slide-title" data-index="${index}" value="${attr(slide.title)}" placeholder="Slide title" aria-label="Slide ${index + 1} title" />
+                  <textarea class="pf-slide-text-input" data-action="slide-text" data-index="${index}" rows="3" placeholder="On-screen text" aria-label="Slide ${index + 1} on-screen text">${escapeHtml(slide.text)}</textarea>
+                </div>
+                <input class="pf-input pf-slide-notes" data-action="slide-notes" data-index="${index}" value="${attr(slide.notes)}" placeholder="Notes for production…" aria-label="Slide ${index + 1} production notes" />
+                <div class="pf-slide-tools">
+                  <span class="pf-slide-num">${index + 1}</span>
+                  <button class="pf-outline-btn" data-action="slide-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move slide up">▲</button>
+                  <button class="pf-outline-btn" data-action="slide-down" data-index="${index}" ${index === deck.slides.length - 1 ? "disabled" : ""} aria-label="Move slide down">▼</button>
+                  <button class="pf-outline-btn" data-action="slide-remove" data-index="${index}" aria-label="Remove slide">✕</button>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+        <button class="pf-slide-card pf-slide-add" data-action="slide-add">+ Add slide</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderSlidesModal(active) {
@@ -7238,6 +7426,63 @@ document.addEventListener("click", (event) => {
     ui.scripture.attribution = "";
     render();
   }
+  if (action === "deck-rebuild") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck = buildSlideDeck(active);
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    showBanner("Deck rebuilt from the sermon.");
+    render();
+  }
+  if (action === "deck-font") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.fontScale = Number(target.dataset.scale);
+    saveState();
+    render();
+  }
+  if (action === "slide-up" || action === "slide-down") {
+    const active = getActive();
+    if (!active) return;
+    const index = Number(target.dataset.index);
+    const swap = action === "slide-up" ? index - 1 : index + 1;
+    const slides = active.slideDeck.slides;
+    if (swap < 0 || swap >= slides.length) return;
+    [slides[index], slides[swap]] = [slides[swap], slides[index]];
+    saveState();
+    render();
+  }
+  if (action === "slide-remove") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.slides.splice(Number(target.dataset.index), 1);
+    saveState();
+    render();
+  }
+  if (action === "slide-add") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.slides.push({ id: genId(), type: "custom", title: "", text: "", notes: "" });
+    saveState();
+    render();
+  }
+  if (action === "deck-export-pdf") {
+    const active = getActive();
+    if (active) exportPdf(`${active.passage || "Sermon"} slides`, deckPrintHtml(active));
+  }
+  if (action === "deck-export-md") {
+    const active = getActive();
+    if (active) downloadText(`${slug(active.passage)}-slides.md`, deckMarkdown(active));
+  }
+  if (action === "deck-export-txt") {
+    const active = getActive();
+    if (active) downloadText(`${slug(active.passage)}-slides.txt`, deckPlainText(active));
+  }
+  if (action === "deck-copy") {
+    const active = getActive();
+    if (active) copyText(deckPlainText(active));
+  }
   if (action === "refine") {
     closeToolMenus();
     runRefine(target.dataset.kind);
@@ -7692,6 +7937,14 @@ document.addEventListener("input", (event) => {
     state.preachingProfile[target.dataset.key] = target.value;
     saveState();
   }
+  if (action === "slide-title" || action === "slide-text" || action === "slide-notes") {
+    const active = getActive();
+    const slide = active?.slideDeck.slides[Number(target.dataset.index)];
+    if (!slide) return;
+    slide[action === "slide-title" ? "title" : action === "slide-text" ? "text" : "notes"] = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+  }
   if (action === "scripture-ref") {
     ui.scripture.ref = target.value;
   }
@@ -7784,6 +8037,13 @@ document.addEventListener("change", (event) => {
   if (action === "rubric-toggle") {
     state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
     saveState();
+  }
+  if (action === "deck-theme") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.theme = target.value;
+    saveState();
+    render();
   }
   if (action === "scripture-translation") {
     if (target.value === "manual") {
