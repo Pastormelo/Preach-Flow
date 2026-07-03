@@ -3026,3 +3026,573 @@ p {
   color: var(--ofc-danger);
   margin-left: auto;
 }
+
+/* ---- Preaching Profile ---- */
+.pf-rubric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 24px;
+}
+.pf-chip-x {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 0 0 4px;
+}
+.pf-onboard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+@media (max-width: 880px) {
+  .pf-rubric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================================
+   Pulpit View — focused preaching interface (practice + live)
+   ===================================================================== */
+.pf-pulpit {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.pf-pulpit.theme-light { background: #fdfaf5; color: #23272e; --pv-muted: #6b7480; --pv-line: #e5e0d6; --pv-chip: #f0ebe1; }
+.pf-pulpit.theme-dark { background: #16181c; color: #f0ede6; --pv-muted: #9aa2ad; --pv-line: #2c313a; --pv-chip: #23272e; }
+.pf-pulpit.theme-contrast { background: #000; color: #fff; --pv-muted: #d6d6d6; --pv-line: #444; --pv-chip: #1a1a1a; }
+
+.pf-pulpit-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--pv-line);
+}
+.pf-pulpit-bar.bottom {
+  border-bottom: 0;
+  border-top: 1px solid var(--pv-line);
+  justify-content: space-between;
+}
+.pf-pulpit-controls {
+  transition: opacity 0.5s var(--ease-out);
+}
+.pf-pulpit:not(.controls-on) .pf-pulpit-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+.pf-pulpit-btn {
+  min-width: 44px;
+  min-height: 40px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--pv-line);
+  background: var(--pv-chip);
+  color: inherit;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pf-pulpit-btn:disabled { opacity: 0.35; cursor: default; }
+.pf-pulpit-chip {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--pv-line);
+  background: transparent;
+  color: var(--pv-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pf-pulpit-chip.active { background: var(--brand); border-color: var(--brand); color: #20242a; }
+.pf-pulpit-modes { display: flex; gap: 6px; }
+.pf-pulpit-id {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--pv-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 120px;
+}
+.pf-pulpit-tools { display: flex; gap: 6px; }
+
+.pf-pulpit-progress {
+  height: 4px;
+  background: var(--pv-line);
+}
+.pf-pulpit-progress i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width 0.3s var(--ease-out);
+}
+
+.pf-pulpit-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 30px 22px 60px;
+  -webkit-overflow-scrolling: touch;
+}
+.pf-pulpit.narrow .pf-pulpit-body > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+.pf-pulpit.wide .pf-pulpit-body > * { max-width: 1020px; margin-left: auto; margin-right: auto; }
+.pf-pulpit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--pv-line);
+}
+.pf-pulpit-passage {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.72em;
+  color: var(--brand);
+}
+.pf-pulpit-idea { font-size: 0.6em; color: var(--pv-muted); }
+.pf-pulpit-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.15em;
+  margin: 0 0 0.5em;
+}
+.pf-pulpit-section { margin-bottom: 2em; }
+.pf-pulpit-section.current .pf-pulpit-title { color: var(--brand); }
+.pf-pulpit-section blockquote {
+  border-left: 4px solid var(--brand);
+  background: var(--pv-chip);
+  padding: 0.5em 0.9em;
+  margin: 0.8em 0;
+  border-radius: 0 12px 12px 0;
+}
+.pf-pulpit-section .pf-b-note { opacity: 0.62; font-size: 0.82em; font-style: italic; }
+.pf-pulpit.hide-notes .pf-b-note { display: none; }
+.pf-pulpit-section .pf-b-cue {
+  font-size: 0.7em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--brand);
+  border: 1px dashed var(--brand);
+  border-radius: 10px;
+  padding: 0.4em 0.8em;
+  margin: 0.8em 0;
+}
+.pf-pulpit.hide-cues .pf-b-cue { display: none; }
+.pf-pulpit.hide-refs .pf-scripture-ref { display: none; }
+.pf-pulpit-next {
+  margin-top: 26px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--pv-line);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.62em;
+  color: var(--pv-muted);
+}
+
+.pf-pulpit-zone {
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  width: 14%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  z-index: 5;
+}
+.pf-pulpit-zone.left { left: 0; }
+.pf-pulpit-zone.right { right: 0; }
+
+.pf-pulpit-nav { display: flex; align-items: center; gap: 12px; }
+.pf-pulpit-count { font-family: var(--font-display); font-weight: 800; font-size: 13.5px; color: var(--pv-muted); min-width: 52px; text-align: center; }
+.pf-pulpit-timing { display: flex; align-items: center; gap: 12px; }
+.pf-pulpit-timer {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pf-pulpit-timer.over { color: #ff6b62; }
+.pf-pulpit-meta { font-size: 12.5px; font-weight: 600; color: var(--pv-muted); }
+.pf-pulpit-marks { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.pf-pulpit-settings {
+  position: absolute;
+  top: 64px;
+  right: 18px;
+  z-index: 20;
+  width: 290px;
+  background: var(--pv-chip);
+  border: 1px solid var(--pv-line);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+}
+.pf-pulpit-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--pv-line);
+}
+.pf-pulpit-settings-row:last-child { border-bottom: 0; }
+
+.pf-pulpit-practice {
+  position: absolute;
+  left: 18px;
+  bottom: 84px;
+  z-index: 15;
+  width: min(340px, calc(100vw - 36px));
+  background: var(--pv-chip);
+  border: 1px solid var(--pv-line);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.pf-pulpit-practice-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+  color: var(--pv-muted);
+}
+.pf-pulpit-practice-head strong { color: inherit; font-family: var(--font-display); }
+.pf-pulpit-practice .pf-ws-input {
+  background: transparent;
+  color: inherit;
+  border-color: var(--pv-line);
+  font-size: 13.5px;
+}
+
+@media (max-width: 880px) {
+  .pf-pulpit-bar { padding: 10px 12px; gap: 8px; }
+  .pf-pulpit-id { display: none; }
+  .pf-pulpit-body { padding: 22px 16px 120px; }
+  .pf-pulpit-practice { bottom: 128px; }
+  .pf-pulpit-bar.bottom { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-pulpit-controls { transition: none; }
+}
+
+/* ---- structured sermon blocks ---- */
+.pf-b {
+  position: relative;
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  border-radius: 0 12px 12px 0;
+  padding: 10px 14px 10px 16px;
+  margin: 14px 0;
+  background: var(--surface-sunken);
+}
+.pf-b::before {
+  content: "Block";
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.pf-b-scripture { border-left-color: var(--brand); background: var(--brand-soft); }
+.pf-b-scripture::before { content: "Scripture"; color: var(--text-brand); }
+.pf-b-illustration::before { content: "Illustration"; }
+.pf-b-application { border-left-color: #4f9d69; }
+.pf-b-application::before { content: "Application"; color: #4f9d69; }
+.pf-b-transition::before { content: "Transition"; }
+.pf-b-transition { border-style: dashed; }
+.pf-b-prayer::before { content: "Prayer"; }
+.pf-b-quote::before { content: "Quote"; }
+.pf-b-cue { border-left-color: #7b68ae; }
+.pf-b-cue::before { content: "Media cue"; color: #7b68ae; }
+.pf-b-slide { border-left-color: #7b68ae; }
+.pf-b-slide::before { content: "Slide cue"; color: #7b68ae; }
+.pf-b-note { opacity: 0.85; }
+.pf-b-note::before { content: "Personal note"; }
+.pf-b-public::before { content: "Public note"; }
+.pf-b-respond { border-left-color: var(--ofc-danger); }
+.pf-b-respond::before { content: "Call to respond"; color: var(--ofc-danger); }
+.pf-scripture-ref {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.82em;
+  color: var(--text-brand);
+  margin-bottom: 4px;
+}
+.pf-scripture-text { font-style: italic; }
+.pf-scripture-attr { font-size: 0.72em; color: var(--text-muted); margin-top: 4px; }
+.pf-slide-title { font-family: var(--font-display); font-weight: 800; font-size: 0.9em; }
+.pf-scripture-flags { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.pf-scripture-flags .pf-toggle-row { flex: 0 0 auto; }
+
+/* ---- Sermon Guide refine card ---- */
+.pf-refine-card {
+  max-width: 860px;
+  margin: 0 auto 14px;
+  border-left: 3px solid var(--brand);
+}
+
+/* ---- Slide Builder ---- */
+.pf-deck-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.pf-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.pf-slide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 12px;
+}
+.pf-slide-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+.pf-slide-card.theme-dark .pf-slide-thumb { background: #16181c; color: #f4f1ea; }
+.pf-slide-card.theme-light .pf-slide-thumb { background: #ffffff; color: #20242a; border: 1px solid var(--border-subtle); }
+.pf-slide-card.theme-brand .pf-slide-thumb { background: var(--brand); color: #20242a; }
+.pf-slide-type {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+.pf-slide-heavy {
+  font-style: normal;
+  color: #ff6b62;
+  opacity: 1;
+}
+.pf-slide-title-input,
+.pf-slide-text-input {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  width: 100%;
+  font-family: var(--font-display);
+  resize: none;
+}
+.pf-slide-title-input { font-weight: 800; font-size: 17px; }
+.pf-slide-text-input { font-family: var(--font-body); font-size: 13px; line-height: 1.45; flex: 1; }
+.pf-slide-thumb.scale-0 .pf-slide-title-input { font-size: 14px; }
+.pf-slide-thumb.scale-0 .pf-slide-text-input { font-size: 11.5px; }
+.pf-slide-thumb.scale-2 .pf-slide-title-input { font-size: 20px; }
+.pf-slide-thumb.scale-2 .pf-slide-text-input { font-size: 15px; }
+.pf-slide-title-input:focus,
+.pf-slide-text-input:focus { outline: 1px dashed var(--brand); border-radius: 4px; }
+.pf-slide-notes { font-size: 12.5px; padding: 8px 10px; }
+.pf-slide-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-slide-num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.pf-slide-add {
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  border-style: dashed;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+.pf-slide-add:hover { border-color: var(--brand); color: var(--text-brand); }
+
+/* ---- Sharing and Delivery Center ---- */
+.pf-delivery-grid,
+.pf-share-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pf-delivery-card,
+.pf-share-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.pf-delivery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+}
+.pf-delivery-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.pf-delivery-actions .pf-btn { padding: 6px 12px; font-size: 12.5px; }
+.pf-delivery-status { width: auto; padding: 6px 10px; font-size: 12.5px; }
+.pf-share-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+  margin-bottom: 8px;
+}
+.pf-share-sections .pf-toggle-row span { font-size: 13px; }
+.pf-share-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+@media (max-width: 880px) {
+  .pf-delivery-grid,
+  .pf-share-grid { grid-template-columns: 1fr; }
+  .pf-share-sections { grid-template-columns: 1fr; }
+}
+
+/* =====================================================================
+   Mobile & tablet audit: sheets, touch targets, breathing room
+   ===================================================================== */
+@media (max-width: 880px) {
+  /* modals become bottom sheets */
+  .pf-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .pf-modal {
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+  }
+
+  /* touch targets */
+  .pf-btn,
+  .pf-chip,
+  .pf-nav-btn,
+  .pf-nav-menu-item,
+  .pf-tool-pill,
+  .pf-outline-btn,
+  .pf-check-item {
+    min-height: 44px;
+  }
+  .pf-tool-btn,
+  .pf-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .pf-toggle-row input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* editor + toolbar breathing room */
+  .pf-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pf-editor-statbar {
+    gap: 10px;
+    font-size: 12.5px;
+  }
+  .pf-editor-actions .pf-btn {
+    padding: 10px 14px;
+  }
+
+  /* grids collapse */
+  .pf-impact-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .pf-series-row-grid {
+    grid-template-columns: 1fr;
+  }
+  .pf-deck-controls .pf-btn {
+    flex: 1 1 auto;
+  }
+
+  /* inputs stay readable (avoids iOS zoom-on-focus) */
+  .pf-input,
+  .pf-select,
+  .pf-ws-input {
+    font-size: 16px;
+  }
+
+  /* coach composer + page bottoms respect the home indicator */
+  .pf-coach-wrap {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pf-page {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+
+  /* library / delivery action rows wrap without crowding */
+  .pf-lib-actions .pf-btn,
+  .pf-delivery-actions .pf-btn {
+    min-height: 40px;
+  }
+}
+
+/* iPad landscape: keep two-column layouts but relax gutters */
+@media (min-width: 881px) and (max-width: 1120px) {
+  .pf-doc-canvas {
+    padding: 40px 36px 70px;
+  }
+  .pf-lens-explain,
+  .pf-tool-cards {
+    gap: 14px;
+  }
+  .pf-deck-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}

@@ -394,6 +394,64 @@ const PHASE_RESOURCES = {
 // so it must be initialized before loadState() runs below).
 const PRACTICE_WPM_CHOICES = [110, 130, 150];
 
+// ---- Preaching Profile ----
+// The preacher's workflow layer: defaults, homiletical preferences,
+// convictions, review standards, and Sermon Guide posture. Distinct from
+// Account (identity/security), Congregational Lens (the church), and the
+// Workspace (the sermon).
+function normalizePreachingProfile(profile) {
+  const source = profile && typeof profile === "object" ? profile : {};
+  const str = (value) => (typeof value === "string" ? value : "");
+  const list = (value) => (Array.isArray(value) ? value.filter(Boolean).map(String) : []);
+  const flag = (value, fallback) => (typeof value === "boolean" ? value : fallback);
+  return {
+    // 1. Preaching role
+    role: str(source.role),
+    context: str(source.context),
+    cadence: str(source.cadence),
+    day: str(source.day),
+    // 2. Sermon defaults
+    translation: str(source.translation),
+    length: str(source.length),
+    targetTime: str(source.targetTime),
+    format: str(source.format),
+    deliverable: str(source.deliverable),
+    seriesBehavior: str(source.seriesBehavior),
+    // 3. Homiletical preferences
+    style: str(source.style),
+    outlinePref: str(source.outlinePref),
+    bigIdeaStyle: str(source.bigIdeaStyle),
+    applicationEmphasis: list(source.applicationEmphasis),
+    christConnection: str(source.christConnection),
+    // 4. Convictions
+    tradition: str(source.tradition),
+    confession: str(source.confession),
+    values: list(source.values),
+    guardrails: str(source.guardrails),
+    // 5. Sermon Guide preferences
+    posture: list(source.posture),
+    useProfile: flag(source.useProfile, true),
+    useLens: flag(source.useLens, true),
+    pushBack: flag(source.pushBack, true),
+    questionsFirst: flag(source.questionsFirst, false),
+    textInCharge: flag(source.textInCharge, true),
+    noFullSections: flag(source.noFullSections, true),
+    // 6. Review rubric (defaults render as checked when unset)
+    rubric: source.rubric && typeof source.rubric === "object" ? source.rubric : {},
+    rubricCustom: list(source.rubricCustom),
+    // 7. Preparation rhythm
+    prepRhythm: str(source.prepRhythm),
+    prepDays: list(source.prepDays),
+    pressurePoints: list(source.pressurePoints),
+    weeklyTarget: str(source.weeklyTarget),
+    // 8. Output defaults
+    exportFormat: str(source.exportFormat),
+    productionOutputs: list(source.productionOutputs),
+    audienceOutputs: list(source.audienceOutputs),
+    onboarded: flag(source.onboarded, false),
+  };
+}
+
 const DEFAULT_DRAFT = {
   passage: "",
   title: "",
@@ -424,12 +482,17 @@ const ui = {
   switcherQuery: "",
   notesQuery: "",
   impactTab: "home",
+  profileTab: "profile",
   libraryQuery: "",
   librarySort: "date",
   debriefSermonId: "",
   debriefQuery: "",
   confirmDeleteId: "",
   practice: { running: false, seconds: 0 },
+  pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
+  scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
+  refine: null,
+  preparingAll: false,
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -492,6 +555,9 @@ if (!state.dietReview || typeof state.dietReview !== "object") state.dietReview 
 if (!state.resources || typeof state.resources !== "object") state.resources = {};
 state.practiceWpm = normalizeWpm(state.practiceWpm);
 state.practiceFont = normalizeFontStep(state.practiceFont);
+state.preachingProfile = normalizePreachingProfile(state.preachingProfile);
+state.pulpitPrefs = normalizePulpitPrefs(state.pulpitPrefs);
+state.bibleProvider = normalizeBibleProvider(state.bibleProvider);
 
 function loadTheme() {
   const stored = localStorage.getItem(THEME_STORE);
@@ -525,6 +591,9 @@ function loadState() {
       resources: normalizeResources(parsed.resources),
       practiceWpm: normalizeWpm(parsed.practiceWpm),
       practiceFont: normalizeFontStep(parsed.practiceFont),
+      preachingProfile: normalizePreachingProfile(parsed.preachingProfile),
+      pulpitPrefs: normalizePulpitPrefs(parsed.pulpitPrefs),
+      bibleProvider: normalizeBibleProvider(parsed.bibleProvider),
     };
   } catch {
     return {
@@ -576,6 +645,9 @@ function stateSnapshot() {
     resources: state.resources,
     practiceWpm: state.practiceWpm,
     practiceFont: state.practiceFont,
+    preachingProfile: state.preachingProfile,
+    pulpitPrefs: state.pulpitPrefs,
+    bibleProvider: state.bibleProvider,
   };
 }
 
@@ -599,6 +671,9 @@ function applyStateSnapshot(snapshot) {
   state.resources = normalizeResources(snapshot?.resources);
   state.practiceWpm = normalizeWpm(snapshot?.practiceWpm);
   state.practiceFont = normalizeFontStep(snapshot?.practiceFont);
+  state.preachingProfile = normalizePreachingProfile(snapshot?.preachingProfile);
+  state.pulpitPrefs = normalizePulpitPrefs(snapshot?.pulpitPrefs);
+  state.bibleProvider = normalizeBibleProvider(snapshot?.bibleProvider);
 }
 
 function normalizeSermon(sermon) {
@@ -621,6 +696,23 @@ function normalizeSermon(sermon) {
       : [],
     tags: Array.isArray(sermon.tags) ? sermon.tags.filter(Boolean).map(String) : [],
     slidesDoc: typeof sermon.slidesDoc === "string" ? sermon.slidesDoc : "",
+    slideDeck:
+      sermon.slideDeck && typeof sermon.slideDeck === "object"
+        ? {
+            theme: ["dark", "light", "brand"].includes(sermon.slideDeck.theme) ? sermon.slideDeck.theme : "dark",
+            fontScale: [0, 1, 2].includes(sermon.slideDeck.fontScale) ? sermon.slideDeck.fontScale : 1,
+            builtAt: sermon.slideDeck.builtAt || "",
+            slides: Array.isArray(sermon.slideDeck.slides)
+              ? sermon.slideDeck.slides.map((slide) => ({
+                  id: slide.id || genId(),
+                  type: slide.type || "custom",
+                  title: typeof slide.title === "string" ? slide.title : "",
+                  text: typeof slide.text === "string" ? slide.text : "",
+                  notes: typeof slide.notes === "string" ? slide.notes : "",
+                }))
+              : [],
+          }
+        : { theme: "dark", fontScale: 1, builtAt: "", slides: [] },
     timeSpent: Number.isFinite(sermon.timeSpent) && sermon.timeSpent > 0 ? Math.round(sermon.timeSpent) : 0,
     practice:
       sermon.practice && typeof sermon.practice === "object"
@@ -628,8 +720,10 @@ function normalizeSermon(sermon) {
             runs: Number(sermon.practice.runs) || 0,
             lastSeconds: Number(sermon.practice.lastSeconds) || 0,
             lastAt: sermon.practice.lastAt || "",
+            notes: typeof sermon.practice.notes === "string" ? sermon.practice.notes : "",
+            marks: sermon.practice.marks && typeof sermon.practice.marks === "object" ? sermon.practice.marks : {},
           }
-        : { runs: 0, lastSeconds: 0, lastAt: "" },
+        : { runs: 0, lastSeconds: 0, lastAt: "", notes: "", marks: {} },
     impact: sermon.impact && typeof sermon.impact === "object" ? sermon.impact : {},
     shepherd:
       sermon.shepherd && typeof sermon.shepherd === "object"
@@ -640,6 +734,8 @@ function normalizeSermon(sermon) {
       sermon.debrief && typeof sermon.debrief === "object"
         ? { ...sermon.debrief, responses: Array.isArray(sermon.debrief.responses) ? sermon.debrief.responses : [] }
         : { responses: [] },
+    shareLinks: sermon.shareLinks && typeof sermon.shareLinks === "object" ? sermon.shareLinks : {},
+    delivery: sermon.delivery && typeof sermon.delivery === "object" ? sermon.delivery : {},
     googleDoc:
       sermon.googleDoc && typeof sermon.googleDoc === "object"
         ? {
@@ -744,10 +840,44 @@ function normalizeWpm(value) {
   return PRACTICE_WPM_CHOICES.includes(wpm) ? wpm : 130;
 }
 
-// Practice-mode font: 2 steps down, 3 steps up from the base size.
+// Reading font: 2 steps down, 3 steps up from the base size.
 function normalizeFontStep(value) {
   const step = Number(value);
   return Number.isInteger(step) && step >= -2 && step <= 3 ? step : 0;
+}
+
+// Bible provider settings. PreachFlow never scrapes Bible sites and never
+// bundles copyrighted translations: the built-in provider serves public-
+// domain texts (WEB, KJV) via bible-api.com, and manual paste with
+// attribution covers everything else.
+function normalizeBibleProvider(settings) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const provider = ["public-domain", "manual"].includes(source.provider) ? source.provider : "public-domain";
+  return {
+    provider,
+    translation: ["WEB", "KJV"].includes(source.translation) ? source.translation : "WEB",
+    apiKey: typeof source.apiKey === "string" ? source.apiKey : "",
+    attribution: typeof source.attribution === "boolean" ? source.attribution : true,
+  };
+}
+
+// Pulpit View display preferences (user-level; persisted and synced).
+function normalizePulpitPrefs(prefs) {
+  const source = prefs && typeof prefs === "object" ? prefs : {};
+  const pick = (value, options, fallback) => (options.includes(value) ? value : fallback);
+  const flag = (value, fallback) => (typeof value === "boolean" ? value : fallback);
+  return {
+    fontStep: normalizeFontStep(source.fontStep),
+    lineHeight: pick(source.lineHeight, ["compact", "comfortable", "spacious"], "comfortable"),
+    theme: pick(source.theme, ["light", "dark", "contrast"], "dark"),
+    width: pick(source.width, ["narrow", "wide"], "narrow"),
+    focusMode: flag(source.focusMode, true),
+    showNotes: flag(source.showNotes, true),
+    showCues: flag(source.showCues, true),
+    showRefs: flag(source.showRefs, true),
+    showTimer: flag(source.showTimer, true),
+    showProgress: flag(source.showProgress, true),
+  };
 }
 
 function normalizeLens(lens) {
@@ -776,6 +906,30 @@ function attr(value) {
   return escapeHtml(value);
 }
 
+// Structured sermon-block classes that survive sanitization. Everything
+// else is stripped to plain rich text.
+const BLOCK_CLASSES = new Set([
+  "pf-b",
+  "pf-b-scripture",
+  "pf-b-point",
+  "pf-b-sub",
+  "pf-b-illustration",
+  "pf-b-application",
+  "pf-b-transition",
+  "pf-b-prayer",
+  "pf-b-quote",
+  "pf-b-cue",
+  "pf-b-slide",
+  "pf-b-note",
+  "pf-b-public",
+  "pf-b-respond",
+  "pf-scripture-ref",
+  "pf-scripture-text",
+  "pf-scripture-attr",
+  "pf-slide-title",
+]);
+const BLOCK_DATA_ATTRS = new Set(["data-ref", "data-translation", "data-slide", "data-pulpit", "data-production"]);
+
 function sanitizeRichHtml(value) {
   const template = document.createElement("template");
   template.innerHTML = String(value || "");
@@ -799,13 +953,19 @@ function sanitizeRichHtml(value) {
       }
       continue;
     }
-    const sizeClass = node.tagName === "SPAN" && /^pf-size-[1-7]$/.test(node.className) ? node.className : "";
+    const keptClasses = String(node.className || "")
+      .split(/\s+/)
+      .filter((token) => BLOCK_CLASSES.has(token) || /^pf-size-[1-7]$/.test(token))
+      .join(" ");
+    const keptData = [...node.attributes]
+      .filter((attrNode) => BLOCK_DATA_ATTRS.has(attrNode.name))
+      .map((attrNode) => [attrNode.name, attrNode.value.slice(0, 120)]);
     for (const attrNode of [...node.attributes]) {
       node.removeAttribute(attrNode.name);
     }
-    if (sizeClass) {
-      node.className = sizeClass;
-    } else if (node.tagName === "SPAN") {
+    if (keptClasses) node.className = keptClasses;
+    for (const [name, dataValue] of keptData) node.setAttribute(name, dataValue);
+    if (node.tagName === "SPAN" && !keptClasses) {
       node.replaceWith(...node.childNodes);
     }
   }
@@ -944,12 +1104,25 @@ function render() {
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
+    ${ui.scripture.show ? renderScriptureModal() : ""}
+    ${renderOnboarding()}
   `;
 
   if (state.view === "signin") {
     app.innerHTML = `
       <div class="pf-root pf-fade" data-theme="${attr(state.theme)}">
         ${renderSignin(active)}
+        ${overlays}
+      </div>
+    `;
+    restoreFocus(focus);
+    return;
+  }
+
+  if (state.view === "pulpit" || state.view === "practice") {
+    app.innerHTML = `
+      <div class="pf-root" data-theme="${attr(state.theme)}">
+        ${renderPulpitView(active)}
         ${overlays}
       </div>
     `;
@@ -1018,13 +1191,14 @@ const BRAND_MARK_SVG = pfMarkSvg(22);
 const NAV_ITEMS = [
   ["workspace", "Workspace"],
   ["editor", "Editor"],
-  ["practice", "Practice"],
+  ["pulpit", "Pulpit"],
   ["library", "Library"],
 ];
 
 const NAV_GROUPS = [
   ["Ministry", [
     ["impact", "Impact Plan"],
+    ["sharing", "Sharing & Delivery"],
     ["debrief", "Debrief"],
     ["lens", "Congregational Lens"],
   ]],
@@ -1147,7 +1321,7 @@ function renderOpenAIKeyPanel() {
 const GOOGLE_G_SVG = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>`;
 
 function renderSignin(active) {
-  if (ui.auth.user) return renderAccount(active);
+  if (ui.auth.user) return renderProfile(active);
   const creating = ui.signinMode === "signup";
   const disabled = ui.auth.loading || !ui.auth.configured;
   return `
@@ -1203,53 +1377,363 @@ function renderSignin(active) {
   `;
 }
 
-function renderAccount(active) {
+// ---- Preaching Profile page ----
+const PROFILE_TABS = [
+  ["profile", "Preaching Profile"],
+  ["guide", "Sermon Guide"],
+  ["defaults", "Defaults"],
+  ["account", "Account"],
+  ["privacy", "Privacy"],
+];
+
+const PROFILE_OPTIONS = {
+  role: ["Lead pastor", "Teaching pastor", "Church planter", "Associate pastor", "Elder", "Student pastor", "Guest preacher", "Other"],
+  context: ["Sunday gathering", "Midweek service", "Students", "Groups", "Church plant", "Conference", "Devotional", "Other"],
+  cadence: ["Weekly", "Most weeks", "Monthly", "Occasional", "Seasonal"],
+  day: ["Sunday", "Wednesday", "Other"],
+  format: ["Full manuscript", "Detailed outline", "Hybrid notes", "Bullet notes"],
+  deliverable: ["Sermon manuscript", "Preaching notes", "Teaching guide", "Devotional", "Group guide"],
+  seriesBehavior: ["Standalone sermon", "Series-based", "Book-by-book", "Topical series", "Church calendar"],
+  style: ["Expositional", "Textual", "Narrative", "Doctrinal", "Topical", "Mixed"],
+  outlinePref: ["Text-driven movements", "Proposition-based points", "Narrative movement", "Problem-solution", "Theological argument", "Pastoral burden"],
+  bigIdeaStyle: ["Concise statement", "Doctrinal claim", "Pastoral burden", "Memorable sentence", "Question-answer"],
+  christConnection: ["Responsible biblical theology", "Direct fulfillment", "Gospel pattern", "Canonical context", "Avoid forced allegory"],
+  prepRhythm: ["Same-week preparation", "Two weeks ahead", "Four-week rotation", "Custom rhythm"],
+  exportFormat: ["PDF", "Word", "Markdown", "Google Docs"],
+};
+
+const PROFILE_APPLICATION_EMPHASES = ["Heart", "Habits", "Church body", "Mission", "Repentance", "Comfort", "Evangelism", "Family", "Suffering", "Leadership"];
+const PROFILE_VALUES = ["Gospel centrality", "Biblical authority", "Spirit dependence", "Church as family", "Mission", "Discipleship", "Prayer", "Leadership development", "Church planting", "Mercy", "Holiness", "Evangelism", "Generosity", "Justice", "Unity"];
+const PROFILE_POSTURES = ["Ask me questions first", "Give direct suggestions", "Challenge weak assumptions", "Help me tighten structure", "Focus on application", "Focus on exegesis", "Focus on clarity and brevity"];
+const PROFILE_RUBRIC = [
+  ["faithful", "Faithfulness to the text"],
+  ["bigidea", "Clear big idea"],
+  ["gospel", "Gospel clarity"],
+  ["christ", "Responsible Christ connection"],
+  ["application", "Specific application"],
+  ["evangelistic", "Evangelistic clarity"],
+  ["tone", "Pastoral tone"],
+  ["transitions", "Transitions"],
+  ["length", "Length"],
+  ["complexity", "Unnecessary complexity"],
+  ["respond", "Call to respond"],
+  ["nextsteps", "Church-wide next steps"],
+];
+const PROFILE_PREP_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const PROFILE_PRESSURES = ["Getting started", "Big idea", "Outline", "Application", "Manuscript", "Conclusion", "Review", "Slides", "Group guide"];
+const PROFILE_PRODUCTION_OUTPUTS = ["Slides document", "Family group guide", "Discipleship pack", "Impact plan", "Social summary", "Weekly email", "Devotional"];
+const PROFILE_AUDIENCES = ["Staff", "Prayer team", "Groups", "Parents", "Members", "Unbelievers", "Leaders", "Production team"];
+
+const PROFILE_GUARDRAIL_HINT = `e.g.
+Do not force Christ connections where the text does not support them.
+Do not overuse therapeutic language.
+Do not make application generic.
+Do not flatten Old Testament texts.
+Do not write as if the app is the preacher.`;
+
+// A review-rubric item is on unless the pastor turned it off.
+function rubricChecked(key) {
+  const value = state.preachingProfile.rubric[key];
+  return value !== false;
+}
+
+// The rubric the pastor wants applied before preaching (defaults + custom).
+function activeRubricItems() {
+  const items = PROFILE_RUBRIC.filter(([key]) => rubricChecked(key)).map(([, label]) => label);
+  return [...items, ...state.preachingProfile.rubricCustom];
+}
+
+function profileSelect(key, label, options, allowFree = false) {
+  const value = state.preachingProfile[key] || "";
+  const custom = value && !options.includes(value);
   return `
-    <div class="pf-signin-wrap">
-      <div class="pf-signin-inner">
-        <div style="margin-bottom:14px;">
-          <button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to workspace</button>
+    <div class="pf-field" style="margin-bottom:0;">
+      <label class="pf-label">${escapeHtml(label)}</label>
+      <select class="pf-select" data-action="profile-field" data-key="${attr(key)}">
+        <option value="">Choose…</option>
+        ${options.map((option) => `<option ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        ${custom ? `<option selected>${escapeHtml(value)}</option>` : ""}
+      </select>
+    </div>
+  `;
+}
+
+function profileInput(key, label, placeholder = "") {
+  return `
+    <div class="pf-field" style="margin-bottom:0;">
+      <label class="pf-label">${escapeHtml(label)}</label>
+      <input class="pf-input" data-action="profile-field" data-key="${attr(key)}" value="${attr(state.preachingProfile[key] || "")}" placeholder="${attr(placeholder)}" />
+    </div>
+  `;
+}
+
+function profileToggle(key, label, desc) {
+  return `
+    <label class="pf-toggle-row">
+      <input type="checkbox" data-action="profile-toggle" data-key="${attr(key)}" ${state.preachingProfile[key] ? "checked" : ""} />
+      <span><strong>${escapeHtml(label)}</strong>${desc ? ` — ${escapeHtml(desc)}` : ""}</span>
+    </label>
+  `;
+}
+
+function profileSection(title, hint, body) {
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">${escapeHtml(title)}</span></div>
+      ${hint ? `<p class="pf-section-hint">${escapeHtml(hint)}</p>` : ""}
+      ${body}
+    </section>
+  `;
+}
+
+// Optional post-signup setup. Never blocks the app; everything stays
+// editable later from the avatar.
+function renderOnboarding() {
+  if (!ui.auth.user || state.preachingProfile.onboarded) return "";
+  if (state.view === "signin") return "";
+  return `
+    <div class="pf-overlay" data-action="onboard-skip" data-overlay>
+      <div class="pf-modal" data-stop style="max-width:560px;">
+        <div class="pf-modal-head"><span class="pf-eyebrow pf-eyebrow-brand">Welcome</span></div>
+        <h2 style="font-family:var(--font-display);font-weight:800;font-size:21px;margin:2px 0 8px;">Make PreachFlow fit your preaching workflow.</h2>
+        <p class="pf-page-sub" style="margin-bottom:16px;">Set a few defaults so PreachFlow can better support your sermon preparation, review, and ministry outputs. Nothing here is required.</p>
+        <div class="pf-onboard-cards">
+          <button class="pf-tool-card" data-action="onboard-start" data-tab="defaults">
+            <span class="pf-tool-card-title">Set preaching defaults</span>
+            <span class="pf-tool-card-desc">Translation, sermon length, format, and the outputs you produce most weeks.</span>
+          </button>
+          <button class="pf-tool-card" data-action="onboard-start" data-tab="guide">
+            <span class="pf-tool-card-title">Shape Sermon Guide</span>
+            <span class="pf-tool-card-desc">Posture, push-back, and guardrails — how you want help without handing over the pen.</span>
+          </button>
+          <button class="pf-tool-card" data-action="onboard-lens">
+            <span class="pf-tool-card-title">Add Congregational Lens</span>
+            <span class="pf-tool-card-desc">Tell PreachFlow who your church is, so application lands on real people.</span>
+          </button>
         </div>
-        <div class="pf-signin-head">
-          <span class="pf-avatar" style="width:46px;height:46px;font-size:18px;margin-bottom:16px;">${escapeHtml(accountInitial())}</span>
-          <h1 class="pf-signin-title">Your account</h1>
-          <p class="pf-signin-subtitle">${escapeHtml(ui.auth.user.email || "Signed in")}</p>
-        </div>
-        <div class="pf-signin-card">
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Cloud sync</div>
-              <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
-            </div>
-            <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Sermon Guide engine</div>
-              <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet"}</div>
-            </div>
-            <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Congregational Lens</div>
-              <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
-            </div>
-            <button class="pf-btn" data-action="open-lens">Open</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Appearance</div>
-              <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
-            </div>
-            <button class="pf-btn" data-action="toggle-theme">Toggle</button>
-          </div>
-          <div class="pf-account-actions">
-            <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
-          </div>
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="onboard-start" data-tab="profile">Start setup</button>
+          <button class="pf-btn" data-action="onboard-skip">Skip for now</button>
+          <button class="pf-btn pf-btn-ghost" data-action="onboard-skip">Use basic defaults</button>
         </div>
       </div>
     </div>
+  `;
+}
+
+function renderProfile(active) {
+  const tab = PROFILE_TABS.some(([key]) => key === ui.profileTab) ? ui.profileTab : "profile";
+  const headings = {
+    profile: ["Preaching Profile", "Shape PreachFlow around the way you prepare, preach, and lead through the Word."],
+    guide: ["Sermon Guide", "Set the posture and boundaries for how Sermon Guide supports your preparation."],
+    defaults: ["Defaults", "Sermon and output defaults, so every sermon starts closer to your real workflow."],
+    account: ["Your account", "Identity, sign-in, sync, and settings."],
+    privacy: ["Privacy", "What PreachFlow stores, what it never shares, and what belongs elsewhere."],
+  };
+  const [heading, sub] = headings[tab];
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <div style="margin-bottom:12px;"><button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to app</button></div>
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">${escapeHtml(ui.auth.user?.email || "Profile")}</span>
+        <h1 class="pf-h1">${escapeHtml(heading)}</h1>
+        <p class="pf-page-sub">${escapeHtml(sub)}</p>
+      </div>
+      <div class="pf-subtabs" style="margin-bottom:22px;">
+        ${PROFILE_TABS.map(([key, label]) => `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="profile-tab" data-tab="${key}">${label}</button>`).join("")}
+      </div>
+      ${tab === "profile" ? renderProfileTab() : ""}
+      ${tab === "guide" ? renderProfileGuideTab() : ""}
+      ${tab === "defaults" ? renderProfileDefaultsTab() : ""}
+      ${tab === "account" ? renderProfileAccountTab(active) : ""}
+      ${tab === "privacy" ? renderProfilePrivacyTab() : ""}
+    </div>
+  `;
+}
+
+function renderProfileTab() {
+  const profile = state.preachingProfile;
+  return `
+    <p class="pf-page-sub" style="margin-bottom:18px;">Your Preaching Profile helps PreachFlow remember your sermon defaults, preparation rhythm, review standards, and preferred ministry outputs — so every sermon starts closer to your real workflow. Everything here is optional and editable anytime.</p>
+
+    ${profileSection("Preaching role", "Who is preaching, where, and how often.", `
+      <div class="pf-form-grid">
+        ${profileSelect("role", "Role or title", PROFILE_OPTIONS.role)}
+        ${profileSelect("context", "Primary preaching context", PROFILE_OPTIONS.context)}
+        ${profileSelect("cadence", "Preaching cadence", PROFILE_OPTIONS.cadence)}
+        ${profileSelect("day", "Default preaching day", PROFILE_OPTIONS.day)}
+      </div>
+    `)}
+
+    ${profileSection("Homiletical preferences", "How you naturally build a sermon. Sermon Guide respects these instead of pushing a generic method.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("style", "Primary preaching style", PROFILE_OPTIONS.style)}
+        ${profileSelect("outlinePref", "Outline preference", PROFILE_OPTIONS.outlinePref)}
+        ${profileSelect("bigIdeaStyle", "Big idea style", PROFILE_OPTIONS.bigIdeaStyle)}
+        ${profileSelect("christConnection", "Christ connection preference", PROFILE_OPTIONS.christConnection)}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Application emphasis</label>
+      ${renderChipGroup("profile", "applicationEmphasis", PROFILE_APPLICATION_EMPHASES, profile.applicationEmphasis)}
+    `)}
+
+    ${profileSection("Theological and ministry convictions", "The stream you preach from and the values your ministry carries.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileInput("tradition", "Theological tradition or stream", "e.g. Reformed Baptist, Wesleyan, non-denominational…")}
+        ${profileInput("confession", "Confessional alignment", "e.g. 1689, Westminster, statement of faith…")}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Ministry values</label>
+      ${renderChipGroup("profile", "values", PROFILE_VALUES, profile.values)}
+      <div class="pf-ws-field" style="margin-top:14px;">
+        <label class="pf-label">Guardrails — lines Sermon Guide must not cross</label>
+        <textarea class="pf-ws-input" rows="5" data-action="profile-field" data-key="guardrails" placeholder="${attr(PROFILE_GUARDRAIL_HINT)}">${escapeHtml(profile.guardrails)}</textarea>
+      </div>
+    `)}
+
+    ${profileSection("Review rubric", "Before you preach, PreachFlow checks the sermon against this list — your standards, not generic ones.", `
+      <div class="pf-rubric-grid">
+        ${PROFILE_RUBRIC.map(
+          ([key, label]) => `
+            <label class="pf-toggle-row" style="margin-top:0;">
+              <input type="checkbox" data-action="rubric-toggle" data-key="${attr(key)}" ${rubricChecked(key) ? "checked" : ""} />
+              <span>${escapeHtml(label)}</span>
+            </label>
+          `,
+        ).join("")}
+      </div>
+      ${profile.rubricCustom.length ? `<div class="pf-filter-chips" style="margin:12px 0 0;">${profile.rubricCustom.map((item, index) => `<span class="pf-chip active">${escapeHtml(item)} <button class="pf-chip-x" data-action="rubric-remove" data-index="${index}" aria-label="Remove ${attr(item)}">✕</button></span>`).join("")}</div>` : ""}
+      <div class="pf-chip-add" style="margin-top:12px;">
+        <input class="pf-input" data-rubric-input placeholder="Add your own review standard…" />
+        <button type="button" class="pf-btn pf-btn-ghost" data-action="rubric-add">Add</button>
+      </div>
+    `)}
+
+    ${profileSection("Preparation rhythm", "How your week actually works — so nudges and defaults fit real life.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("prepRhythm", "Preferred prep rhythm", PROFILE_OPTIONS.prepRhythm)}
+        ${profileInput("weeklyTarget", "Ideal weekly target", "e.g. manuscript done by Thursday")}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Typical sermon-prep days</label>
+      ${renderChipGroup("profile", "prepDays", PROFILE_PREP_DAYS, profile.prepDays)}
+      <label class="pf-label" style="display:block;margin:14px 0 6px;">Common pressure points</label>
+      ${renderChipGroup("profile", "pressurePoints", PROFILE_PRESSURES, profile.pressurePoints)}
+    `)}
+
+    <p class="pf-helper">Your Preaching Profile is for sermon-prep preferences and ministry workflow defaults. Do not store confidential counseling details, private member information, or sensitive pastoral care notes here.</p>
+  `;
+}
+
+function renderProfileGuideTab() {
+  const profile = state.preachingProfile;
+  return `
+    ${profileSection("Sermon Guide posture", "How you want Sermon Guide to engage your work. It supports the process — the Word leads, and you preach.", `
+      ${renderChipGroup("profile", "posture", PROFILE_POSTURES, profile.posture)}
+    `)}
+    ${profileSection("Default behavior", "", `
+      ${profileToggle("useProfile", "Use Preaching Profile in Sermon Guide responses", "your preferences shape how it helps")}
+      ${profileToggle("useLens", "Use Congregational Lens in Sermon Guide responses", "application aimed at your actual church")}
+      ${profileToggle("pushBack", "Push back when the sermon is unclear", "honest friction, not flattery")}
+      ${profileToggle("questionsFirst", "Prefer questions before drafting", "Sermon Guide asks before it suggests")}
+      ${profileToggle("textInCharge", "Keep the text in charge", "challenge anything the passage doesn't support")}
+      ${profileToggle("noFullSections", "Avoid writing full sermon sections unless explicitly requested", "the pen stays in your hand")}
+    `)}
+    ${profileSection("Engine", "", `
+      <div class="pf-account-row" style="border:0;padding:0;">
+        <div style="flex:1;">
+          <div class="pf-account-label">Sermon Guide engine</div>
+          <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet — add one to enable Sermon Guide"}</div>
+        </div>
+        <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
+      </div>
+    `)}
+  `;
+}
+
+function renderProfileDefaultsTab() {
+  return `
+    ${profileSection("Sermon defaults", "Prefilled when you start a sermon — always editable per sermon.", `
+      <div class="pf-form-grid">
+        ${profileInput("translation", "Preferred Bible translation", "e.g. ESV, CSB, NIV, KJV")}
+        ${profileInput("length", "Default sermon length (minutes)", "40")}
+        ${profileInput("targetTime", "Target preaching time (minutes)", "40")}
+        ${profileSelect("format", "Default sermon format", PROFILE_OPTIONS.format)}
+        ${profileSelect("deliverable", "Default deliverable", PROFILE_OPTIONS.deliverable)}
+        ${profileSelect("seriesBehavior", "Default series behavior", PROFILE_OPTIONS.seriesBehavior)}
+      </div>
+    `)}
+    ${profileSection("Bible provider", "How Insert Scripture gets passage text. No scraping, no bundled copyrighted translations.", `
+      <div class="pf-account-row" style="border:0;padding:0 0 10px;">
+        <div style="flex:1;">
+          <div class="pf-account-label">Provider</div>
+          <div class="pf-account-meta">${state.bibleProvider.provider === "manual" ? "Manual paste with attribution" : `Public-domain API (${state.bibleProvider.translation})`}</div>
+        </div>
+      </div>
+      <label class="pf-toggle-row" style="margin-top:0;">
+        <input type="checkbox" data-action="bible-attribution" ${state.bibleProvider.attribution ? "checked" : ""} />
+        <span><strong>Show attribution on Scripture blocks</strong> — translation credit stays with the text</span>
+      </label>
+      <p class="pf-helper" style="margin-top:8px;">Built-in fetching covers public-domain texts (WEB, KJV). For licensed translations, use manual paste inside Insert Scripture — support for licensed API providers can plug into this setting later.</p>
+    `)}
+    ${profileSection("Output defaults", "What you usually produce from a sermon and who it's for.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("exportFormat", "Default export format", PROFILE_OPTIONS.exportFormat)}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Default production outputs</label>
+      ${renderChipGroup("profile", "productionOutputs", PROFILE_PRODUCTION_OUTPUTS, state.preachingProfile.productionOutputs)}
+      <label class="pf-label" style="display:block;margin:14px 0 6px;">Default audience outputs</label>
+      ${renderChipGroup("profile", "audienceOutputs", PROFILE_AUDIENCES, state.preachingProfile.audienceOutputs)}
+    `)}
+  `;
+}
+
+function renderProfileAccountTab(active) {
+  return `
+    ${profileSection("Account", "Identity, sign-in, security, integrations, and settings live here — your Preaching Profile is about your workflow.", `
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Cloud sync</div>
+          <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
+        </div>
+        <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Congregational Lens</div>
+          <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
+        </div>
+        <button class="pf-btn" data-action="open-lens">Open</button>
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Google Docs</div>
+          <div class="pf-account-meta">${ui.google.connected ? "Connected" : ui.google.configured ? "Not connected" : "Not configured"}</div>
+        </div>
+        ${active ? `<button class="pf-btn" data-action="open-google-docs">Manage</button>` : ""}
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Appearance</div>
+          <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
+        </div>
+        <button class="pf-btn" data-action="toggle-theme">Toggle</button>
+      </div>
+      <div class="pf-account-actions">
+        <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
+      </div>
+    `)}
+  `;
+}
+
+function renderProfilePrivacyTab() {
+  return `
+    ${profileSection("Where your data lives", "", `
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Your sermons, profile, and lens are saved on this device, and — when you're signed in — synced to your own account's cloud storage. Sermon Guide requests send only the sermon context needed for the request, using the API key you added on this device.</p>
+    `)}
+    ${profileSection("What is never shared", "", `
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Share links never include your Preaching Profile, your account details, your Congregational Lens (unless you intentionally include a broad ministry field), your private notes, or your Post-Sermon Debrief — unless you explicitly turn a section on.</p>
+    `)}
+    ${profileSection("What belongs elsewhere", "", `
+      <p class="pf-ministry-desc">PreachFlow is for sermon preparation and ministry workflow. Do not store confidential counseling details, private member information, or sensitive pastoral care notes anywhere in the app — the Preaching Profile, Congregational Lens, and Debrief all carry this same rule.</p>
+    `)}
   `;
 }
 
@@ -1264,7 +1748,8 @@ function renderMain(active) {
   if (state.view === "series") return renderSeriesPage();
   if (state.view === "diet") return renderDietPage();
   if (state.view === "editor") return renderEditorPage(active);
-  if (state.view === "practice") return renderPracticePage(active);
+  if (state.view === "slides") return renderSlideBuilder(active);
+  if (state.view === "sharing") return renderSharingCenter(active);
   if (state.view === "library") return renderLibrary();
   if (state.view === "debrief") return renderDebriefPage();
   if (active) return renderWorkspace(active);
@@ -1378,6 +1863,25 @@ function renderEmpty() {
   `;
 }
 
+// Suggest the next occurrence of the profile's default preaching day.
+function nextPreachingDate() {
+  const day = state.preachingProfile.day;
+  const target = day === "Sunday" ? 0 : day === "Wednesday" ? 3 : null;
+  if (target === null) return "";
+  const now = new Date();
+  const delta = (target - now.getDay() + 7) % 7 || 7;
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + delta);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+}
+
+// The sermon form's deliverable is manuscript-or-notes; map the profile's
+// richer format preference onto it.
+function profileDefaultFormat() {
+  return state.preachingProfile.format === "Full manuscript" || !state.preachingProfile.format
+    ? "Full manuscript"
+    : "Preaching notes";
+}
+
 function renderNewSermon() {
   return `
     <div class="pf-page pf-page-narrow pf-fade">
@@ -1399,11 +1903,11 @@ function renderNewSermon() {
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-date">Preaching date</label>
-            <input id="new-date" class="pf-input" type="date" name="date" />
+            <input id="new-date" class="pf-input" type="date" name="date" value="${attr(nextPreachingDate())}" />
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-length">Length (min)</label>
-            <input id="new-length" class="pf-input" name="length" inputmode="numeric" value="${attr(DEFAULT_DRAFT.length)}" />
+            <input id="new-length" class="pf-input" name="length" inputmode="numeric" value="${attr(state.preachingProfile.length || DEFAULT_DRAFT.length)}" />
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-series">Series</label>
@@ -1412,8 +1916,8 @@ function renderNewSermon() {
           <div class="pf-field">
             <label class="pf-label" for="new-format">Deliverable</label>
             <select id="new-format" class="pf-select" name="format">
-              <option>Full manuscript</option>
-              <option>Preaching notes</option>
+              <option ${profileDefaultFormat() === "Full manuscript" ? "selected" : ""}>Full manuscript</option>
+              <option ${profileDefaultFormat() === "Preaching notes" ? "selected" : ""}>Preaching notes</option>
             </select>
           </div>
         </div>
@@ -1484,6 +1988,269 @@ function estPreachMinutes(words) {
   return words ? Math.max(1, Math.round(words / state.practiceWpm)) : 0;
 }
 
+// ---- Sermon Guide refinement tools ----
+// Selection- and section-based helps. Every result is a suggestion card the
+// preacher can copy, insert as a note, or dismiss — the manuscript is never
+// overwritten.
+const REFINE_ACTIONS = [
+  ["clarify", "Clarify this section", "Suggest how to make this clearer without changing the preacher's voice. Point at what is unclear and offer a clarified rendering as a suggestion — do not expand it."],
+  ["tighten", "Tighten wording", "Suggest a tighter version: remove filler, repetition, and unnecessary length while keeping the preacher's voice and conviction. Show the tightened text as a suggestion."],
+  ["transition", "Strengthen transition", "Evaluate the transition into and out of this section and suggest one or two stronger ways to connect the movements. Do not rewrite the sections themselves."],
+  ["check-text", "Check against the text", "Ask whether each claim here is clearly supported by the passage being preached. Flag anything the text does not say, and note what would need to change to stay faithful."],
+  ["big-idea", "Pressure-test the big idea", "Evaluate the sermon's big idea: faithful to the passage, clear, memorable, text-driven? Push where it is weak. Affirm what is genuinely strong."],
+  ["application", "Strengthen application", "Evaluate the application: specific and pastoral, or generic and religious? Suggest how to make it concrete for real people this week — name the kinds of people it should reach."],
+  ["gospel", "Check gospel clarity", "Evaluate whether grace, repentance, faith, and Christ come through clearly here — without forcing the text. Note what is missing or muddy."],
+  ["weak-spots", "Identify weak spots", "Find unclear logic, unsupported claims, thin application, overexplaining, missing transitions, or a vague call to respond. List them plainly with a pointer for each."],
+  ["preach-ready", "Make this more preach-ready", "Suggest how to improve this for oral delivery: shorter sentences, spoken cadence, concrete words — in the preacher's own voice, offered as a suggestion."],
+  ["questions", "Create discussion questions", "Draft four to six group discussion questions from this section: observation, meaning, application, and heart. Questions only — no commentary."],
+];
+
+async function runRefine(kind) {
+  if (!requireOpenAIKey()) return;
+  const active = getActive();
+  if (!active) return;
+  const def = REFINE_ACTIONS.find(([key]) => key === kind);
+  if (!def) return;
+  const selection = window.getSelection();
+  const raw = selection ? selection.toString().trim() : "";
+  const inEditor = raw && selection.anchorNode?.parentElement?.closest('[data-action="phase-editor"]');
+  const source = inEditor ? raw : phaseNoteText(active, manuscriptPhaseDef()).slice(0, 4500);
+  const scope = inEditor ? "selected section" : "whole sermon";
+  if (!source.trim()) {
+    showBanner("Write something first — refinement works on your words.");
+    return;
+  }
+  ui.refine = { loading: true, label: def[1], text: "", scope };
+  render();
+  try {
+    const response = await fetch("./api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...openAIHeaders() },
+      body: JSON.stringify({
+        context: `${sermonDraftContext(active)}\n\nTHE PREACHER'S TEXT (${scope}):\n${source}`,
+        prompt: `${def[2]} Respond as a brief, concrete suggestion for the preacher to weigh — clearly theirs to accept or reject. Never present your words as the sermon itself.`,
+      }),
+    });
+    const data = await response.json();
+    ui.refine = { loading: false, label: def[1], text: data.text || "No suggestion came back — try again.", scope };
+  } catch {
+    ui.refine = null;
+    showBanner("Could not reach Sermon Guide.");
+  }
+  render();
+}
+
+function renderRefineCard() {
+  const refine = ui.refine;
+  if (!refine) return "";
+  return `
+    <section class="pf-card-box pf-refine-card" aria-live="polite">
+      <div class="pf-checklist-head" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · ${escapeHtml(refine.label)}</span>
+          <p class="pf-helper" style="margin-top:2px;">Reviewing the ${escapeHtml(refine.scope)} — a suggestion, never an overwrite.</p>
+        </div>
+        <button class="pf-btn pf-btn-ghost" data-action="refine-dismiss">Dismiss</button>
+      </div>
+      ${
+        refine.loading
+          ? `<p class="pf-ministry-desc">Weighing your words…</p>`
+          : `
+        <div class="pf-review-result" style="margin-top:6px;">${escapeHtml(refine.text)}</div>
+        <div class="pf-modal-actions" style="margin-top:12px;">
+          <button class="pf-btn" data-action="refine-copy">Copy suggestion</button>
+          <button class="pf-btn pf-btn-ghost" data-action="refine-insert-note">Insert as personal note</button>
+        </div>`
+      }
+    </section>
+  `;
+}
+
+// ---- Insert Scripture + structured blocks ----
+// Reference parser: "John 3:16", "John 3:16-18", "Psalm 23", "Romans 8:1-4",
+// "1 Corinthians 13:1-7". Validated against the canonical book list.
+function parseBibleRef(input) {
+  const clean = String(input || "").trim().replace(/\s+/g, " ");
+  const match = clean.match(/^((?:[1-3]\s)?[A-Za-z][A-Za-z .]+?)\s+(\d{1,3})(?::(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?$/);
+  if (!match) return null;
+  const book = passageBook(match[1]);
+  if (!book) return null;
+  return {
+    book: book.name,
+    chapter: Number(match[2]),
+    verseStart: match[3] ? Number(match[3]) : null,
+    verseEnd: match[4] ? Number(match[4]) : null,
+    reference: `${book.name} ${match[2]}${match[3] ? `:${match[3]}${match[4] ? `-${match[4]}` : ""}` : ""}`,
+  };
+}
+
+// Public-domain provider (bible-api.com — WEB and KJV only).
+async function fetchScripturePassage(reference, translation) {
+  const url = `https://bible-api.com/${encodeURIComponent(reference)}?translation=${translation === "KJV" ? "kjv" : "web"}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Provider returned ${response.status}`);
+  const data = await response.json();
+  if (!data.text) throw new Error("Passage not found");
+  return {
+    reference: data.reference || reference,
+    text: String(data.text).replace(/\s*\n\s*/g, " ").trim(),
+    attribution: translation === "KJV" ? "KJV · Public domain" : "World English Bible · Public domain",
+  };
+}
+
+function scriptureBlockHtml({ reference, translation, text, attribution, slide, pulpit, production }) {
+  return (
+    `<div class="pf-b pf-b-scripture" data-ref="${attr(reference)}" data-translation="${attr(translation)}"` +
+    ` data-slide="${slide ? "1" : "0"}" data-pulpit="${pulpit ? "1" : "0"}" data-production="${production ? "1" : "0"}">` +
+    `<p class="pf-scripture-ref">${escapeHtml(reference)} · ${escapeHtml(translation)}</p>` +
+    `<p class="pf-scripture-text">${escapeHtml(text)}</p>` +
+    (state.bibleProvider.attribution && attribution ? `<p class="pf-scripture-attr">${escapeHtml(attribution)}</p>` : "") +
+    `</div><p><br></p>`
+  );
+}
+
+// Block palette: structured, styled blocks inserted into the manuscript.
+// Points/subpoints are real headings so Pulpit View and slides see them.
+const EDITOR_BLOCKS = [
+  ["point", "Sermon Point"],
+  ["sub", "Subpoint"],
+  ["illustration", "Illustration"],
+  ["application", "Application"],
+  ["transition", "Transition"],
+  ["prayer", "Prayer"],
+  ["quote", "Quote"],
+  ["cue", "Media Cue"],
+  ["slide", "Slide Cue"],
+  ["note", "Personal Note"],
+  ["public", "Public Note"],
+  ["respond", "Call to Respond"],
+];
+
+function editorBlockHtml(kind) {
+  if (kind === "point") return `<h3>New point…</h3><p><br></p>`;
+  if (kind === "sub") return `<h4>Subpoint…</h4><p><br></p>`;
+  if (kind === "slide") {
+    return `<div class="pf-b pf-b-slide" data-slide="1"><p class="pf-slide-title">Slide: title…</p><p>On-screen text…</p></div><p><br></p>`;
+  }
+  const labels = Object.fromEntries(EDITOR_BLOCKS);
+  return `<div class="pf-b pf-b-${attr(kind)}"><p>${escapeHtml(labels[kind] || "Note")}…</p></div><p><br></p>`;
+}
+
+// Remember where the cursor was in the manuscript editor so modal-driven
+// inserts land in the right place.
+let savedEditorRange = null;
+
+function saveEditorRange() {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  const editor = range.startContainer.parentElement?.closest('[data-action="phase-editor"]');
+  savedEditorRange = editor ? range.cloneRange() : null;
+}
+
+function insertIntoEditor(html) {
+  const editor = document.querySelector('[data-action="phase-editor"]');
+  if (!editor) {
+    showBanner("Open the Sermon Editor first.");
+    return;
+  }
+  editor.focus({ preventScroll: true });
+  // execCommand("insertHTML") flattens block markup into styled spans, so
+  // insert real nodes at the nearest top-level block boundary instead.
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const fragment = template.content;
+  const lastNode = fragment.lastChild;
+  let anchor = savedEditorRange && editor.contains(savedEditorRange.startContainer) ? savedEditorRange.startContainer : null;
+  while (anchor && anchor.parentNode && anchor.parentNode !== editor) anchor = anchor.parentNode;
+  if (anchor && anchor.parentNode === editor) {
+    anchor.after(fragment);
+  } else {
+    editor.appendChild(fragment);
+  }
+  if (lastNode) {
+    const selection = window.getSelection();
+    const caret = document.createRange();
+    caret.setStartAfter(lastNode);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
+  }
+  savedEditorRange = null;
+  persistPhaseEditor(editor);
+  updateEditorStats();
+}
+
+function renderScriptureModal() {
+  const modal = ui.scripture;
+  const provider = state.bibleProvider;
+  const manualOnly = provider.provider === "manual";
+  return `
+    <div class="pf-overlay" data-action="scripture-close" data-overlay>
+      <div class="pf-modal" data-stop style="max-width:560px;">
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow pf-eyebrow-brand">Insert Scripture</span>
+        </div>
+        <div class="pf-form-grid" style="margin-bottom:12px;">
+          <div class="pf-field full" style="margin-bottom:0;">
+            <label class="pf-label" for="scripture-ref">Reference</label>
+            <input id="scripture-ref" class="pf-input" data-action="scripture-ref" value="${attr(modal.ref)}" placeholder="John 3:16 · Psalm 23 · Romans 8:1-4" />
+          </div>
+          <div class="pf-field" style="margin-bottom:0;">
+            <label class="pf-label">Translation</label>
+            <select class="pf-select" data-action="scripture-translation">
+              ${["WEB", "KJV"].map((code) => `<option ${provider.translation === code ? "selected" : ""}>${code}</option>`).join("")}
+              <option ${manualOnly ? "selected" : ""} value="manual">Other (paste below)</option>
+            </select>
+          </div>
+          <div class="pf-field" style="margin-bottom:0;display:flex;align-items:flex-end;">
+            <button class="pf-btn pf-btn-primary" data-action="scripture-fetch" ${modal.loading ? "disabled" : ""} style="width:100%;">${modal.loading ? "Fetching…" : "Fetch passage"}</button>
+          </div>
+        </div>
+        ${modal.error ? `<p class="pf-helper" style="color:var(--ofc-danger);margin-bottom:10px;">${escapeHtml(modal.error)} You can paste the passage below with attribution instead.</p>` : ""}
+        <div class="pf-ws-field">
+          <label class="pf-label">Passage text ${manualOnly ? "(paste from your licensed copy)" : ""}</label>
+          <textarea class="pf-ws-input" rows="5" data-action="scripture-text" placeholder="Fetched text appears here — or paste the passage from a translation you have rights to use.">${escapeHtml(modal.text)}</textarea>
+        </div>
+        <div class="pf-scripture-flags">
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="slide" ${modal.slide ? "checked" : ""} /> <span>Include in slides</span></label>
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="pulpit" ${modal.pulpit ? "checked" : ""} /> <span>Show in Pulpit View</span></label>
+          <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="production" ${modal.production ? "checked" : ""} /> <span>Include in Production Link</span></label>
+        </div>
+        <p class="pf-helper" style="margin:8px 0 0;">Built-in fetching serves public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use — attribution is kept with the block.</p>
+        <div class="pf-modal-actions">
+          <button class="pf-btn" data-action="scripture-close">Cancel</button>
+          <button class="pf-btn pf-btn-primary" data-action="scripture-insert" ${modal.text.trim() ? "" : "disabled"}>Insert Scripture block</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function fetchScriptureIntoModal() {
+  const parsed = parseBibleRef(ui.scripture.ref);
+  if (!parsed) {
+    ui.scripture.error = "That reference didn't parse — try the form “John 3:16-18”.";
+    render();
+    return;
+  }
+  ui.scripture.ref = parsed.reference;
+  ui.scripture.loading = true;
+  ui.scripture.error = "";
+  render();
+  try {
+    const passage = await fetchScripturePassage(parsed.reference, state.bibleProvider.translation);
+    ui.scripture.text = passage.text;
+    ui.scripture.attribution = passage.attribution;
+    ui.scripture.ref = passage.reference;
+  } catch (error) {
+    ui.scripture.error = `Could not fetch the passage (${error.message || "network error"}).`;
+  } finally {
+    ui.scripture.loading = false;
+    render();
+  }
+}
+
 function renderEditorPage(active) {
   if (!active) return renderNeedSermon("The Sermon Editor writes the manuscript of your current sermon — start one first.");
   const words = manuscriptWordCount(active);
@@ -1501,6 +2268,8 @@ function renderEditorPage(active) {
         <div class="pf-editor-actions">
           <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync"><span class="pf-sync-dot"></span>${escapeHtml(sync.text)}</button>
           <button class="pf-btn" data-view="practice">Practice ▸</button>
+          <button class="pf-btn" data-view="pulpit">Pulpit View ▸</button>
+          <button class="pf-btn pf-btn-ghost" data-view="slides">Slides</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-doc">Word</button>
         </div>
@@ -1512,6 +2281,7 @@ function renderEditorPage(active) {
         <button class="pf-inline-link" data-view="workspace">back to the Workspace</button>
       </div>
       ${renderFormatToolbar({ full: true })}
+      ${renderRefineCard()}
       <div
         class="pf-editor pf-doc-canvas"
         contenteditable="true"
@@ -1564,41 +2334,242 @@ function fmtClock(totalSeconds) {
   return `${h ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 
-function renderPracticePage(active) {
-  if (!active) return renderNeedSermon("Practice mode reads the manuscript of your current sermon — start one first.");
-  const words = manuscriptWordCount(active);
-  const est = estPreachMinutes(words);
-  const target = Number(active.length) || 0;
-  const html = sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()));
-  const running = ui.practice.running;
-  const over = target && ui.practice.seconds > target * 60;
-  return `
-    <div class="pf-page pf-page-wide pf-fade pf-practice-page">
-      <div class="pf-practice-bar">
-        <div class="pf-practice-timer ${over ? "over" : ""}" data-practice-timer>${fmtClock(ui.practice.seconds)}</div>
-        <div class="pf-practice-controls">
-          <button class="pf-btn pf-btn-primary" data-action="practice-toggle">${running ? "Pause" : ui.practice.seconds ? "Resume" : "Start run-through"}</button>
-          <button class="pf-btn pf-btn-ghost" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"}>Reset</button>
-        </div>
-        <div class="pf-practice-meta">
-          <span class="${target && est > target ? "pf-practice-over-est" : ""}">≈ ${est || "—"} min · ${words.toLocaleString()} words</span>
-          <select class="pf-select pf-practice-pace" data-action="practice-pace" title="Speaking pace">
-            ${PRACTICE_WPM_CHOICES.map((wpm) => `<option value="${wpm}" ${wpm === state.practiceWpm ? "selected" : ""}>${wpm} wpm</option>`).join("")}
-          </select>
-          <span>target ${target ? `${target} min` : "—"}</span>
-        </div>
-        <div class="pf-practice-font">
-          <button class="pf-font-btn" data-action="practice-font" data-delta="-1" ${state.practiceFont <= -2 ? "disabled" : ""} title="Smaller text">A−</button>
-          <button class="pf-font-btn" data-action="practice-font" data-delta="1" ${state.practiceFont >= 3 ? "disabled" : ""} title="Larger text">A+</button>
+// ---- Pulpit View ----
+// A focused preaching interface: Practice mode to rehearse against the
+// clock, Live mode to take to the pulpit. Read-only by design — Sermon
+// Guide never interrupts live preaching.
+const PULPIT_FONT_SIZES = [18, 20, 23, 27, 32, 38];
+const PULPIT_LINE_HEIGHTS = { compact: 1.55, comfortable: 1.75, spacious: 2.0 };
+const PULPIT_MARKS = [
+  ["strong", "Strong"],
+  ["rushed", "Rushed"],
+  ["unclear", "Unclear"],
+  ["long", "Too long"],
+];
+
+// Split the manuscript into preachable sections at headings; fall back to
+// the outline, then to a single section.
+function pulpitSections(sermon) {
+  const html = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const raw = [];
+  let current = { title: "", nodes: [] };
+  for (const node of [...template.content.childNodes]) {
+    const tag = node.nodeType === 1 ? node.tagName : "";
+    if (tag === "H2" || tag === "H3") {
+      if (current.title || current.nodes.length) raw.push(current);
+      current = { title: node.textContent.trim(), nodes: [] };
+    } else {
+      current.nodes.push(node);
+    }
+  }
+  if (current.title || current.nodes.length) raw.push(current);
+  const sections = raw
+    .map((section, index) => {
+      const wrap = document.createElement("div");
+      section.nodes.forEach((node) => wrap.appendChild(node));
+      return {
+        title: section.title || (index === 0 ? "Opening" : `Section ${index + 1}`),
+        html: wrap.innerHTML,
+      };
+    })
+    .filter((section) => section.title.trim() || richHtmlToText(section.html));
+  if (sections.length) return sections;
+  const movements = (sermon.outline || []).filter((movement) => movement.title.trim());
+  if (movements.length) {
+    return movements.map((movement) => ({
+      title: movement.title,
+      html: movement.sub ? `<p>${escapeHtml(movement.sub)}</p>` : "",
+    }));
+  }
+  return [];
+}
+
+function pulpitReady(sermon) {
+  return Boolean(sermon && sermon.passage.trim() && pulpitSections(sermon).length);
+}
+
+function pulpitFontPx() {
+  return PULPIT_FONT_SIZES[state.pulpitPrefs.fontStep + 2] || 23;
+}
+
+function fmtWallClock(date) {
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function pulpitTargetEnd(sermon) {
+  const target = Number(sermon.length) || 0;
+  if (!target || !ui.practice.running || !ui.pulpit.startedAt) return "";
+  const end = new Date(new Date(ui.pulpit.startedAt).getTime() + target * 60000);
+  return fmtWallClock(end);
+}
+
+function renderPulpitView(active) {
+  if (!active) {
+    return `<div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">${renderNeedSermon("Pulpit View opens your current sermon — start one first.")}</div>`;
+  }
+  const sections = pulpitSections(active);
+  if (!sections.length) {
+    return `
+      <div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">
+        <div class="pf-empty">Pulpit View opens once this sermon has content — a manuscript with headings, or an outline.
+          <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button class="pf-btn pf-btn-primary" data-view="editor">Write the manuscript</button>
+            <button class="pf-btn" data-view="workspace">Back to the Workspace</button>
+          </div>
         </div>
       </div>
-      ${
-        words
-          ? `<div class="pf-practice-doc" style="font-size:${practiceFontPx()}px;">${html}</div>`
-          : `<div class="pf-empty" style="margin-top:20px;">No manuscript yet. Write it in the <button class="pf-inline-link" data-view="editor">Sermon Editor</button> (or the Manuscript phase) and come back to rehearse.</div>`
-      }
-      <p class="pf-helper" style="margin-top:16px;">The clock turns red once you pass your target time. The estimate assumes ${state.practiceWpm} words per minute — adjust the pace to match how you actually preach. Runs of a minute or more are remembered for the Delivery Prep checklist.</p>
+    `;
+  }
+
+  const prefs = state.pulpitPrefs;
+  const mode = ui.pulpit.mode === "practice" ? "practice" : "live";
+  const index = Math.min(Math.max(0, ui.pulpit.section), sections.length - 1);
+  const section = sections[index];
+  const next = sections[index + 1] || null;
+  const target = Number(active.length) || 0;
+  const words = manuscriptWordCount(active);
+  const over = target && ui.practice.seconds > target * 60;
+  const bodyStyle = `font-size:${pulpitFontPx()}px;line-height:${PULPIT_LINE_HEIGHTS[prefs.lineHeight]};`;
+  const mark = active.practice.marks?.[index] || "";
+
+  return `
+    <div class="pf-pulpit theme-${attr(prefs.theme)} ${prefs.width === "narrow" ? "narrow" : "wide"} ${prefs.showNotes ? "" : "hide-notes"} ${prefs.showCues ? "" : "hide-cues"} ${prefs.showRefs ? "" : "hide-refs"} controls-on" data-pulpit>
+      <header class="pf-pulpit-bar pf-pulpit-controls">
+        <button class="pf-pulpit-btn" data-action="pulpit-exit" aria-label="Leave Pulpit View">&larr; Exit</button>
+        <div class="pf-pulpit-modes" role="tablist" aria-label="Pulpit mode">
+          <button class="pf-pulpit-chip ${mode === "practice" ? "active" : ""}" data-action="pulpit-mode" data-mode="practice">Practice</button>
+          <button class="pf-pulpit-chip ${mode === "live" ? "active" : ""}" data-action="pulpit-mode" data-mode="live">Live</button>
+        </div>
+        <span class="pf-pulpit-id">${escapeHtml(active.passage)}${active.title ? ` — ${escapeHtml(active.title)}` : ""}</span>
+        <div class="pf-pulpit-tools">
+          <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="-1" ${prefs.fontStep <= -2 ? "disabled" : ""} aria-label="Smaller text">A−</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="1" ${prefs.fontStep >= 3 ? "disabled" : ""} aria-label="Larger text">A+</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-theme" aria-label="Switch theme" title="Theme: ${attr(prefs.theme)}">◐</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-focus" aria-label="Toggle focus mode" title="${prefs.focusMode ? "One section at a time" : "Continuous scroll"}">${prefs.focusMode ? "☰" : "▭"}</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-fullscreen" aria-label="Fullscreen">⛶</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-settings" aria-label="Display settings" aria-haspopup="true">⚙</button>
+        </div>
+      </header>
+
+      ${ui.pulpit.showSettings ? renderPulpitSettings(prefs) : ""}
+      ${prefs.showProgress ? `<div class="pf-pulpit-progress" aria-hidden="true"><i style="width:${Math.round(((index + 1) / sections.length) * 100)}%"></i></div>` : ""}
+
+      <main class="pf-pulpit-body" style="${bodyStyle}" data-pulpit-body>
+        <div class="pf-pulpit-head">
+          <span class="pf-pulpit-passage">${escapeHtml(active.passage)}</span>
+          ${worksheetValue(active, "aim", "burden").trim() ? `<span class="pf-pulpit-idea">${escapeHtml(worksheetValue(active, "aim", "burden"))}</span>` : ""}
+        </div>
+        ${
+          prefs.focusMode
+            ? `
+              <section class="pf-pulpit-section" aria-label="${attr(section.title)}">
+                <h2 class="pf-pulpit-title">${escapeHtml(section.title)}</h2>
+                ${section.html}
+              </section>
+              ${next ? `<footer class="pf-pulpit-next">Next: ${escapeHtml(next.title)}</footer>` : `<footer class="pf-pulpit-next">Last section — land it.</footer>`}
+            `
+            : sections
+                .map(
+                  (item, itemIndex) => `
+                    <section class="pf-pulpit-section ${itemIndex === index ? "current" : ""}" id="pulpit-section-${itemIndex}">
+                      <h2 class="pf-pulpit-title">${escapeHtml(item.title)}</h2>
+                      ${item.html}
+                    </section>
+                  `,
+                )
+                .join("")
+        }
+      </main>
+
+      <button class="pf-pulpit-zone left" data-action="pulpit-prev" aria-label="Previous section"></button>
+      <button class="pf-pulpit-zone right" data-action="pulpit-next" aria-label="Next section"></button>
+
+      <footer class="pf-pulpit-bar bottom pf-pulpit-controls">
+        <div class="pf-pulpit-nav">
+          <button class="pf-pulpit-btn" data-action="pulpit-prev" ${index === 0 ? "disabled" : ""}>‹ Prev</button>
+          <span class="pf-pulpit-count">${index + 1} / ${sections.length}</span>
+          <button class="pf-pulpit-btn" data-action="pulpit-next" ${index >= sections.length - 1 ? "disabled" : ""}>Next ›</button>
+        </div>
+        ${
+          prefs.showTimer
+            ? `
+          <div class="pf-pulpit-timing">
+            <button class="pf-pulpit-timer ${over ? "over" : ""}" data-action="practice-toggle" data-practice-timer title="${ui.practice.running ? "Pause" : "Start"} (T)">${fmtClock(ui.practice.seconds)}</button>
+            <span class="pf-pulpit-meta"><span data-pulpit-clock>${fmtWallClock(new Date())}</span>${target ? ` · target ${target} min${pulpitTargetEnd(active) ? ` · ends ${pulpitTargetEnd(active)}` : ""}` : ""}</span>
+            <button class="pf-pulpit-btn" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"} aria-label="Reset timer">↺</button>
+          </div>`
+            : ""
+        }
+        ${
+          mode === "practice"
+            ? `
+          <div class="pf-pulpit-marks" role="group" aria-label="Mark this section">
+            ${PULPIT_MARKS.map(([key, label]) => `<button class="pf-pulpit-chip ${mark === key ? "active" : ""}" data-action="pulpit-mark" data-mark="${key}">${label}</button>`).join("")}
+          </div>`
+            : `<span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "—"} min</span>`
+        }
+      </footer>
+
+      ${mode === "practice" ? renderPulpitPracticePanel(active) : ""}
     </div>
+  `;
+}
+
+function renderPulpitSettings(prefs) {
+  const toggles = [
+    ["showNotes", "Show personal notes"],
+    ["showCues", "Show slide cues"],
+    ["showRefs", "Show Scripture references"],
+    ["showTimer", "Show timer"],
+    ["showProgress", "Show progress"],
+  ];
+  return `
+    <div class="pf-pulpit-settings" data-stop>
+      <div class="pf-pulpit-settings-row">
+        <span>Line height</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-lineheight">${escapeHtml(prefs.lineHeight)}</button>
+      </div>
+      <div class="pf-pulpit-settings-row">
+        <span>Reading column</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-width">${prefs.width === "narrow" ? "narrow" : "wide"}</button>
+      </div>
+      <div class="pf-pulpit-settings-row">
+        <span>Pace</span>
+        <select class="pf-select pf-practice-pace" data-action="practice-pace">
+          ${PRACTICE_WPM_CHOICES.map((wpm) => `<option value="${wpm}" ${wpm === state.practiceWpm ? "selected" : ""}>${wpm} wpm</option>`).join("")}
+        </select>
+      </div>
+      ${toggles
+        .map(
+          ([key, label]) => `
+            <label class="pf-pulpit-settings-row">
+              <span>${label}</span>
+              <input type="checkbox" data-action="pulpit-pref-toggle" data-key="${key}" ${prefs[key] ? "checked" : ""} />
+            </label>
+          `,
+        )
+        .join("")}
+      <div class="pf-pulpit-settings-row">
+        <span>Emergency change?</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-unlock-edit">Unlock quick edit</button>
+      </div>
+    </div>
+  `;
+}
+
+// Practice-mode side panel: run history + debrief notes. Never shown live.
+function renderPulpitPracticePanel(active) {
+  const practice = active.practice;
+  return `
+    <aside class="pf-pulpit-practice pf-pulpit-controls">
+      <div class="pf-pulpit-practice-head">
+        <strong>Practice</strong>
+        <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} · last ${fmtClock(practice.lastSeconds)}` : "No timed runs yet"}</span>
+      </div>
+      <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>
+    </aside>
   `;
 }
 
@@ -1700,6 +2671,7 @@ function renderLibraryCard(sermon) {
       <div class="pf-lib-actions">
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="workspace" data-sermon="${attr(sermon.id)}">Open</button>
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="editor" data-sermon="${attr(sermon.id)}">Editor</button>
+        <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="pulpit" data-sermon="${attr(sermon.id)}">Pulpit</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief</button>
         <button class="pf-btn pf-btn-ghost pf-lib-delete" data-action="delete-sermon" data-sermon="${attr(sermon.id)}" title="Delete this sermon">Delete</button>
       </div>
@@ -2138,9 +3110,10 @@ function renderCanvas(active, phase) {
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
           ${complete ? "Phase complete · undo" : checklistReady ? "Mark phase complete" : `Checklist ${checkedCount}/${phase.doItems.length} — finish to complete`}
         </button>
+        <button class="pf-btn pf-btn-ghost" data-view="pulpit">Open Pulpit View</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-impact">Impact Plan</button>
         ${debriefAvailable(active) ? `<button class="pf-btn pf-btn-ghost" data-action="open-debrief">Debrief</button>` : ""}
-        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Slides doc</button>
+        <button class="pf-btn pf-btn-ghost" data-view="slides">Slide Builder</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active-doc">Word</button>
         <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
@@ -2277,6 +3250,19 @@ function renderFormatToolbar(options = {}) {
       ${
         full
           ? `
+        <span class="pf-tool-menu-wrap">
+          <button class="pf-tool-pill" data-action="heading-menu" title="Insert a sermon block" aria-haspopup="true">+ Block ${menuChevron}</button>
+          <span class="pf-tool-menu" data-tool-menu>
+            ${EDITOR_BLOCKS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="insert-block" data-kind="${kind}">${label}</button>`).join("")}
+          </span>
+        </span>
+        <button class="pf-tool-pill" data-action="open-scripture" title="Insert a Bible passage">Scripture ＋</button>
+        <span class="pf-tool-menu-wrap">
+          <button class="pf-tool-pill" data-action="heading-menu" title="Refine with Sermon Guide" aria-haspopup="true">Refine ✦ ${menuChevron}</button>
+          <span class="pf-tool-menu" data-tool-menu>
+            ${REFINE_ACTIONS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="refine" data-kind="${kind}">${label}</button>`).join("")}
+          </span>
+        </span>
         <span class="pf-tool-menu-wrap">
           <button class="pf-tool-pill" data-action="heading-menu" title="Font size" aria-haspopup="true">Size ${menuChevron}</button>
           <span class="pf-tool-menu" data-tool-menu>
@@ -2533,6 +3519,175 @@ function generateSlidesDoc(sermon) {
     `<p><strong>Notes for production:</strong> </p>`,
   ];
   return pieces.join("");
+}
+
+// ---- Slide Builder ----
+// Slides serve preaching, not the other way around: short lines, readable
+// Scripture with attribution, and a warning when a slide gets text-heavy.
+const SLIDE_TYPES = {
+  title: "Title",
+  passage: "Passage",
+  bigidea: "Big idea",
+  point: "Point",
+  scripture: "Scripture",
+  quote: "Quote",
+  application: "Application",
+  respond: "Response",
+  closing: "Closing",
+  custom: "Custom",
+};
+
+// Build the deck from what the sermon already marked slide-worthy.
+function buildSlideDeck(sermon) {
+  const slides = [];
+  const push = (type, title, text = "", notes = "") => slides.push({ id: genId(), type, title, text, notes });
+  push("title", sermon.title || sermon.passage || "Sermon", [sermon.passage, sermon.series].filter(Boolean).join(" · "));
+  if (sermon.passage) push("passage", sermon.passage, "");
+  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
+  if (bigIdea) push("bigidea", "Big idea", bigIdea);
+
+  const template = document.createElement("template");
+  template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+  let sawHeadings = false;
+  for (const node of [...template.content.querySelectorAll("h3, .pf-b-scripture, .pf-b-slide, .pf-b-quote, .pf-b-respond")]) {
+    if (node.tagName === "H3") {
+      sawHeadings = true;
+      const text = node.textContent.trim();
+      if (text) push("point", text);
+    } else if (node.classList.contains("pf-b-scripture")) {
+      if (node.getAttribute("data-slide") !== "1") continue;
+      const ref = node.getAttribute("data-ref") || node.querySelector(".pf-scripture-ref")?.textContent || "Scripture";
+      const body = node.querySelector(".pf-scripture-text")?.textContent.trim() || "";
+      const attribution = node.querySelector(".pf-scripture-attr")?.textContent.trim() || "";
+      push("scripture", ref, body, attribution);
+    } else if (node.classList.contains("pf-b-slide")) {
+      const title = (node.querySelector(".pf-slide-title")?.textContent || "").replace(/^slide:\s*/i, "").trim();
+      const body = [...node.querySelectorAll("p:not(.pf-slide-title)")].map((p) => p.textContent.trim()).filter(Boolean).join("\n");
+      push("custom", title || "Slide", body);
+    } else if (node.classList.contains("pf-b-quote")) {
+      const body = node.textContent.trim();
+      if (body) push("quote", "Quote", body);
+    } else if (node.classList.contains("pf-b-respond")) {
+      const body = node.textContent.trim();
+      if (body) push("respond", "Respond", body);
+    }
+  }
+  if (!sawHeadings) {
+    (sermon.outline || [])
+      .filter((movement) => movement.title.trim())
+      .forEach((movement) => push("point", movement.title.trim(), movement.sub.trim()));
+  }
+  if (bigIdea) push("closing", "Walk away with this", bigIdea);
+  return { theme: sermon.slideDeck?.theme || "dark", fontScale: sermon.slideDeck?.fontScale ?? 1, builtAt: new Date().toISOString(), slides };
+}
+
+function slideTooHeavy(slide) {
+  const words = `${slide.title} ${slide.text}`.split(/\s+/).filter(Boolean).length;
+  return words > 34 || slide.text.split("\n").length > 6;
+}
+
+function deckPlainText(sermon) {
+  return sermon.slideDeck.slides
+    .map((slide, index) => {
+      const lines = [`[${index + 1} · ${SLIDE_TYPES[slide.type] || "Slide"}] ${slide.title}`];
+      if (slide.text.trim()) lines.push(slide.text.trim());
+      if (slide.notes.trim()) lines.push(`(production: ${slide.notes.trim()})`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+function deckMarkdown(sermon) {
+  return `# ${sermon.title || sermon.passage || "Sermon"} — slides\n\n${sermon.slideDeck.slides
+    .map((slide, index) => {
+      const lines = [`## ${index + 1}. ${slide.title || SLIDE_TYPES[slide.type]}`];
+      if (slide.text.trim()) lines.push(slide.text.trim());
+      if (slide.notes.trim()) lines.push(`> production: ${slide.notes.trim()}`);
+      return lines.join("\n\n");
+    })
+    .join("\n\n")}\n`;
+}
+
+function deckPrintHtml(sermon) {
+  const dark = sermon.slideDeck.theme !== "light";
+  const bg = sermon.slideDeck.theme === "brand" ? "#FF953E" : dark ? "#16181c" : "#ffffff";
+  const fg = sermon.slideDeck.theme === "brand" ? "#20242a" : dark ? "#f4f1ea" : "#20242a";
+  const scale = [0.85, 1, 1.2][sermon.slideDeck.fontScale] || 1;
+  return sermon.slideDeck.slides
+    .map(
+      (slide) => `
+        <div style="page-break-after:always;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:92vh;background:${bg};color:${fg};padding:6vh 8vw;border-radius:6px;">
+          <div style="font-size:${Math.round(14 * scale)}px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:18px;">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}</div>
+          <div style="font-weight:800;font-size:${Math.round(44 * scale)}px;line-height:1.15;margin-bottom:20px;">${escapeHtml(slide.title)}</div>
+          ${slide.text.trim() ? `<div style="font-size:${Math.round(26 * scale)}px;line-height:1.4;white-space:pre-wrap;">${escapeHtml(slide.text)}</div>` : ""}
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function ensureDeck(sermon) {
+  if (!sermon.slideDeck.slides.length) {
+    sermon.slideDeck = buildSlideDeck(sermon);
+    saveState();
+  }
+  return sermon.slideDeck;
+}
+
+function renderSlideBuilder(active) {
+  if (!active) return renderNeedSermon("Slide Builder creates slides from your current sermon — start one first.");
+  const deck = ensureDeck(active);
+  return `
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Slide Builder</span>
+        <h1 class="pf-h1">Create clean sermon slides from the message you already prepared</h1>
+        <p class="pf-page-sub">Everything you marked while writing — points, Scripture blocks, slide cues, the big idea — becomes a deck. Edit, reorder, and export; slides serve the preaching, not the other way around.</p>
+      </div>
+
+      <div class="pf-deck-controls">
+        <button class="pf-btn pf-btn-primary" data-action="deck-rebuild" title="Rebuild the deck from the sermon (replaces slide edits)">Rebuild from sermon</button>
+        <select class="pf-select" data-action="deck-theme" style="width:auto;" title="Slide theme">
+          ${["dark", "light", "brand"].map((theme) => `<option value="${theme}" ${deck.theme === theme ? "selected" : ""}>${theme[0].toUpperCase()}${theme.slice(1)} theme</option>`).join("")}
+        </select>
+        <div class="pf-practice-font" style="margin-left:0;">
+          <button class="pf-font-btn" data-action="deck-font" data-scale="0" ${deck.fontScale === 0 ? "disabled" : ""}>A−</button>
+          <button class="pf-font-btn" data-action="deck-font" data-scale="2" ${deck.fontScale === 2 ? "disabled" : ""}>A+</button>
+        </div>
+        <span style="flex:1;"></span>
+        <button class="pf-btn" data-action="deck-export-pdf">PDF deck</button>
+        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Production doc</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-export-md">Markdown</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-export-txt">Slide list (.txt)</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-copy">Copy all text</button>
+      </div>
+      <p class="pf-helper" style="margin-bottom:18px;">The slide list exports production-ready text for your presentation software. ${deck.builtAt ? `Deck built ${escapeHtml(fmtDate(deck.builtAt.slice(0, 10)))}.` : ""}</p>
+
+      <div class="pf-deck-grid">
+        ${deck.slides
+          .map(
+            (slide, index) => `
+              <div class="pf-slide-card theme-${attr(deck.theme)}" data-slide-card>
+                <div class="pf-slide-thumb scale-${deck.fontScale}">
+                  <span class="pf-slide-type">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}${slideTooHeavy(slide) ? ` <em class="pf-slide-heavy" title="This slide is text-heavy — prefer short, readable lines">Heavy text</em>` : ""}</span>
+                  <input class="pf-slide-title-input" data-action="slide-title" data-index="${index}" value="${attr(slide.title)}" placeholder="Slide title" aria-label="Slide ${index + 1} title" />
+                  <textarea class="pf-slide-text-input" data-action="slide-text" data-index="${index}" rows="3" placeholder="On-screen text" aria-label="Slide ${index + 1} on-screen text">${escapeHtml(slide.text)}</textarea>
+                </div>
+                <input class="pf-input pf-slide-notes" data-action="slide-notes" data-index="${index}" value="${attr(slide.notes)}" placeholder="Notes for production…" aria-label="Slide ${index + 1} production notes" />
+                <div class="pf-slide-tools">
+                  <span class="pf-slide-num">${index + 1}</span>
+                  <button class="pf-outline-btn" data-action="slide-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move slide up">▲</button>
+                  <button class="pf-outline-btn" data-action="slide-down" data-index="${index}" ${index === deck.slides.length - 1 ? "disabled" : ""} aria-label="Move slide down">▼</button>
+                  <button class="pf-outline-btn" data-action="slide-remove" data-index="${index}" aria-label="Remove slide">✕</button>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+        <button class="pf-slide-card pf-slide-add" data-action="slide-add">+ Add slide</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderSlidesModal(active) {
@@ -2852,6 +4007,7 @@ function ministryStore(name, sermonId) {
   const sermon = sermonId ? state.sermons.find((item) => item.id === sermonId) : getActive();
   if (name === "impact" || name === "shepherd" || name === "pack" || name === "debrief") return sermon ? sermon[name] : null;
   if (name === "lens") return state.lens;
+  if (name === "profile") return state.preachingProfile;
   if (name === "series") return getSeries();
   if (name === "series-formation") return getSeries()?.formation || null;
   if (name === "series-outputs") return getSeries()?.outputs || null;
@@ -2882,14 +4038,62 @@ PACK_CARDS.forEach((card) => {
   DRAFT_SPECS[`pack.${card.key}`] = { store: "pack", ...card };
 });
 DRAFT_SPECS["series-outputs.outputs"] = { store: "series-outputs", ...SERIES_OUTPUT_CARD };
+DRAFT_SPECS["pack.recap"] = {
+  store: "pack",
+  key: "recap",
+  title: "Public Sermon Recap",
+  desc: "A clean public-facing recap: what was preached, why it matters, and a next step.",
+  fields: ["Short recap", "Reflection questions", "Next step invitation"],
+};
 DRAFT_SPECS["pack.devotional"].instructions =
   "For each day include: a Scripture reference, a two-to-three sentence reflection, a one-line prayer, and one concrete practice.";
 DRAFT_SPECS["shepherd.sevenday"].instructions =
   "Keep each day to two or three lines the pastor could text or email to someone the sermon stirred.";
 
+// How the preacher wants help — fed to Sermon Guide behind the profile's
+// own toggles. Never included in exports or share links.
+function profileSummaryLines() {
+  const profile = state.preachingProfile || {};
+  if (profile.useProfile === false) return [];
+  const fields = [
+    ["Role / context / cadence", [profile.role, profile.context, profile.cadence].filter(Boolean).join(" · ")],
+    ["Preaching style", profile.style],
+    ["Outline preference", profile.outlinePref],
+    ["Big idea style", profile.bigIdeaStyle],
+    ["Application emphasis", (profile.applicationEmphasis || []).join(", ")],
+    ["Christ connection preference", profile.christConnection],
+    ["Tradition", [profile.tradition, profile.confession].filter(Boolean).join(" · ")],
+    ["Ministry values", (profile.values || []).join(", ")],
+    ["Preferred translation", profile.translation],
+  ].filter(([, value]) => value && String(value).trim());
+  const lines = [];
+  if (fields.length) {
+    lines.push(
+      "PREACHING PROFILE (how this pastor prepares and wants help — fit your help to it):",
+      ...fields.map(([label, value]) => `${label}: ${value}`),
+    );
+  }
+  const posture = (profile.posture || []).join("; ");
+  if (posture) lines.push(`SERMON GUIDE POSTURE: ${posture}.`);
+  const behaviors = [];
+  if (profile.pushBack) behaviors.push("push back when the work is unclear");
+  if (profile.questionsFirst) behaviors.push("prefer asking questions before suggesting");
+  if (profile.textInCharge) behaviors.push("keep the text in charge — challenge anything the passage does not support");
+  if (profile.noFullSections) behaviors.push("do not write full sermon sections unless explicitly requested");
+  if (behaviors.length) lines.push(`BEHAVIOR: ${behaviors.join("; ")}.`);
+  if ((profile.guardrails || "").trim()) {
+    lines.push("GUARDRAILS (hard constraints from the preacher — never cross these):", profile.guardrails.trim());
+  }
+  const rubric = activeRubricItems();
+  if (lines.length && rubric.length) lines.push(`REVIEW RUBRIC (when asked to review, check against these): ${rubric.join("; ")}.`);
+  if (!lines.length) return [];
+  return [...lines, ""];
+}
+
 function lensSummaryLines() {
   const lens = state.lens || {};
   if (!lens.enabled) return [];
+  if (state.preachingProfile?.useLens === false) return [];
   const fields = [
     ["Church", [lens["profile.name"], lens["profile.city"], lens["profile.size"]].filter(Boolean).join(", ")],
     ["Ministry context", [lens["profile.style"], lens["profile.context"], lens["profile.demographics"]].filter(Boolean).join(" · ")],
@@ -2920,7 +4124,7 @@ function sermonDraftContext(sermon) {
   if (applicationNote.trim()) extras.push(`APPLICATION NOTES:\n${applicationNote.slice(0, 900)}`);
   if (invitation.trim()) extras.push(`INVITATION PLAN:\n${invitation.slice(0, 500)}`);
   if (manuscript.trim()) extras.push(`MANUSCRIPT EXCERPT:\n${manuscript.slice(0, 1400)}`);
-  return [...lines, "", ...extras, "", ...lensSummaryLines()].join("\n");
+  return [...lines, "", ...extras, "", ...profileSummaryLines(), ...lensSummaryLines()].join("\n");
 }
 
 async function draftWithGuide(specKey) {
@@ -2989,6 +4193,7 @@ function seriesDraftContext(series) {
         `${index + 1}. ${row.when || ""} ${row.passage || "(passage tbd)"} — ${row.title || ""}${row.idea ? ` | Big idea: ${row.idea}` : ""}${row.emphasis ? ` | Formation: ${row.emphasis}` : ""}`,
     ),
     "",
+    ...profileSummaryLines(),
     ...lensSummaryLines(),
   ];
   return lines.join("\n");
@@ -3161,6 +4366,11 @@ function renderImpact(active) {
             </button>
           `;
         }).join("")}
+        <button class="pf-tool-card" data-view="sharing">
+          <span class="pf-tool-card-title">Sharing &amp; Delivery</span>
+          <span class="pf-tool-card-desc">Get every resource ready and share read-only links with production, groups, staff, and the church.</span>
+          <span class="pf-tool-card-meta">Resource delivery & share links <span class="pf-tool-card-go">Open →</span></span>
+        </button>
         <button class="pf-tool-card ${debriefOpen ? "" : "locked"}" data-action="${debriefOpen ? "open-debrief" : "impact-tab-locked"}" data-sermon="${attr(active.id)}">
           <span class="pf-tool-card-title">Debrief</span>
           <span class="pf-tool-card-desc">After Sunday: what landed, what was unclear, what should shape future preaching. Attached to this sermon and searchable later.</span>
@@ -3268,6 +4478,443 @@ function debriefSearchText(sermon) {
 // "first thing to do this week" before new prep starts.
 function pendingDebriefSermon() {
   return debriefTargets().find((sermon) => !debriefFilled(sermon)) || null;
+}
+
+// ---- Resource Delivery + Sharing and Delivery Center ----
+// Finished ministry resources with a status, plus secure read-only share
+// links. Share links never carry the Preaching Profile, Congregational
+// Lens, private notes, or the Post-Sermon Debrief unless a section is
+// explicitly turned on — and those four are never even offered by default.
+const DELIVERY_RESOURCES = [
+  { key: "staff", label: "Staff Alignment", store: "impact", field: "staff" },
+  { key: "group", label: "Family Group Guide", store: "pack", field: "group" },
+  { key: "prayer", label: "Prayer Team Prompts", store: "impact", field: "prayer" },
+  { key: "shepherd", label: "Shepherding Follow-Up", store: "shepherd", field: "care" },
+  { key: "family", label: "Parent & Family Discipleship", store: "pack", field: "family" },
+  { key: "comms", label: "Communications", store: "impact", field: "comms" },
+  { key: "worship", label: "Worship & Service Planning", store: "impact", field: "worship" },
+  { key: "personal", label: "Personal Reflection Guide", store: "pack", field: "personal" },
+  { key: "devotional", label: "Seven-Day Devotional", store: "pack", field: "devotional" },
+  { key: "memory", label: "Memory Verse Card", store: "pack", field: "memory" },
+  { key: "nextsteps", label: "Weekly Next Steps", store: "pack", field: "nextsteps" },
+  { key: "recap", label: "Public Sermon Recap", store: "pack", field: "recap" },
+];
+
+const DELIVERY_STATUSES = [
+  ["drafted", "Drafted"],
+  ["reviewed", "Reviewed"],
+  ["ready", "Ready"],
+  ["shared", "Shared"],
+];
+
+function deliveryText(sermon, resource) {
+  const value = sermon?.[resource.store]?.[resource.field];
+  return typeof value === "string" ? value : "";
+}
+
+function deliveryStatus(sermon, resource) {
+  const text = deliveryText(sermon, resource).trim();
+  if (!text) return "none";
+  const manual = sermon.delivery?.[resource.key];
+  return ["reviewed", "ready", "shared"].includes(manual) ? manual : "drafted";
+}
+
+function deliveryStatusLabel(status) {
+  return { none: "Not started", drafted: "Drafted", reviewed: "Reviewed", ready: "Ready", shared: "Shared" }[status] || "Not started";
+}
+
+// Draft every missing resource with Sermon Guide — existing drafts are
+// never overwritten.
+async function prepareAllResources() {
+  const active = getActive();
+  if (!active || ui.preparingAll) return;
+  if (!requireOpenAIKey()) return;
+  const missing = DELIVERY_RESOURCES.filter(
+    (resource) => !deliveryText(active, resource).trim() && DRAFT_SPECS[`${resource.store}.${resource.field}`],
+  );
+  if (!missing.length) {
+    showBanner("Every resource already has a draft — nothing was overwritten.");
+    return;
+  }
+  ui.preparingAll = true;
+  render();
+  for (const resource of missing) {
+    showBanner(`Preparing ${resource.label}…`);
+    await draftWithGuide(`${resource.store}.${resource.field}`);
+  }
+  ui.preparingAll = false;
+  showBanner("Resources prepared — review and adapt each one before it goes out.");
+  render();
+}
+
+// ---- share links ----
+const SHARE_KINDS = [
+  {
+    key: "preacher",
+    label: "Preacher Link",
+    desc: "A read-only Pulpit View for your own device or a backup — notes, Scripture, points, and timing.",
+    sections: [
+      ["notes", "Preaching notes (sections)", true],
+      ["personal", "Personal preaching notes", true],
+      ["timer", "Timer settings", true],
+    ],
+  },
+  {
+    key: "production",
+    label: "Production Team Link",
+    desc: "What the media team needs: outline, slide cues, on-screen text, Scripture references.",
+    sections: [
+      ["bigidea", "Big idea", true],
+      ["outline", "Sermon outline", true],
+      ["slides", "Slide cues & on-screen text", true],
+      ["scripture", "Scripture references", true],
+      ["live", "Follow live section", false],
+    ],
+  },
+  {
+    key: "group",
+    label: "Family Group Link",
+    desc: "A ready-to-use guide for group leaders.",
+    sections: [
+      ["bigidea", "Big idea", true],
+      ["guide", "Group guide & questions", true],
+      ["prayer", "Prayer prompts", false],
+    ],
+  },
+  {
+    key: "pack",
+    label: "Discipleship Pack Link",
+    desc: "The weekly discipleship resource for members and families.",
+    sections: [
+      ["personal", "Personal reflection guide", true],
+      ["family", "Parent conversation guide", true],
+      ["devotional", "Seven-day devotional", true],
+      ["memory", "Memory verse", true],
+      ["nextsteps", "Weekly next steps", true],
+    ],
+  },
+  {
+    key: "staff",
+    label: "Staff Alignment Link",
+    desc: "A read-only ministry alignment page for staff and key leaders.",
+    sections: [
+      ["summary", "Sermon summary & burden", true],
+      ["emphasis", "Ministry emphasis", true],
+      ["followup", "Follow-up needs", true],
+      ["prayer", "Prayer burden", true],
+      ["nextsteps", "Church-wide next steps", true],
+    ],
+  },
+  {
+    key: "recap",
+    label: "Public Recap Link",
+    desc: "A clean public-facing sermon recap.",
+    sections: [
+      ["recap", "Short recap", true],
+      ["reflection", "Reflection questions", true],
+      ["invitation", "Next step invitation", true],
+    ],
+  },
+];
+
+function shareToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function shareLink(sermon, kind) {
+  const def = SHARE_KINDS.find((item) => item.key === kind);
+  const existing = sermon.shareLinks[kind];
+  if (existing && existing.sections) return existing;
+  const sections = {};
+  def.sections.forEach(([key, , fallback]) => {
+    sections[key] = fallback;
+  });
+  sermon.shareLinks[kind] = { token: "", createdAt: "", updatedAt: "", expiresAt: "", revoked: false, dirty: false, sections, ...(existing || {}) };
+  return sermon.shareLinks[kind];
+}
+
+function shareUrl(link) {
+  return `${window.location.origin}${window.location.pathname.replace(/app$/, "").replace(/\/$/, "")}/share.html?t=${link.token}`;
+}
+
+function sharePlain(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// Build exactly what a link is allowed to carry — and nothing else.
+function buildSharePayload(sermon, kind) {
+  const link = shareLink(sermon, kind);
+  const on = (key) => link.sections[key] !== false;
+  const def = SHARE_KINDS.find((item) => item.key === kind);
+  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
+  const header = {
+    title: sermon.title || "",
+    passage: sermon.passage || "",
+    series: sermon.series || "",
+    date: sermon.date || "",
+    bigIdea: kind === "preacher" || on("bigidea") ? bigIdea : "",
+  };
+  const blocks = [];
+  const add = (label, text) => {
+    if (sharePlain(text)) blocks.push({ label, text: sharePlain(text) });
+  };
+
+  if (kind === "preacher") {
+    if (on("timer") && sermon.length) add("Timing", `Target length: ${sermon.length} minutes`);
+    if (on("notes")) {
+      pulpitSections(sermon).forEach((section) => {
+        const template = document.createElement("template");
+        template.innerHTML = section.html;
+        if (!on("personal")) template.content.querySelectorAll(".pf-b-note").forEach((node) => node.remove());
+        add(section.title, template.content.textContent.replace(/\n{3,}/g, "\n\n"));
+      });
+    }
+  }
+  if (kind === "production") {
+    if (on("outline")) {
+      add("Outline", (sermon.outline || []).filter((m) => m.title.trim()).map((m, i) => `${i + 1}. ${m.title}${m.sub ? ` — ${m.sub}` : ""}`).join("\n"));
+    }
+    if (on("slides") && sermon.slideDeck.slides.length) add("Slides", deckPlainText(sermon));
+    if (on("scripture")) {
+      const template = document.createElement("template");
+      template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+      const refs = [...template.content.querySelectorAll('.pf-b-scripture[data-production="1"]')]
+        .map((node) => node.getAttribute("data-ref"))
+        .filter(Boolean);
+      add("Scripture references", refs.join("\n"));
+    }
+  }
+  if (kind === "group") {
+    if (on("guide")) add("Group guide", deliveryText(sermon, DELIVERY_RESOURCES.find((r) => r.key === "group")));
+    if (on("prayer")) add("Prayer prompts", sermon.impact?.prayer);
+  }
+  if (kind === "pack") {
+    ["personal", "family", "devotional", "memory", "nextsteps"].forEach((key) => {
+      if (!on(key)) return;
+      const resource = DELIVERY_RESOURCES.find((r) => r.key === key);
+      add(resource.label, deliveryText(sermon, resource));
+    });
+  }
+  if (kind === "staff") {
+    if (on("summary")) add("Summary & burden", [bigIdea, worksheetValue(sermon, "aim", "fallen").trim()].filter(Boolean).join("\n"));
+    if (on("emphasis")) add("Ministry emphasis", sermon.impact?.["summary.emphasis"]);
+    if (on("followup")) add("Follow-up needs", sermon.shepherd?.care);
+    if (on("prayer")) add("Prayer burden", sermon.impact?.prayer);
+    if (on("nextsteps")) add("Church-wide next steps", sermon.pack?.nextsteps);
+  }
+  if (kind === "recap") {
+    if (on("recap")) add("Recap", sermon.pack?.recap);
+    if (on("reflection")) add("Reflect this week", sermon.pack?.personal);
+    if (on("invitation")) add("Your next step", sermon.pack?.nextsteps);
+  }
+
+  return {
+    v: 1,
+    kind,
+    label: def.label,
+    header,
+    blocks,
+    follow: kind === "production" && on("live"),
+    currentSection: "",
+  };
+}
+
+function shareReady() {
+  return Boolean(ui.auth.client && ui.auth.user);
+}
+
+async function pushSharedView(sermon, kind, options = {}) {
+  const link = shareLink(sermon, kind);
+  if (!link.token) return false;
+  if (!shareReady()) {
+    showBanner("Sign in and sync this sermon to create live share links.");
+    return false;
+  }
+  const payload = buildSharePayload(sermon, kind);
+  if (options.currentSection) payload.currentSection = options.currentSection;
+  const { error } = await ui.auth.client.from("preach_flow_shared_views").upsert(
+    {
+      token: link.token,
+      user_id: ui.auth.user.id,
+      sermon_id: sermon.id,
+      kind,
+      payload,
+      revoked: false,
+      expires_at: link.expiresAt || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "token" },
+  );
+  if (error) {
+    showBanner(`Share update failed: ${error.message}`);
+    return false;
+  }
+  link.updatedAt = new Date().toISOString();
+  link.dirty = false;
+  link.revoked = false;
+  saveState();
+  return true;
+}
+
+async function revokeSharedView(sermon, kind) {
+  const link = shareLink(sermon, kind);
+  if (link.token && shareReady()) {
+    await ui.auth.client
+      .from("preach_flow_shared_views")
+      .update({ revoked: true, updated_at: new Date().toISOString() })
+      .eq("token", link.token);
+  }
+  link.revoked = true;
+  saveState();
+}
+
+// Local read-only preview of exactly what a link would show — works
+// offline and without an account.
+function openSharePreview(sermon, kind) {
+  const payload = buildSharePayload(sermon, kind);
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`
+    <title>${escapeHtml(payload.label)} — preview</title>
+    <body style="margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#f4fbfe;color:#20242a;">
+      <div style="max-width:680px;margin:0 auto;padding:40px 22px;">
+        <p style="font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#dc6a12;">${escapeHtml(payload.label)} · preview</p>
+        <h1 style="margin:6px 0 4px;font-size:26px;">${escapeHtml(payload.header.title || payload.header.passage || "Sermon")}</h1>
+        <p style="color:#5e6c7a;margin:0 0 6px;">${escapeHtml([payload.header.passage, payload.header.series, payload.header.date].filter(Boolean).join(" · "))}</p>
+        ${payload.header.bigIdea ? `<p style="font-weight:700;margin:10px 0 0;">${escapeHtml(payload.header.bigIdea)}</p>` : ""}
+        ${payload.blocks.map((block) => `<h2 style="font-size:16px;margin:26px 0 6px;">${escapeHtml(block.label)}</h2><p style="white-space:pre-wrap;line-height:1.65;margin:0;">${escapeHtml(block.text)}</p>`).join("") || `<p style="margin-top:26px;color:#5e6c7a;">Nothing to show yet — draft the underlying resources first.</p>`}
+        <p style="margin-top:40px;font-size:12px;color:#5e6c7a;">Read-only preview. The live link shows the same content.</p>
+      </div>
+    </body>`);
+  win.document.close();
+}
+
+function renderSharingCenter(active) {
+  if (!active) return renderNeedSermon("The Sharing and Delivery Center works from your current sermon — start one first.");
+  const bigIdea = worksheetValue(active, "aim", "burden").trim();
+  const purpose = worksheetValue(active, "aim", "purpose").trim();
+  const statuses = DELIVERY_RESOURCES.map((resource) => deliveryStatus(active, resource));
+  const readyCount = statuses.filter((status) => status === "ready" || status === "shared").length;
+  const sharedCount = statuses.filter((status) => status === "shared").length;
+  const draftedCount = statuses.filter((status) => status !== "none").length;
+  const nextStep = !draftedCount
+    ? "Draft your first resource — start with the Family Group Guide."
+    : readyCount < draftedCount
+      ? "Review drafted resources and mark them ready."
+      : !sharedCount
+        ? "Create a share link and send the first resource out."
+        : "Carry the message into the week — everything is moving.";
+
+  return `
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Sharing and Delivery Center</span>
+        <h1 class="pf-h1">Share the right sermon resources with the right people</h1>
+        <p class="pf-page-sub">Create secure, read-only links for preaching notes, production cues, group guides, discipleship resources, and ministry follow-up outputs — and get every resource ready to use the moment Sunday ends.</p>
+      </div>
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">This week's ministry package</span></div>
+        <div class="pf-impact-summary">
+          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "—")}</p></div>
+          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "—")}</p></div>
+          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : "—"}</p></div>
+          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "—"}</p></div>
+          <div><span class="pf-label">Resources</span><p>${draftedCount}/${DELIVERY_RESOURCES.length} drafted · ${readyCount} ready · ${sharedCount} shared</p></div>
+        </div>
+        <p class="pf-section-hint" style="margin:12px 0 0;">Next: ${escapeHtml(nextStep)}</p>
+        <div class="pf-modal-actions" style="margin-top:12px;">
+          <button class="pf-btn pf-btn-primary" data-action="prepare-all" ${ui.preparingAll || ui.drafting ? "disabled" : ""}>${ui.preparingAll ? "Preparing…" : "Prepare all resources"}</button>
+          <span class="pf-helper" style="align-self:center;">Drafts only what's missing — your existing work is never overwritten. Review everything before it goes out.</span>
+        </div>
+      </section>
+
+      <h2 class="pf-lib-group-head">Resource delivery <span>${DELIVERY_RESOURCES.length}</span></h2>
+      <div class="pf-delivery-grid">
+        ${DELIVERY_RESOURCES.map((resource) => {
+          const status = deliveryStatus(active, resource);
+          const specKey = `${resource.store}.${resource.field}`;
+          return `
+            <div class="pf-delivery-card">
+              <div class="pf-delivery-head">
+                <strong>${escapeHtml(resource.label)}</strong>
+                <span class="pf-lib-badge ${status === "ready" || status === "shared" ? "done" : ""}">${deliveryStatusLabel(status)}</span>
+              </div>
+              <div class="pf-delivery-actions">
+                ${status === "none" && DRAFT_SPECS[specKey] ? `<button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === specKey ? "Drafting…" : "Draft with Sermon Guide"}</button>` : ""}
+                <button class="pf-btn pf-btn-ghost" data-action="delivery-edit" data-store="${attr(resource.store)}">Edit</button>
+                ${status !== "none" ? `
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-copy" data-key="${attr(resource.key)}">Copy</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="pdf">PDF</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="doc">Word</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="md">MD</button>
+                  <select class="pf-select pf-delivery-status" data-action="delivery-status" data-key="${attr(resource.key)}" aria-label="${attr(resource.label)} status">
+                    ${DELIVERY_STATUSES.map(([value, label]) => `<option value="${value}" ${status === value ? "selected" : ""}>${label}</option>`).join("")}
+                  </select>` : ""}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <h2 class="pf-lib-group-head" style="margin-top:34px;">Share links <span>${SHARE_KINDS.length}</span></h2>
+      ${
+        shareReady()
+          ? ""
+          : `<div class="pf-empty" style="margin-bottom:16px;">Sign in and sync this sermon to create live share links. Local previews below still work.</div>`
+      }
+      <div class="pf-share-grid">
+        ${SHARE_KINDS.map((def) => renderShareCard(active, def)).join("")}
+      </div>
+      <p class="pf-helper" style="margin-top:18px;">Share links are unguessable, revocable, and read-only. They never include your account, Preaching Profile, Congregational Lens, private notes, or Post-Sermon Debrief.</p>
+    </div>
+  `;
+}
+
+function renderShareCard(active, def) {
+  const link = shareLink(active, def.key);
+  const status = link.revoked ? "Revoked" : link.token ? "Public — anyone with the link" : "Unshared";
+  return `
+    <div class="pf-share-card">
+      <div class="pf-delivery-head">
+        <strong>${escapeHtml(def.label)}</strong>
+        <span class="pf-lib-badge ${link.token && !link.revoked ? "done" : ""}">${status}</span>
+      </div>
+      <p class="pf-tool-card-desc" style="margin:4px 0 10px;">${escapeHtml(def.desc)}</p>
+      <div class="pf-share-sections">
+        ${def.sections
+          .map(
+            ([key, label]) => `
+              <label class="pf-toggle-row" style="margin-top:0;">
+                <input type="checkbox" data-action="share-section" data-kind="${attr(def.key)}" data-key="${attr(key)}" ${link.sections[key] !== false ? "checked" : ""} />
+                <span>${escapeHtml(label)}</span>
+              </label>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="pf-share-meta">
+        <label class="pf-label" style="display:flex;align-items:center;gap:8px;">Expires
+          <input class="pf-input" type="date" style="width:auto;padding:6px 10px;" data-action="share-expires" data-kind="${attr(def.key)}" value="${attr((link.expiresAt || "").slice(0, 10))}" />
+        </label>
+        ${link.updatedAt ? `<span class="pf-helper">Updated ${escapeHtml(formatTime(link.updatedAt))}${link.dirty ? " · changes not pushed yet" : ""}</span>` : ""}
+      </div>
+      <div class="pf-delivery-actions">
+        ${
+          link.token && !link.revoked
+            ? `
+          <button class="pf-btn pf-btn-ghost" data-action="share-copy" data-kind="${attr(def.key)}">Copy link</button>
+          <button class="pf-btn pf-btn-ghost" data-action="share-update" data-kind="${attr(def.key)}">Update now</button>
+          <button class="pf-btn pf-btn-ghost" data-action="share-regenerate" data-kind="${attr(def.key)}">Regenerate</button>
+          <button class="pf-btn pf-btn-ghost pf-lib-delete" data-action="share-revoke" data-kind="${attr(def.key)}">Revoke</button>`
+            : `<button class="pf-btn pf-btn-primary" data-action="share-create" data-kind="${attr(def.key)}">Create link</button>`
+        }
+        <button class="pf-btn pf-btn-ghost" data-action="share-preview" data-kind="${attr(def.key)}">Preview</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderDebriefPage() {
@@ -3846,6 +5493,7 @@ async function reviewPreachingDiet() {
       .slice(0, 15)
       .map((sermon) => `- ${sermon.date} · ${sermon.passage}${sermon.title ? ` — ${sermon.title}` : ""}${worksheetValue(sermon, "aim", "burden").trim() ? ` | Big idea: ${worksheetValue(sermon, "aim", "burden").trim()}` : ""}`),
     "",
+    ...profileSummaryLines(),
     ...lensSummaryLines(),
   ];
   ui.drafting = "diet";
@@ -4605,7 +6253,7 @@ async function send(textArg, metaLabel) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
-        context: activeContext(getActive()),
+        context: [activeContext(getActive()), "", ...profileSummaryLines(), ...lensSummaryLines()].join("\n"),
         messages: next
           .filter((message) => message.role === "user" || message.role === "assistant")
           .map((message) => ({ role: message.role, content: message.content })),
@@ -5909,6 +7557,16 @@ document.addEventListener("click", (event) => {
 
   if (target.dataset.view) {
     state.view = target.dataset.view;
+    if (state.view === "practice") {
+      state.view = "pulpit";
+      ui.pulpit.mode = "practice";
+      ui.pulpit.section = 0;
+      requestPracticeWakeLock();
+    } else if (state.view === "pulpit") {
+      ui.pulpit.section = 0;
+      ui.pulpit.showSettings = false;
+      requestPracticeWakeLock();
+    }
     ui.showNew = false;
     closeOverlays();
     saveState();
@@ -6136,12 +7794,184 @@ document.addEventListener("click", (event) => {
     else exportDoc(name, manuscriptDocHtml(active));
   }
   if (action === "practice-toggle") {
-    ui.practice.running = !ui.practice.running;
-    if (ui.practice.running) requestPracticeWakeLock();
-    else {
-      releasePracticeWakeLock();
-      recordPracticeRun();
-    }
+    togglePracticeTimer();
+  }
+  if (action === "pulpit-exit") {
+    releasePracticeWakeLock();
+    state.view = "workspace";
+    saveState();
+    render();
+  }
+  if (action === "pulpit-mode") {
+    ui.pulpit.mode = target.dataset.mode === "practice" ? "practice" : "live";
+    ui.pulpit.showSettings = false;
+    render();
+  }
+  if (action === "pulpit-next") {
+    pulpitStep(1);
+  }
+  if (action === "pulpit-prev") {
+    pulpitStep(-1);
+  }
+  if (action === "pulpit-font") {
+    state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep + Number(target.dataset.delta));
+    saveState();
+    render();
+  }
+  if (action === "pulpit-theme") {
+    const order = ["dark", "light", "contrast"];
+    state.pulpitPrefs.theme = order[(order.indexOf(state.pulpitPrefs.theme) + 1) % order.length];
+    saveState();
+    render();
+  }
+  if (action === "pulpit-lineheight") {
+    const order = ["compact", "comfortable", "spacious"];
+    state.pulpitPrefs.lineHeight = order[(order.indexOf(state.pulpitPrefs.lineHeight) + 1) % order.length];
+    saveState();
+    render();
+  }
+  if (action === "pulpit-width") {
+    state.pulpitPrefs.width = state.pulpitPrefs.width === "narrow" ? "wide" : "narrow";
+    saveState();
+    render();
+  }
+  if (action === "pulpit-focus") {
+    state.pulpitPrefs.focusMode = !state.pulpitPrefs.focusMode;
+    saveState();
+    render();
+  }
+  if (action === "pulpit-fullscreen") {
+    pulpitFullscreen();
+  }
+  if (action === "pulpit-settings") {
+    ui.pulpit.showSettings = !ui.pulpit.showSettings;
+    render();
+  }
+  if (action === "pulpit-unlock-edit") {
+    ui.pulpit.showSettings = false;
+    state.view = "editor";
+    saveState();
+    render();
+  }
+  if (action === "open-scripture") {
+    saveEditorRange();
+    ui.scripture = { ...ui.scripture, show: true, error: "", loading: false };
+    render();
+  }
+  if (action === "scripture-close") {
+    ui.scripture.show = false;
+    render();
+  }
+  if (action === "scripture-fetch") {
+    fetchScriptureIntoModal();
+  }
+  if (action === "scripture-insert") {
+    const modal = ui.scripture;
+    if (!modal.text.trim()) return;
+    const translation = state.bibleProvider.provider === "manual" ? (state.preachingProfile.translation || "—") : state.bibleProvider.translation;
+    ui.scripture.show = false;
+    insertIntoEditor(
+      scriptureBlockHtml({
+        reference: modal.ref.trim() || "Passage",
+        translation,
+        text: modal.text.trim(),
+        attribution: modal.attribution || (state.bibleProvider.provider === "manual" ? `${translation} — used with permission` : ""),
+        slide: modal.slide,
+        pulpit: modal.pulpit,
+        production: modal.production,
+      }),
+    );
+    ui.scripture.text = "";
+    ui.scripture.attribution = "";
+    render();
+  }
+  if (action === "deck-rebuild") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck = buildSlideDeck(active);
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    showBanner("Deck rebuilt from the sermon.");
+    render();
+  }
+  if (action === "deck-font") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.fontScale = Number(target.dataset.scale);
+    saveState();
+    render();
+  }
+  if (action === "slide-up" || action === "slide-down") {
+    const active = getActive();
+    if (!active) return;
+    const index = Number(target.dataset.index);
+    const swap = action === "slide-up" ? index - 1 : index + 1;
+    const slides = active.slideDeck.slides;
+    if (swap < 0 || swap >= slides.length) return;
+    [slides[index], slides[swap]] = [slides[swap], slides[index]];
+    saveState();
+    render();
+  }
+  if (action === "slide-remove") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.slides.splice(Number(target.dataset.index), 1);
+    saveState();
+    render();
+  }
+  if (action === "slide-add") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.slides.push({ id: genId(), type: "custom", title: "", text: "", notes: "" });
+    saveState();
+    render();
+  }
+  if (action === "deck-export-pdf") {
+    const active = getActive();
+    if (active) exportPdf(`${active.passage || "Sermon"} slides`, deckPrintHtml(active));
+  }
+  if (action === "deck-export-md") {
+    const active = getActive();
+    if (active) downloadText(`${slug(active.passage)}-slides.md`, deckMarkdown(active));
+  }
+  if (action === "deck-export-txt") {
+    const active = getActive();
+    if (active) downloadText(`${slug(active.passage)}-slides.txt`, deckPlainText(active));
+  }
+  if (action === "deck-copy") {
+    const active = getActive();
+    if (active) copyText(deckPlainText(active));
+  }
+  if (action === "refine") {
+    closeToolMenus();
+    runRefine(target.dataset.kind);
+  }
+  if (action === "refine-dismiss") {
+    ui.refine = null;
+    render();
+  }
+  if (action === "refine-copy") {
+    if (ui.refine?.text) copyText(ui.refine.text);
+  }
+  if (action === "refine-insert-note") {
+    if (!ui.refine?.text) return;
+    insertIntoEditor(`<div class="pf-b pf-b-note"><p>${escapeHtml(ui.refine.text)}</p></div><p><br></p>`);
+    ui.refine = null;
+    render();
+  }
+  if (action === "insert-block") {
+    saveEditorRange();
+    closeToolMenus();
+    insertIntoEditor(editorBlockHtml(target.dataset.kind));
+    render();
+  }
+  if (action === "pulpit-mark") {
+    const active = getActive();
+    if (!active) return;
+    const current = active.practice.marks[ui.pulpit.section];
+    active.practice.marks = { ...active.practice.marks, [ui.pulpit.section]: current === target.dataset.mark ? "" : target.dataset.mark };
+    active.updatedAt = new Date().toISOString();
+    saveState();
     render();
   }
   if (action === "practice-reset") {
@@ -6157,7 +7987,11 @@ document.addEventListener("click", (event) => {
   }
   if (action === "lib-open") {
     state.activeId = target.dataset.sermon;
-    state.view = target.dataset.mode === "editor" ? "editor" : "workspace";
+    state.view = target.dataset.mode === "editor" ? "editor" : target.dataset.mode === "pulpit" ? "pulpit" : "workspace";
+    if (state.view === "pulpit") {
+      ui.pulpit.section = 0;
+      requestPracticeWakeLock();
+    }
     saveState();
     render();
   }
@@ -6279,6 +8113,42 @@ document.addEventListener("click", (event) => {
     ui.impactTab = "home";
     render();
   }
+  if (action === "profile-tab") {
+    ui.profileTab = target.dataset.tab;
+    render();
+  }
+  if (action === "rubric-add") {
+    const input = target.parentElement?.querySelector("[data-rubric-input]");
+    const value = (input?.value || "").trim();
+    if (!value) return;
+    if (!state.preachingProfile.rubricCustom.includes(value)) state.preachingProfile.rubricCustom.push(value);
+    saveState();
+    render();
+  }
+  if (action === "rubric-remove") {
+    state.preachingProfile.rubricCustom.splice(Number(target.dataset.index), 1);
+    saveState();
+    render();
+  }
+  if (action === "onboard-start") {
+    state.preachingProfile.onboarded = true;
+    ui.profileTab = target.dataset.tab || "profile";
+    state.view = "signin";
+    saveState();
+    render();
+  }
+  if (action === "onboard-lens") {
+    state.preachingProfile.onboarded = true;
+    state.view = "lens";
+    saveState();
+    render();
+  }
+  if (action === "onboard-skip") {
+    state.preachingProfile.onboarded = true;
+    saveState();
+    showBanner("You can shape your Preaching Profile anytime from your avatar.");
+    render();
+  }
   if (action === "impact-tab-locked") {
     showBanner("The debrief opens once the sermon is preached (or its date passes).");
   }
@@ -6352,6 +8222,79 @@ document.addEventListener("click", (event) => {
   }
   if (action === "guide-draft") {
     draftWithGuide(target.dataset.spec);
+  }
+  if (action === "prepare-all") {
+    prepareAllResources();
+  }
+  if (action === "delivery-edit") {
+    const store = target.dataset.store;
+    state.view = "impact";
+    ui.impactTab = store === "impact" ? "plan" : store === "shepherd" ? "shepherd" : "pack";
+    saveState();
+    render();
+  }
+  if (action === "delivery-copy" || action === "delivery-export") {
+    const active = getActive();
+    const resource = DELIVERY_RESOURCES.find((item) => item.key === target.dataset.key);
+    if (!active || !resource) return;
+    const text = deliveryText(active, resource);
+    if (!text.trim()) {
+      showBanner("Nothing to export yet.");
+      return;
+    }
+    const heading = `${resource.label} — ${active.passage || "Sermon"}`;
+    if (action === "delivery-copy") {
+      copyText(text);
+    } else if (target.dataset.format === "pdf") {
+      exportPdf(heading, `<section class="sermon"><h1>${escapeHtml(heading)}</h1><div class="note"><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p></div></section>`);
+    } else if (target.dataset.format === "doc") {
+      exportDoc(heading, `<h1>${escapeHtml(heading)}</h1><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p>`);
+    } else {
+      downloadText(`${slug(active.passage)}-${resource.key}.md`, `# ${heading}\n\n${text}\n`);
+    }
+  }
+  if (action === "share-create" || action === "share-update" || action === "share-regenerate") {
+    const active = getActive();
+    if (!active) return;
+    if (!shareReady()) {
+      showBanner("Sign in and sync this sermon to create live share links.");
+      return;
+    }
+    const link = shareLink(active, target.dataset.kind);
+    if (action === "share-regenerate" && link.token) {
+      revokeSharedView(active, target.dataset.kind);
+      link.token = "";
+    }
+    if (!link.token) {
+      link.token = shareToken();
+      link.createdAt = new Date().toISOString();
+      link.revoked = false;
+    }
+    pushSharedView(active, target.dataset.kind).then((ok) => {
+      if (ok) {
+        copyText(shareUrl(link));
+        showBanner("Link is live and copied to your clipboard.");
+      }
+      render();
+    });
+  }
+  if (action === "share-copy") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    if (link.token) copyText(shareUrl(link));
+  }
+  if (action === "share-revoke") {
+    const active = getActive();
+    if (!active) return;
+    revokeSharedView(active, target.dataset.kind).then(() => {
+      showBanner("Link revoked — it no longer resolves.");
+      render();
+    });
+  }
+  if (action === "share-preview") {
+    const active = getActive();
+    if (active) openSharePreview(active, target.dataset.kind);
   }
   if (action === "ministry-copy") {
     const store = ministryStore(target.dataset.store, target.dataset.sermon);
@@ -6522,6 +8465,33 @@ document.addEventListener("input", (event) => {
     store[target.dataset.key] = target.value;
     touchMinistryStore(target.dataset.store, target.dataset.sermon);
   }
+  if (action === "profile-field") {
+    state.preachingProfile[target.dataset.key] = target.value;
+    saveState();
+  }
+  if (action === "slide-title" || action === "slide-text" || action === "slide-notes") {
+    const active = getActive();
+    const slide = active?.slideDeck.slides[Number(target.dataset.index)];
+    if (!slide) return;
+    slide[action === "slide-title" ? "title" : action === "slide-text" ? "text" : "notes"] = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+  }
+  if (action === "scripture-ref") {
+    ui.scripture.ref = target.value;
+  }
+  if (action === "scripture-text") {
+    ui.scripture.text = target.value;
+    const insertBtn = document.querySelector('[data-action="scripture-insert"]');
+    if (insertBtn) insertBtn.disabled = !target.value.trim();
+  }
+  if (action === "pulpit-notes") {
+    const active = getActive();
+    if (!active) return;
+    active.practice.notes = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+  }
   if (action === "series-map-field") {
     const series = getSeries();
     const row = series?.map[Number(target.dataset.index)];
@@ -6587,6 +8557,73 @@ document.addEventListener("change", (event) => {
     ui.debriefSermonId = target.value;
     render();
   }
+  if (action === "profile-field") {
+    state.preachingProfile[target.dataset.key] = target.value;
+    saveState();
+  }
+  if (action === "profile-toggle") {
+    state.preachingProfile[target.dataset.key] = target.checked;
+    saveState();
+    render();
+  }
+  if (action === "rubric-toggle") {
+    state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
+    saveState();
+  }
+  if (action === "share-section") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    link.sections[target.dataset.key] = target.checked;
+    link.dirty = Boolean(link.token);
+    saveState();
+    render();
+  }
+  if (action === "share-expires") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    link.expiresAt = target.value ? `${target.value}T23:59:59Z` : "";
+    link.dirty = Boolean(link.token);
+    saveState();
+  }
+  if (action === "delivery-status") {
+    const active = getActive();
+    if (!active) return;
+    active.delivery = { ...active.delivery, [target.dataset.key]: target.value };
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
+  if (action === "deck-theme") {
+    const active = getActive();
+    if (!active) return;
+    active.slideDeck.theme = target.value;
+    saveState();
+    render();
+  }
+  if (action === "scripture-translation") {
+    if (target.value === "manual") {
+      state.bibleProvider.provider = "manual";
+    } else {
+      state.bibleProvider.provider = "public-domain";
+      state.bibleProvider.translation = target.value;
+    }
+    saveState();
+    render();
+  }
+  if (action === "scripture-flag") {
+    ui.scripture[target.dataset.key] = target.checked;
+  }
+  if (action === "bible-attribution") {
+    state.bibleProvider.attribution = target.checked;
+    saveState();
+  }
+  if (action === "pulpit-pref-toggle") {
+    state.pulpitPrefs[target.dataset.key] = target.checked;
+    saveState();
+    render();
+  }
   if (action === "practice-pace") {
     state.practiceWpm = normalizeWpm(target.value);
     saveState();
@@ -6605,7 +8642,7 @@ document.addEventListener("change", (event) => {
 
 // Keep the contenteditable's selection when a toolbar button is pressed.
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"]')) {
+  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"], [data-action="refine"], [data-action="insert-block"], [data-action="open-scripture"]')) {
     event.preventDefault();
   }
 });
@@ -6662,6 +8699,48 @@ document.addEventListener("mouseup", (event) => {
 document.addEventListener("scroll", hideFindChip, true);
 
 document.addEventListener("keydown", (event) => {
+  if (
+    (state.view === "pulpit" || state.view === "practice") &&
+    !event.target.closest("input, textarea, select, [contenteditable=true]")
+  ) {
+    const key = event.key;
+    if (key === "ArrowRight" || key === " ") {
+      event.preventDefault();
+      pulpitStep(1);
+      return;
+    }
+    if (key === "ArrowLeft") {
+      event.preventDefault();
+      pulpitStep(-1);
+      return;
+    }
+    if (key === "t" || key === "T") {
+      togglePracticeTimer();
+      return;
+    }
+    if (key === "f" || key === "F") {
+      pulpitFullscreen();
+      return;
+    }
+    if (key === "+" || key === "=") {
+      state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep + 1);
+      saveState();
+      render();
+      return;
+    }
+    if (key === "-") {
+      state.pulpitPrefs.fontStep = normalizeFontStep(state.pulpitPrefs.fontStep - 1);
+      saveState();
+      render();
+      return;
+    }
+    if (key === "d" || key === "D") {
+      state.pulpitPrefs.theme = state.pulpitPrefs.theme === "dark" ? "light" : "dark";
+      saveState();
+      render();
+      return;
+    }
+  }
   if (event.target.dataset?.action === "coach-input" && event.key === "Enter") {
     event.preventDefault();
     send();
@@ -6763,6 +8842,54 @@ function releasePracticeWakeLock() {
   practiceWakeLock = null;
 }
 
+function togglePracticeTimer() {
+  ui.practice.running = !ui.practice.running;
+  if (ui.practice.running) {
+    ui.pulpit.startedAt = new Date(Date.now() - ui.practice.seconds * 1000).toISOString();
+    requestPracticeWakeLock();
+  } else {
+    releasePracticeWakeLock();
+    recordPracticeRun();
+  }
+  render();
+}
+
+let followLiveTimer = null;
+
+function pulpitStep(delta) {
+  const active = getActive();
+  if (!active) return;
+  const sections = pulpitSections(active);
+  const next = Math.min(sections.length - 1, Math.max(0, ui.pulpit.section + delta));
+  if (next === ui.pulpit.section) return;
+  ui.pulpit.section = next;
+  // Follow-live: if the production link opted in, quietly push the section.
+  const production = active.shareLinks?.production;
+  if (ui.pulpit.mode === "live" && production?.token && !production.revoked && production.sections?.live && shareReady()) {
+    clearTimeout(followLiveTimer);
+    followLiveTimer = setTimeout(() => {
+      pushSharedView(active, "production", { currentSection: sections[next]?.title || `Section ${next + 1}` });
+    }, 1500);
+  }
+  render();
+  requestAnimationFrame(() => {
+    if (state.pulpitPrefs.focusMode) {
+      document.querySelector("[data-pulpit-body]")?.scrollTo(0, 0);
+    } else {
+      document.getElementById(`pulpit-section-${next}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  });
+}
+
+function pulpitFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  } catch {
+    /* fullscreen unavailable */
+  }
+}
+
 function recordPracticeRun() {
   const active = getActive();
   if (!active || ui.practice.seconds < 60) return;
@@ -6776,6 +8903,8 @@ function recordPracticeRun() {
 }
 
 setInterval(() => {
+  const clock = document.querySelector("[data-pulpit-clock]");
+  if (clock) clock.textContent = fmtWallClock(new Date());
   if (!ui.practice.running) return;
   ui.practice.seconds += 1;
   const display = document.querySelector("[data-practice-timer]");
@@ -6784,6 +8913,24 @@ setInterval(() => {
   const target = Number(getActive()?.length) || 0;
   display.classList.toggle("over", Boolean(target && ui.practice.seconds > target * 60));
 }, 1000);
+
+// Pulpit View quiet controls: chrome fades after a few idle seconds and
+// returns on any pointer or key activity.
+let pulpitIdleTimer = null;
+["pointermove", "pointerdown", "touchstart", "keydown"].forEach((eventName) =>
+  document.addEventListener(
+    eventName,
+    () => {
+      if (state.view !== "pulpit" && state.view !== "practice") return;
+      const root = document.querySelector("[data-pulpit]");
+      if (!root) return;
+      root.classList.add("controls-on");
+      clearTimeout(pulpitIdleTimer);
+      pulpitIdleTimer = setTimeout(() => root.classList.remove("controls-on"), 3500);
+    },
+    { passive: true },
+  ),
+);
 
 ["mousedown", "keydown", "mousemove", "wheel", "touchstart"].forEach((eventName) =>
   document.addEventListener(eventName, () => {
