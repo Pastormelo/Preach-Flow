@@ -17,6 +17,14 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Mulish:wght@400;500;600;700&display=swap"
     />
+    <script>
+      // If an auth provider redirects to the site root with a session code,
+      // forward it to the app so sign-in completes instead of stranding the
+      // user on the marketing page.
+      if (/[?#&](code|access_token|refresh_token|error_description)=/.test(window.location.href)) {
+        window.location.replace("./app" + window.location.search + window.location.hash);
+      }
+    </script>
     <style>
       :root {
         --surface-page: #f4fbfe;
