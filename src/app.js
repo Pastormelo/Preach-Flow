@@ -492,6 +492,7 @@ const ui = {
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   refine: null,
+  preparingAll: false,
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -733,6 +734,8 @@ function normalizeSermon(sermon) {
       sermon.debrief && typeof sermon.debrief === "object"
         ? { ...sermon.debrief, responses: Array.isArray(sermon.debrief.responses) ? sermon.debrief.responses : [] }
         : { responses: [] },
+    shareLinks: sermon.shareLinks && typeof sermon.shareLinks === "object" ? sermon.shareLinks : {},
+    delivery: sermon.delivery && typeof sermon.delivery === "object" ? sermon.delivery : {},
     googleDoc:
       sermon.googleDoc && typeof sermon.googleDoc === "object"
         ? {
@@ -1195,6 +1198,7 @@ const NAV_ITEMS = [
 const NAV_GROUPS = [
   ["Ministry", [
     ["impact", "Impact Plan"],
+    ["sharing", "Sharing & Delivery"],
     ["debrief", "Debrief"],
     ["lens", "Congregational Lens"],
   ]],
@@ -1745,6 +1749,7 @@ function renderMain(active) {
   if (state.view === "diet") return renderDietPage();
   if (state.view === "editor") return renderEditorPage(active);
   if (state.view === "slides") return renderSlideBuilder(active);
+  if (state.view === "sharing") return renderSharingCenter(active);
   if (state.view === "library") return renderLibrary();
   if (state.view === "debrief") return renderDebriefPage();
   if (active) return renderWorkspace(active);
@@ -4028,6 +4033,13 @@ PACK_CARDS.forEach((card) => {
   DRAFT_SPECS[`pack.${card.key}`] = { store: "pack", ...card };
 });
 DRAFT_SPECS["series-outputs.outputs"] = { store: "series-outputs", ...SERIES_OUTPUT_CARD };
+DRAFT_SPECS["pack.recap"] = {
+  store: "pack",
+  key: "recap",
+  title: "Public Sermon Recap",
+  desc: "A clean public-facing recap: what was preached, why it matters, and a next step.",
+  fields: ["Short recap", "Reflection questions", "Next step invitation"],
+};
 DRAFT_SPECS["pack.devotional"].instructions =
   "For each day include: a Scripture reference, a two-to-three sentence reflection, a one-line prayer, and one concrete practice.";
 DRAFT_SPECS["shepherd.sevenday"].instructions =
@@ -4349,6 +4361,11 @@ function renderImpact(active) {
             </button>
           `;
         }).join("")}
+        <button class="pf-tool-card" data-view="sharing">
+          <span class="pf-tool-card-title">Sharing &amp; Delivery</span>
+          <span class="pf-tool-card-desc">Get every resource ready and share read-only links with production, groups, staff, and the church.</span>
+          <span class="pf-tool-card-meta">Resource delivery & share links <span class="pf-tool-card-go">Open →</span></span>
+        </button>
         <button class="pf-tool-card ${debriefOpen ? "" : "locked"}" data-action="${debriefOpen ? "open-debrief" : "impact-tab-locked"}" data-sermon="${attr(active.id)}">
           <span class="pf-tool-card-title">Debrief</span>
           <span class="pf-tool-card-desc">After Sunday: what landed, what was unclear, what should shape future preaching. Attached to this sermon and searchable later.</span>
@@ -4456,6 +4473,443 @@ function debriefSearchText(sermon) {
 // "first thing to do this week" before new prep starts.
 function pendingDebriefSermon() {
   return debriefTargets().find((sermon) => !debriefFilled(sermon)) || null;
+}
+
+// ---- Resource Delivery + Sharing and Delivery Center ----
+// Finished ministry resources with a status, plus secure read-only share
+// links. Share links never carry the Preaching Profile, Congregational
+// Lens, private notes, or the Post-Sermon Debrief unless a section is
+// explicitly turned on — and those four are never even offered by default.
+const DELIVERY_RESOURCES = [
+  { key: "staff", label: "Staff Alignment", store: "impact", field: "staff" },
+  { key: "group", label: "Family Group Guide", store: "pack", field: "group" },
+  { key: "prayer", label: "Prayer Team Prompts", store: "impact", field: "prayer" },
+  { key: "shepherd", label: "Shepherding Follow-Up", store: "shepherd", field: "care" },
+  { key: "family", label: "Parent & Family Discipleship", store: "pack", field: "family" },
+  { key: "comms", label: "Communications", store: "impact", field: "comms" },
+  { key: "worship", label: "Worship & Service Planning", store: "impact", field: "worship" },
+  { key: "personal", label: "Personal Reflection Guide", store: "pack", field: "personal" },
+  { key: "devotional", label: "Seven-Day Devotional", store: "pack", field: "devotional" },
+  { key: "memory", label: "Memory Verse Card", store: "pack", field: "memory" },
+  { key: "nextsteps", label: "Weekly Next Steps", store: "pack", field: "nextsteps" },
+  { key: "recap", label: "Public Sermon Recap", store: "pack", field: "recap" },
+];
+
+const DELIVERY_STATUSES = [
+  ["drafted", "Drafted"],
+  ["reviewed", "Reviewed"],
+  ["ready", "Ready"],
+  ["shared", "Shared"],
+];
+
+function deliveryText(sermon, resource) {
+  const value = sermon?.[resource.store]?.[resource.field];
+  return typeof value === "string" ? value : "";
+}
+
+function deliveryStatus(sermon, resource) {
+  const text = deliveryText(sermon, resource).trim();
+  if (!text) return "none";
+  const manual = sermon.delivery?.[resource.key];
+  return ["reviewed", "ready", "shared"].includes(manual) ? manual : "drafted";
+}
+
+function deliveryStatusLabel(status) {
+  return { none: "Not started", drafted: "Drafted", reviewed: "Reviewed", ready: "Ready", shared: "Shared" }[status] || "Not started";
+}
+
+// Draft every missing resource with Sermon Guide — existing drafts are
+// never overwritten.
+async function prepareAllResources() {
+  const active = getActive();
+  if (!active || ui.preparingAll) return;
+  if (!requireOpenAIKey()) return;
+  const missing = DELIVERY_RESOURCES.filter(
+    (resource) => !deliveryText(active, resource).trim() && DRAFT_SPECS[`${resource.store}.${resource.field}`],
+  );
+  if (!missing.length) {
+    showBanner("Every resource already has a draft — nothing was overwritten.");
+    return;
+  }
+  ui.preparingAll = true;
+  render();
+  for (const resource of missing) {
+    showBanner(`Preparing ${resource.label}…`);
+    await draftWithGuide(`${resource.store}.${resource.field}`);
+  }
+  ui.preparingAll = false;
+  showBanner("Resources prepared — review and adapt each one before it goes out.");
+  render();
+}
+
+// ---- share links ----
+const SHARE_KINDS = [
+  {
+    key: "preacher",
+    label: "Preacher Link",
+    desc: "A read-only Pulpit View for your own device or a backup — notes, Scripture, points, and timing.",
+    sections: [
+      ["notes", "Preaching notes (sections)", true],
+      ["personal", "Personal preaching notes", true],
+      ["timer", "Timer settings", true],
+    ],
+  },
+  {
+    key: "production",
+    label: "Production Team Link",
+    desc: "What the media team needs: outline, slide cues, on-screen text, Scripture references.",
+    sections: [
+      ["bigidea", "Big idea", true],
+      ["outline", "Sermon outline", true],
+      ["slides", "Slide cues & on-screen text", true],
+      ["scripture", "Scripture references", true],
+      ["live", "Follow live section", false],
+    ],
+  },
+  {
+    key: "group",
+    label: "Family Group Link",
+    desc: "A ready-to-use guide for group leaders.",
+    sections: [
+      ["bigidea", "Big idea", true],
+      ["guide", "Group guide & questions", true],
+      ["prayer", "Prayer prompts", false],
+    ],
+  },
+  {
+    key: "pack",
+    label: "Discipleship Pack Link",
+    desc: "The weekly discipleship resource for members and families.",
+    sections: [
+      ["personal", "Personal reflection guide", true],
+      ["family", "Parent conversation guide", true],
+      ["devotional", "Seven-day devotional", true],
+      ["memory", "Memory verse", true],
+      ["nextsteps", "Weekly next steps", true],
+    ],
+  },
+  {
+    key: "staff",
+    label: "Staff Alignment Link",
+    desc: "A read-only ministry alignment page for staff and key leaders.",
+    sections: [
+      ["summary", "Sermon summary & burden", true],
+      ["emphasis", "Ministry emphasis", true],
+      ["followup", "Follow-up needs", true],
+      ["prayer", "Prayer burden", true],
+      ["nextsteps", "Church-wide next steps", true],
+    ],
+  },
+  {
+    key: "recap",
+    label: "Public Recap Link",
+    desc: "A clean public-facing sermon recap.",
+    sections: [
+      ["recap", "Short recap", true],
+      ["reflection", "Reflection questions", true],
+      ["invitation", "Next step invitation", true],
+    ],
+  },
+];
+
+function shareToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function shareLink(sermon, kind) {
+  const def = SHARE_KINDS.find((item) => item.key === kind);
+  const existing = sermon.shareLinks[kind];
+  if (existing && existing.sections) return existing;
+  const sections = {};
+  def.sections.forEach(([key, , fallback]) => {
+    sections[key] = fallback;
+  });
+  sermon.shareLinks[kind] = { token: "", createdAt: "", updatedAt: "", expiresAt: "", revoked: false, dirty: false, sections, ...(existing || {}) };
+  return sermon.shareLinks[kind];
+}
+
+function shareUrl(link) {
+  return `${window.location.origin}${window.location.pathname.replace(/app$/, "").replace(/\/$/, "")}/share.html?t=${link.token}`;
+}
+
+function sharePlain(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// Build exactly what a link is allowed to carry — and nothing else.
+function buildSharePayload(sermon, kind) {
+  const link = shareLink(sermon, kind);
+  const on = (key) => link.sections[key] !== false;
+  const def = SHARE_KINDS.find((item) => item.key === kind);
+  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
+  const header = {
+    title: sermon.title || "",
+    passage: sermon.passage || "",
+    series: sermon.series || "",
+    date: sermon.date || "",
+    bigIdea: kind === "preacher" || on("bigidea") ? bigIdea : "",
+  };
+  const blocks = [];
+  const add = (label, text) => {
+    if (sharePlain(text)) blocks.push({ label, text: sharePlain(text) });
+  };
+
+  if (kind === "preacher") {
+    if (on("timer") && sermon.length) add("Timing", `Target length: ${sermon.length} minutes`);
+    if (on("notes")) {
+      pulpitSections(sermon).forEach((section) => {
+        const template = document.createElement("template");
+        template.innerHTML = section.html;
+        if (!on("personal")) template.content.querySelectorAll(".pf-b-note").forEach((node) => node.remove());
+        add(section.title, template.content.textContent.replace(/\n{3,}/g, "\n\n"));
+      });
+    }
+  }
+  if (kind === "production") {
+    if (on("outline")) {
+      add("Outline", (sermon.outline || []).filter((m) => m.title.trim()).map((m, i) => `${i + 1}. ${m.title}${m.sub ? ` — ${m.sub}` : ""}`).join("\n"));
+    }
+    if (on("slides") && sermon.slideDeck.slides.length) add("Slides", deckPlainText(sermon));
+    if (on("scripture")) {
+      const template = document.createElement("template");
+      template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
+      const refs = [...template.content.querySelectorAll('.pf-b-scripture[data-production="1"]')]
+        .map((node) => node.getAttribute("data-ref"))
+        .filter(Boolean);
+      add("Scripture references", refs.join("\n"));
+    }
+  }
+  if (kind === "group") {
+    if (on("guide")) add("Group guide", deliveryText(sermon, DELIVERY_RESOURCES.find((r) => r.key === "group")));
+    if (on("prayer")) add("Prayer prompts", sermon.impact?.prayer);
+  }
+  if (kind === "pack") {
+    ["personal", "family", "devotional", "memory", "nextsteps"].forEach((key) => {
+      if (!on(key)) return;
+      const resource = DELIVERY_RESOURCES.find((r) => r.key === key);
+      add(resource.label, deliveryText(sermon, resource));
+    });
+  }
+  if (kind === "staff") {
+    if (on("summary")) add("Summary & burden", [bigIdea, worksheetValue(sermon, "aim", "fallen").trim()].filter(Boolean).join("\n"));
+    if (on("emphasis")) add("Ministry emphasis", sermon.impact?.["summary.emphasis"]);
+    if (on("followup")) add("Follow-up needs", sermon.shepherd?.care);
+    if (on("prayer")) add("Prayer burden", sermon.impact?.prayer);
+    if (on("nextsteps")) add("Church-wide next steps", sermon.pack?.nextsteps);
+  }
+  if (kind === "recap") {
+    if (on("recap")) add("Recap", sermon.pack?.recap);
+    if (on("reflection")) add("Reflect this week", sermon.pack?.personal);
+    if (on("invitation")) add("Your next step", sermon.pack?.nextsteps);
+  }
+
+  return {
+    v: 1,
+    kind,
+    label: def.label,
+    header,
+    blocks,
+    follow: kind === "production" && on("live"),
+    currentSection: "",
+  };
+}
+
+function shareReady() {
+  return Boolean(ui.auth.client && ui.auth.user);
+}
+
+async function pushSharedView(sermon, kind, options = {}) {
+  const link = shareLink(sermon, kind);
+  if (!link.token) return false;
+  if (!shareReady()) {
+    showBanner("Sign in and sync this sermon to create live share links.");
+    return false;
+  }
+  const payload = buildSharePayload(sermon, kind);
+  if (options.currentSection) payload.currentSection = options.currentSection;
+  const { error } = await ui.auth.client.from("preach_flow_shared_views").upsert(
+    {
+      token: link.token,
+      user_id: ui.auth.user.id,
+      sermon_id: sermon.id,
+      kind,
+      payload,
+      revoked: false,
+      expires_at: link.expiresAt || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "token" },
+  );
+  if (error) {
+    showBanner(`Share update failed: ${error.message}`);
+    return false;
+  }
+  link.updatedAt = new Date().toISOString();
+  link.dirty = false;
+  link.revoked = false;
+  saveState();
+  return true;
+}
+
+async function revokeSharedView(sermon, kind) {
+  const link = shareLink(sermon, kind);
+  if (link.token && shareReady()) {
+    await ui.auth.client
+      .from("preach_flow_shared_views")
+      .update({ revoked: true, updated_at: new Date().toISOString() })
+      .eq("token", link.token);
+  }
+  link.revoked = true;
+  saveState();
+}
+
+// Local read-only preview of exactly what a link would show — works
+// offline and without an account.
+function openSharePreview(sermon, kind) {
+  const payload = buildSharePayload(sermon, kind);
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`
+    <title>${escapeHtml(payload.label)} — preview</title>
+    <body style="margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#f4fbfe;color:#20242a;">
+      <div style="max-width:680px;margin:0 auto;padding:40px 22px;">
+        <p style="font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#dc6a12;">${escapeHtml(payload.label)} · preview</p>
+        <h1 style="margin:6px 0 4px;font-size:26px;">${escapeHtml(payload.header.title || payload.header.passage || "Sermon")}</h1>
+        <p style="color:#5e6c7a;margin:0 0 6px;">${escapeHtml([payload.header.passage, payload.header.series, payload.header.date].filter(Boolean).join(" · "))}</p>
+        ${payload.header.bigIdea ? `<p style="font-weight:700;margin:10px 0 0;">${escapeHtml(payload.header.bigIdea)}</p>` : ""}
+        ${payload.blocks.map((block) => `<h2 style="font-size:16px;margin:26px 0 6px;">${escapeHtml(block.label)}</h2><p style="white-space:pre-wrap;line-height:1.65;margin:0;">${escapeHtml(block.text)}</p>`).join("") || `<p style="margin-top:26px;color:#5e6c7a;">Nothing to show yet — draft the underlying resources first.</p>`}
+        <p style="margin-top:40px;font-size:12px;color:#5e6c7a;">Read-only preview. The live link shows the same content.</p>
+      </div>
+    </body>`);
+  win.document.close();
+}
+
+function renderSharingCenter(active) {
+  if (!active) return renderNeedSermon("The Sharing and Delivery Center works from your current sermon — start one first.");
+  const bigIdea = worksheetValue(active, "aim", "burden").trim();
+  const purpose = worksheetValue(active, "aim", "purpose").trim();
+  const statuses = DELIVERY_RESOURCES.map((resource) => deliveryStatus(active, resource));
+  const readyCount = statuses.filter((status) => status === "ready" || status === "shared").length;
+  const sharedCount = statuses.filter((status) => status === "shared").length;
+  const draftedCount = statuses.filter((status) => status !== "none").length;
+  const nextStep = !draftedCount
+    ? "Draft your first resource — start with the Family Group Guide."
+    : readyCount < draftedCount
+      ? "Review drafted resources and mark them ready."
+      : !sharedCount
+        ? "Create a share link and send the first resource out."
+        : "Carry the message into the week — everything is moving.";
+
+  return `
+    <div class="pf-page pf-page-wide pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Sharing and Delivery Center</span>
+        <h1 class="pf-h1">Share the right sermon resources with the right people</h1>
+        <p class="pf-page-sub">Create secure, read-only links for preaching notes, production cues, group guides, discipleship resources, and ministry follow-up outputs — and get every resource ready to use the moment Sunday ends.</p>
+      </div>
+
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">This week's ministry package</span></div>
+        <div class="pf-impact-summary">
+          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "—")}</p></div>
+          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "—")}</p></div>
+          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : "—"}</p></div>
+          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "—"}</p></div>
+          <div><span class="pf-label">Resources</span><p>${draftedCount}/${DELIVERY_RESOURCES.length} drafted · ${readyCount} ready · ${sharedCount} shared</p></div>
+        </div>
+        <p class="pf-section-hint" style="margin:12px 0 0;">Next: ${escapeHtml(nextStep)}</p>
+        <div class="pf-modal-actions" style="margin-top:12px;">
+          <button class="pf-btn pf-btn-primary" data-action="prepare-all" ${ui.preparingAll || ui.drafting ? "disabled" : ""}>${ui.preparingAll ? "Preparing…" : "Prepare all resources"}</button>
+          <span class="pf-helper" style="align-self:center;">Drafts only what's missing — your existing work is never overwritten. Review everything before it goes out.</span>
+        </div>
+      </section>
+
+      <h2 class="pf-lib-group-head">Resource delivery <span>${DELIVERY_RESOURCES.length}</span></h2>
+      <div class="pf-delivery-grid">
+        ${DELIVERY_RESOURCES.map((resource) => {
+          const status = deliveryStatus(active, resource);
+          const specKey = `${resource.store}.${resource.field}`;
+          return `
+            <div class="pf-delivery-card">
+              <div class="pf-delivery-head">
+                <strong>${escapeHtml(resource.label)}</strong>
+                <span class="pf-lib-badge ${status === "ready" || status === "shared" ? "done" : ""}">${deliveryStatusLabel(status)}</span>
+              </div>
+              <div class="pf-delivery-actions">
+                ${status === "none" && DRAFT_SPECS[specKey] ? `<button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === specKey ? "Drafting…" : "Draft with Sermon Guide"}</button>` : ""}
+                <button class="pf-btn pf-btn-ghost" data-action="delivery-edit" data-store="${attr(resource.store)}">Edit</button>
+                ${status !== "none" ? `
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-copy" data-key="${attr(resource.key)}">Copy</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="pdf">PDF</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="doc">Word</button>
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="md">MD</button>
+                  <select class="pf-select pf-delivery-status" data-action="delivery-status" data-key="${attr(resource.key)}" aria-label="${attr(resource.label)} status">
+                    ${DELIVERY_STATUSES.map(([value, label]) => `<option value="${value}" ${status === value ? "selected" : ""}>${label}</option>`).join("")}
+                  </select>` : ""}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <h2 class="pf-lib-group-head" style="margin-top:34px;">Share links <span>${SHARE_KINDS.length}</span></h2>
+      ${
+        shareReady()
+          ? ""
+          : `<div class="pf-empty" style="margin-bottom:16px;">Sign in and sync this sermon to create live share links. Local previews below still work.</div>`
+      }
+      <div class="pf-share-grid">
+        ${SHARE_KINDS.map((def) => renderShareCard(active, def)).join("")}
+      </div>
+      <p class="pf-helper" style="margin-top:18px;">Share links are unguessable, revocable, and read-only. They never include your account, Preaching Profile, Congregational Lens, private notes, or Post-Sermon Debrief.</p>
+    </div>
+  `;
+}
+
+function renderShareCard(active, def) {
+  const link = shareLink(active, def.key);
+  const status = link.revoked ? "Revoked" : link.token ? "Public — anyone with the link" : "Unshared";
+  return `
+    <div class="pf-share-card">
+      <div class="pf-delivery-head">
+        <strong>${escapeHtml(def.label)}</strong>
+        <span class="pf-lib-badge ${link.token && !link.revoked ? "done" : ""}">${status}</span>
+      </div>
+      <p class="pf-tool-card-desc" style="margin:4px 0 10px;">${escapeHtml(def.desc)}</p>
+      <div class="pf-share-sections">
+        ${def.sections
+          .map(
+            ([key, label]) => `
+              <label class="pf-toggle-row" style="margin-top:0;">
+                <input type="checkbox" data-action="share-section" data-kind="${attr(def.key)}" data-key="${attr(key)}" ${link.sections[key] !== false ? "checked" : ""} />
+                <span>${escapeHtml(label)}</span>
+              </label>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="pf-share-meta">
+        <label class="pf-label" style="display:flex;align-items:center;gap:8px;">Expires
+          <input class="pf-input" type="date" style="width:auto;padding:6px 10px;" data-action="share-expires" data-kind="${attr(def.key)}" value="${attr((link.expiresAt || "").slice(0, 10))}" />
+        </label>
+        ${link.updatedAt ? `<span class="pf-helper">Updated ${escapeHtml(formatTime(link.updatedAt))}${link.dirty ? " · changes not pushed yet" : ""}</span>` : ""}
+      </div>
+      <div class="pf-delivery-actions">
+        ${
+          link.token && !link.revoked
+            ? `
+          <button class="pf-btn pf-btn-ghost" data-action="share-copy" data-kind="${attr(def.key)}">Copy link</button>
+          <button class="pf-btn pf-btn-ghost" data-action="share-update" data-kind="${attr(def.key)}">Update now</button>
+          <button class="pf-btn pf-btn-ghost" data-action="share-regenerate" data-kind="${attr(def.key)}">Regenerate</button>
+          <button class="pf-btn pf-btn-ghost pf-lib-delete" data-action="share-revoke" data-kind="${attr(def.key)}">Revoke</button>`
+            : `<button class="pf-btn pf-btn-primary" data-action="share-create" data-kind="${attr(def.key)}">Create link</button>`
+        }
+        <button class="pf-btn pf-btn-ghost" data-action="share-preview" data-kind="${attr(def.key)}">Preview</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderDebriefPage() {
@@ -7764,6 +8218,79 @@ document.addEventListener("click", (event) => {
   if (action === "guide-draft") {
     draftWithGuide(target.dataset.spec);
   }
+  if (action === "prepare-all") {
+    prepareAllResources();
+  }
+  if (action === "delivery-edit") {
+    const store = target.dataset.store;
+    state.view = "impact";
+    ui.impactTab = store === "impact" ? "plan" : store === "shepherd" ? "shepherd" : "pack";
+    saveState();
+    render();
+  }
+  if (action === "delivery-copy" || action === "delivery-export") {
+    const active = getActive();
+    const resource = DELIVERY_RESOURCES.find((item) => item.key === target.dataset.key);
+    if (!active || !resource) return;
+    const text = deliveryText(active, resource);
+    if (!text.trim()) {
+      showBanner("Nothing to export yet.");
+      return;
+    }
+    const heading = `${resource.label} — ${active.passage || "Sermon"}`;
+    if (action === "delivery-copy") {
+      copyText(text);
+    } else if (target.dataset.format === "pdf") {
+      exportPdf(heading, `<section class="sermon"><h1>${escapeHtml(heading)}</h1><div class="note"><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p></div></section>`);
+    } else if (target.dataset.format === "doc") {
+      exportDoc(heading, `<h1>${escapeHtml(heading)}</h1><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p>`);
+    } else {
+      downloadText(`${slug(active.passage)}-${resource.key}.md`, `# ${heading}\n\n${text}\n`);
+    }
+  }
+  if (action === "share-create" || action === "share-update" || action === "share-regenerate") {
+    const active = getActive();
+    if (!active) return;
+    if (!shareReady()) {
+      showBanner("Sign in and sync this sermon to create live share links.");
+      return;
+    }
+    const link = shareLink(active, target.dataset.kind);
+    if (action === "share-regenerate" && link.token) {
+      revokeSharedView(active, target.dataset.kind);
+      link.token = "";
+    }
+    if (!link.token) {
+      link.token = shareToken();
+      link.createdAt = new Date().toISOString();
+      link.revoked = false;
+    }
+    pushSharedView(active, target.dataset.kind).then((ok) => {
+      if (ok) {
+        copyText(shareUrl(link));
+        showBanner("Link is live and copied to your clipboard.");
+      }
+      render();
+    });
+  }
+  if (action === "share-copy") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    if (link.token) copyText(shareUrl(link));
+  }
+  if (action === "share-revoke") {
+    const active = getActive();
+    if (!active) return;
+    revokeSharedView(active, target.dataset.kind).then(() => {
+      showBanner("Link revoked — it no longer resolves.");
+      render();
+    });
+  }
+  if (action === "share-preview") {
+    const active = getActive();
+    if (active) openSharePreview(active, target.dataset.kind);
+  }
   if (action === "ministry-copy") {
     const store = ministryStore(target.dataset.store, target.dataset.sermon);
     const value = store?.[target.dataset.key];
@@ -8038,6 +8565,31 @@ document.addEventListener("change", (event) => {
     state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
     saveState();
   }
+  if (action === "share-section") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    link.sections[target.dataset.key] = target.checked;
+    link.dirty = Boolean(link.token);
+    saveState();
+    render();
+  }
+  if (action === "share-expires") {
+    const active = getActive();
+    if (!active) return;
+    const link = shareLink(active, target.dataset.kind);
+    link.expiresAt = target.value ? `${target.value}T23:59:59Z` : "";
+    link.dirty = Boolean(link.token);
+    saveState();
+  }
+  if (action === "delivery-status") {
+    const active = getActive();
+    if (!active) return;
+    active.delivery = { ...active.delivery, [target.dataset.key]: target.value };
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
   if (action === "deck-theme") {
     const active = getActive();
     if (!active) return;
@@ -8297,13 +8849,23 @@ function togglePracticeTimer() {
   render();
 }
 
+let followLiveTimer = null;
+
 function pulpitStep(delta) {
   const active = getActive();
   if (!active) return;
-  const total = pulpitSections(active).length;
-  const next = Math.min(total - 1, Math.max(0, ui.pulpit.section + delta));
+  const sections = pulpitSections(active);
+  const next = Math.min(sections.length - 1, Math.max(0, ui.pulpit.section + delta));
   if (next === ui.pulpit.section) return;
   ui.pulpit.section = next;
+  // Follow-live: if the production link opted in, quietly push the section.
+  const production = active.shareLinks?.production;
+  if (ui.pulpit.mode === "live" && production?.token && !production.revoked && production.sections?.live && shareReady()) {
+    clearTimeout(followLiveTimer);
+    followLiveTimer = setTimeout(() => {
+      pushSharedView(active, "production", { currentSection: sections[next]?.title || `Section ${next + 1}` });
+    }, 1500);
+  }
   render();
   requestAnimationFrame(() => {
     if (state.pulpitPrefs.focusMode) {

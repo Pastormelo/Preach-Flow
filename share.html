@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Shared from PreachFlow</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/preach-flow-mark.svg?v=ofc-4" />
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, "Segoe UI", "Mulish", sans-serif;
+        background: #f4fbfe;
+        color: #20242a;
+        line-height: 1.65;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #16181c; color: #ece9e2; }
+        .meta, .foot, .updated { color: #9aa2ad !important; }
+        h2 { color: #ffb35e !important; }
+      }
+      .wrap { max-width: 680px; margin: 0 auto; padding: 44px 22px 80px; }
+      .kind {
+        font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+        font-size: 11px; color: #dc6a12; margin: 0 0 6px;
+      }
+      h1 { margin: 0 0 4px; font-size: 27px; line-height: 1.2; }
+      .meta { color: #5e6c7a; margin: 0 0 4px; font-size: 14.5px; }
+      .bigidea { font-weight: 700; margin: 12px 0 0; font-size: 17px; }
+      h2 { font-size: 16px; margin: 30px 0 6px; color: #dc6a12; }
+      .block { white-space: pre-wrap; margin: 0; font-size: 16px; }
+      .updated { margin-top: 44px; font-size: 12.5px; color: #5e6c7a; }
+      .foot { font-size: 12.5px; color: #5e6c7a; margin-top: 6px; }
+      .err { margin-top: 40px; padding: 18px; border: 1px solid #e0e5eb; border-radius: 12px; }
+      .live {
+        position: sticky; top: 0; background: #ff953e; color: #20242a;
+        font-weight: 800; padding: 10px 22px; font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="live" class="live" hidden></div>
+    <div class="wrap" id="root"><p class="meta">Loading…</p></div>
+    <script>
+      const root = document.getElementById("root");
+      const liveBar = document.getElementById("live");
+      const token = new URLSearchParams(window.location.search).get("t") || "";
+      let client = null;
+
+      function esc(value) {
+        const div = document.createElement("div");
+        div.textContent = String(value || "");
+        return div.innerHTML;
+      }
+
+      function fail(message) {
+        root.innerHTML = `<div class="err"><strong>This link isn't available.</strong><p class="meta">${esc(message)}</p></div>`;
+      }
+
+      function renderPayload(payload) {
+        const header = payload.header || {};
+        const metaLine = [header.passage, header.series, header.date].filter(Boolean).join(" · ");
+        root.innerHTML = `
+          <p class="kind">${esc(payload.label || "Shared resource")}</p>
+          <h1>${esc(header.title || header.passage || "Sermon")}</h1>
+          ${metaLine ? `<p class="meta">${esc(metaLine)}</p>` : ""}
+          ${header.bigIdea ? `<p class="bigidea">${esc(header.bigIdea)}</p>` : ""}
+          ${(payload.blocks || []).map((block) => `<h2>${esc(block.label)}</h2><p class="block">${esc(block.text)}</p>`).join("")}
+          <p class="updated">Last updated ${payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : "—"} · <a href="#" onclick="location.reload();return false;">Refresh</a></p>
+          <p class="foot">Read-only. Shared from PreachFlow — sermon prep that keeps the text in charge.</p>
+        `;
+        if (payload.kind === "production" && payload.follow && payload.currentSection) {
+          liveBar.hidden = false;
+          liveBar.textContent = `Now: ${payload.currentSection}`;
+        }
+      }
+
+      async function load() {
+        if (!token) return fail("No share token in the address.");
+        try {
+          const config = await fetch("./api/config").then((response) => response.json());
+          if (!config.supabaseUrl || !config.supabaseAnonKey) return fail("Sharing is not configured for this deployment.");
+          if (!client) {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+            client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+          }
+          const { data, error } = await client.rpc("preach_flow_get_shared_view", { share_token: token });
+          if (error) return fail(error.message);
+          if (!data) return fail("The link may have been revoked, expired, or never existed.");
+          renderPayload(data);
+          if (data.kind === "production" && data.follow) setTimeout(load, 20000);
+        } catch (error) {
+          fail(error.message || "Network error.");
+        }
+      }
+      load();
+    </script>
+  </body>
+</html>

@@ -3442,3 +3442,55 @@ p {
   cursor: pointer;
 }
 .pf-slide-add:hover { border-color: var(--brand); color: var(--text-brand); }
+
+/* ---- Sharing and Delivery Center ---- */
+.pf-delivery-grid,
+.pf-share-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pf-delivery-card,
+.pf-share-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.pf-delivery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+}
+.pf-delivery-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.pf-delivery-actions .pf-btn { padding: 6px 12px; font-size: 12.5px; }
+.pf-delivery-status { width: auto; padding: 6px 10px; font-size: 12.5px; }
+.pf-share-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+  margin-bottom: 8px;
+}
+.pf-share-sections .pf-toggle-row span { font-size: 13px; }
+.pf-share-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+@media (max-width: 880px) {
+  .pf-delivery-grid,
+  .pf-share-grid { grid-template-columns: 1fr; }
+  .pf-share-sections { grid-template-columns: 1fr; }
+}
