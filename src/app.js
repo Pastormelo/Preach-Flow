@@ -394,6 +394,64 @@ const PHASE_RESOURCES = {
 // so it must be initialized before loadState() runs below).
 const PRACTICE_WPM_CHOICES = [110, 130, 150];
 
+// ---- Preaching Profile ----
+// The preacher's workflow layer: defaults, homiletical preferences,
+// convictions, review standards, and Sermon Guide posture. Distinct from
+// Account (identity/security), Congregational Lens (the church), and the
+// Workspace (the sermon).
+function normalizePreachingProfile(profile) {
+  const source = profile && typeof profile === "object" ? profile : {};
+  const str = (value) => (typeof value === "string" ? value : "");
+  const list = (value) => (Array.isArray(value) ? value.filter(Boolean).map(String) : []);
+  const flag = (value, fallback) => (typeof value === "boolean" ? value : fallback);
+  return {
+    // 1. Preaching role
+    role: str(source.role),
+    context: str(source.context),
+    cadence: str(source.cadence),
+    day: str(source.day),
+    // 2. Sermon defaults
+    translation: str(source.translation),
+    length: str(source.length),
+    targetTime: str(source.targetTime),
+    format: str(source.format),
+    deliverable: str(source.deliverable),
+    seriesBehavior: str(source.seriesBehavior),
+    // 3. Homiletical preferences
+    style: str(source.style),
+    outlinePref: str(source.outlinePref),
+    bigIdeaStyle: str(source.bigIdeaStyle),
+    applicationEmphasis: list(source.applicationEmphasis),
+    christConnection: str(source.christConnection),
+    // 4. Convictions
+    tradition: str(source.tradition),
+    confession: str(source.confession),
+    values: list(source.values),
+    guardrails: str(source.guardrails),
+    // 5. Sermon Guide preferences
+    posture: list(source.posture),
+    useProfile: flag(source.useProfile, true),
+    useLens: flag(source.useLens, true),
+    pushBack: flag(source.pushBack, true),
+    questionsFirst: flag(source.questionsFirst, false),
+    textInCharge: flag(source.textInCharge, true),
+    noFullSections: flag(source.noFullSections, true),
+    // 6. Review rubric (defaults render as checked when unset)
+    rubric: source.rubric && typeof source.rubric === "object" ? source.rubric : {},
+    rubricCustom: list(source.rubricCustom),
+    // 7. Preparation rhythm
+    prepRhythm: str(source.prepRhythm),
+    prepDays: list(source.prepDays),
+    pressurePoints: list(source.pressurePoints),
+    weeklyTarget: str(source.weeklyTarget),
+    // 8. Output defaults
+    exportFormat: str(source.exportFormat),
+    productionOutputs: list(source.productionOutputs),
+    audienceOutputs: list(source.audienceOutputs),
+    onboarded: flag(source.onboarded, false),
+  };
+}
+
 const DEFAULT_DRAFT = {
   passage: "",
   title: "",
@@ -424,6 +482,7 @@ const ui = {
   switcherQuery: "",
   notesQuery: "",
   impactTab: "home",
+  profileTab: "profile",
   libraryQuery: "",
   librarySort: "date",
   debriefSermonId: "",
@@ -492,6 +551,7 @@ if (!state.dietReview || typeof state.dietReview !== "object") state.dietReview 
 if (!state.resources || typeof state.resources !== "object") state.resources = {};
 state.practiceWpm = normalizeWpm(state.practiceWpm);
 state.practiceFont = normalizeFontStep(state.practiceFont);
+state.preachingProfile = normalizePreachingProfile(state.preachingProfile);
 
 function loadTheme() {
   const stored = localStorage.getItem(THEME_STORE);
@@ -525,6 +585,7 @@ function loadState() {
       resources: normalizeResources(parsed.resources),
       practiceWpm: normalizeWpm(parsed.practiceWpm),
       practiceFont: normalizeFontStep(parsed.practiceFont),
+      preachingProfile: normalizePreachingProfile(parsed.preachingProfile),
     };
   } catch {
     return {
@@ -576,6 +637,7 @@ function stateSnapshot() {
     resources: state.resources,
     practiceWpm: state.practiceWpm,
     practiceFont: state.practiceFont,
+    preachingProfile: state.preachingProfile,
   };
 }
 
@@ -599,6 +661,7 @@ function applyStateSnapshot(snapshot) {
   state.resources = normalizeResources(snapshot?.resources);
   state.practiceWpm = normalizeWpm(snapshot?.practiceWpm);
   state.practiceFont = normalizeFontStep(snapshot?.practiceFont);
+  state.preachingProfile = normalizePreachingProfile(snapshot?.preachingProfile);
 }
 
 function normalizeSermon(sermon) {
@@ -944,6 +1007,7 @@ function render() {
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
+    ${renderOnboarding()}
   `;
 
   if (state.view === "signin") {
@@ -1147,7 +1211,7 @@ function renderOpenAIKeyPanel() {
 const GOOGLE_G_SVG = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>`;
 
 function renderSignin(active) {
-  if (ui.auth.user) return renderAccount(active);
+  if (ui.auth.user) return renderProfile(active);
   const creating = ui.signinMode === "signup";
   const disabled = ui.auth.loading || !ui.auth.configured;
   return `
@@ -1203,53 +1267,350 @@ function renderSignin(active) {
   `;
 }
 
-function renderAccount(active) {
+// ---- Preaching Profile page ----
+const PROFILE_TABS = [
+  ["profile", "Preaching Profile"],
+  ["guide", "Sermon Guide"],
+  ["defaults", "Defaults"],
+  ["account", "Account"],
+  ["privacy", "Privacy"],
+];
+
+const PROFILE_OPTIONS = {
+  role: ["Lead pastor", "Teaching pastor", "Church planter", "Associate pastor", "Elder", "Student pastor", "Guest preacher", "Other"],
+  context: ["Sunday gathering", "Midweek service", "Students", "Groups", "Church plant", "Conference", "Devotional", "Other"],
+  cadence: ["Weekly", "Most weeks", "Monthly", "Occasional", "Seasonal"],
+  day: ["Sunday", "Wednesday", "Other"],
+  format: ["Full manuscript", "Detailed outline", "Hybrid notes", "Bullet notes"],
+  deliverable: ["Sermon manuscript", "Preaching notes", "Teaching guide", "Devotional", "Group guide"],
+  seriesBehavior: ["Standalone sermon", "Series-based", "Book-by-book", "Topical series", "Church calendar"],
+  style: ["Expositional", "Textual", "Narrative", "Doctrinal", "Topical", "Mixed"],
+  outlinePref: ["Text-driven movements", "Proposition-based points", "Narrative movement", "Problem-solution", "Theological argument", "Pastoral burden"],
+  bigIdeaStyle: ["Concise statement", "Doctrinal claim", "Pastoral burden", "Memorable sentence", "Question-answer"],
+  christConnection: ["Responsible biblical theology", "Direct fulfillment", "Gospel pattern", "Canonical context", "Avoid forced allegory"],
+  prepRhythm: ["Same-week preparation", "Two weeks ahead", "Four-week rotation", "Custom rhythm"],
+  exportFormat: ["PDF", "Word", "Markdown", "Google Docs"],
+};
+
+const PROFILE_APPLICATION_EMPHASES = ["Heart", "Habits", "Church body", "Mission", "Repentance", "Comfort", "Evangelism", "Family", "Suffering", "Leadership"];
+const PROFILE_VALUES = ["Gospel centrality", "Biblical authority", "Spirit dependence", "Church as family", "Mission", "Discipleship", "Prayer", "Leadership development", "Church planting", "Mercy", "Holiness", "Evangelism", "Generosity", "Justice", "Unity"];
+const PROFILE_POSTURES = ["Ask me questions first", "Give direct suggestions", "Challenge weak assumptions", "Help me tighten structure", "Focus on application", "Focus on exegesis", "Focus on clarity and brevity"];
+const PROFILE_RUBRIC = [
+  ["faithful", "Faithfulness to the text"],
+  ["bigidea", "Clear big idea"],
+  ["gospel", "Gospel clarity"],
+  ["christ", "Responsible Christ connection"],
+  ["application", "Specific application"],
+  ["evangelistic", "Evangelistic clarity"],
+  ["tone", "Pastoral tone"],
+  ["transitions", "Transitions"],
+  ["length", "Length"],
+  ["complexity", "Unnecessary complexity"],
+  ["respond", "Call to respond"],
+  ["nextsteps", "Church-wide next steps"],
+];
+const PROFILE_PREP_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const PROFILE_PRESSURES = ["Getting started", "Big idea", "Outline", "Application", "Manuscript", "Conclusion", "Review", "Slides", "Group guide"];
+const PROFILE_PRODUCTION_OUTPUTS = ["Slides document", "Family group guide", "Discipleship pack", "Impact plan", "Social summary", "Weekly email", "Devotional"];
+const PROFILE_AUDIENCES = ["Staff", "Prayer team", "Groups", "Parents", "Members", "Unbelievers", "Leaders", "Production team"];
+
+const PROFILE_GUARDRAIL_HINT = `e.g.
+Do not force Christ connections where the text does not support them.
+Do not overuse therapeutic language.
+Do not make application generic.
+Do not flatten Old Testament texts.
+Do not write as if the app is the preacher.`;
+
+// A review-rubric item is on unless the pastor turned it off.
+function rubricChecked(key) {
+  const value = state.preachingProfile.rubric[key];
+  return value !== false;
+}
+
+// The rubric the pastor wants applied before preaching (defaults + custom).
+function activeRubricItems() {
+  const items = PROFILE_RUBRIC.filter(([key]) => rubricChecked(key)).map(([, label]) => label);
+  return [...items, ...state.preachingProfile.rubricCustom];
+}
+
+function profileSelect(key, label, options, allowFree = false) {
+  const value = state.preachingProfile[key] || "";
+  const custom = value && !options.includes(value);
   return `
-    <div class="pf-signin-wrap">
-      <div class="pf-signin-inner">
-        <div style="margin-bottom:14px;">
-          <button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to workspace</button>
+    <div class="pf-field" style="margin-bottom:0;">
+      <label class="pf-label">${escapeHtml(label)}</label>
+      <select class="pf-select" data-action="profile-field" data-key="${attr(key)}">
+        <option value="">Choose…</option>
+        ${options.map((option) => `<option ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        ${custom ? `<option selected>${escapeHtml(value)}</option>` : ""}
+      </select>
+    </div>
+  `;
+}
+
+function profileInput(key, label, placeholder = "") {
+  return `
+    <div class="pf-field" style="margin-bottom:0;">
+      <label class="pf-label">${escapeHtml(label)}</label>
+      <input class="pf-input" data-action="profile-field" data-key="${attr(key)}" value="${attr(state.preachingProfile[key] || "")}" placeholder="${attr(placeholder)}" />
+    </div>
+  `;
+}
+
+function profileToggle(key, label, desc) {
+  return `
+    <label class="pf-toggle-row">
+      <input type="checkbox" data-action="profile-toggle" data-key="${attr(key)}" ${state.preachingProfile[key] ? "checked" : ""} />
+      <span><strong>${escapeHtml(label)}</strong>${desc ? ` — ${escapeHtml(desc)}` : ""}</span>
+    </label>
+  `;
+}
+
+function profileSection(title, hint, body) {
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">${escapeHtml(title)}</span></div>
+      ${hint ? `<p class="pf-section-hint">${escapeHtml(hint)}</p>` : ""}
+      ${body}
+    </section>
+  `;
+}
+
+// Optional post-signup setup. Never blocks the app; everything stays
+// editable later from the avatar.
+function renderOnboarding() {
+  if (!ui.auth.user || state.preachingProfile.onboarded) return "";
+  if (state.view === "signin") return "";
+  return `
+    <div class="pf-overlay" data-action="onboard-skip" data-overlay>
+      <div class="pf-modal" data-stop style="max-width:560px;">
+        <div class="pf-modal-head"><span class="pf-eyebrow pf-eyebrow-brand">Welcome</span></div>
+        <h2 style="font-family:var(--font-display);font-weight:800;font-size:21px;margin:2px 0 8px;">Make PreachFlow fit your preaching workflow.</h2>
+        <p class="pf-page-sub" style="margin-bottom:16px;">Set a few defaults so PreachFlow can better support your sermon preparation, review, and ministry outputs. Nothing here is required.</p>
+        <div class="pf-onboard-cards">
+          <button class="pf-tool-card" data-action="onboard-start" data-tab="defaults">
+            <span class="pf-tool-card-title">Set preaching defaults</span>
+            <span class="pf-tool-card-desc">Translation, sermon length, format, and the outputs you produce most weeks.</span>
+          </button>
+          <button class="pf-tool-card" data-action="onboard-start" data-tab="guide">
+            <span class="pf-tool-card-title">Shape Sermon Guide</span>
+            <span class="pf-tool-card-desc">Posture, push-back, and guardrails — how you want help without handing over the pen.</span>
+          </button>
+          <button class="pf-tool-card" data-action="onboard-lens">
+            <span class="pf-tool-card-title">Add Congregational Lens</span>
+            <span class="pf-tool-card-desc">Tell PreachFlow who your church is, so application lands on real people.</span>
+          </button>
         </div>
-        <div class="pf-signin-head">
-          <span class="pf-avatar" style="width:46px;height:46px;font-size:18px;margin-bottom:16px;">${escapeHtml(accountInitial())}</span>
-          <h1 class="pf-signin-title">Your account</h1>
-          <p class="pf-signin-subtitle">${escapeHtml(ui.auth.user.email || "Signed in")}</p>
-        </div>
-        <div class="pf-signin-card">
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Cloud sync</div>
-              <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
-            </div>
-            <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Sermon Guide engine</div>
-              <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet"}</div>
-            </div>
-            <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Congregational Lens</div>
-              <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
-            </div>
-            <button class="pf-btn" data-action="open-lens">Open</button>
-          </div>
-          <div class="pf-account-row">
-            <div style="flex:1;">
-              <div class="pf-account-label">Appearance</div>
-              <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
-            </div>
-            <button class="pf-btn" data-action="toggle-theme">Toggle</button>
-          </div>
-          <div class="pf-account-actions">
-            <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
-          </div>
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="onboard-start" data-tab="profile">Start setup</button>
+          <button class="pf-btn" data-action="onboard-skip">Skip for now</button>
+          <button class="pf-btn pf-btn-ghost" data-action="onboard-skip">Use basic defaults</button>
         </div>
       </div>
     </div>
+  `;
+}
+
+function renderProfile(active) {
+  const tab = PROFILE_TABS.some(([key]) => key === ui.profileTab) ? ui.profileTab : "profile";
+  const headings = {
+    profile: ["Preaching Profile", "Shape PreachFlow around the way you prepare, preach, and lead through the Word."],
+    guide: ["Sermon Guide", "Set the posture and boundaries for how Sermon Guide supports your preparation."],
+    defaults: ["Defaults", "Sermon and output defaults, so every sermon starts closer to your real workflow."],
+    account: ["Your account", "Identity, sign-in, sync, and settings."],
+    privacy: ["Privacy", "What PreachFlow stores, what it never shares, and what belongs elsewhere."],
+  };
+  const [heading, sub] = headings[tab];
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <div style="margin-bottom:12px;"><button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to app</button></div>
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">${escapeHtml(ui.auth.user?.email || "Profile")}</span>
+        <h1 class="pf-h1">${escapeHtml(heading)}</h1>
+        <p class="pf-page-sub">${escapeHtml(sub)}</p>
+      </div>
+      <div class="pf-subtabs" style="margin-bottom:22px;">
+        ${PROFILE_TABS.map(([key, label]) => `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="profile-tab" data-tab="${key}">${label}</button>`).join("")}
+      </div>
+      ${tab === "profile" ? renderProfileTab() : ""}
+      ${tab === "guide" ? renderProfileGuideTab() : ""}
+      ${tab === "defaults" ? renderProfileDefaultsTab() : ""}
+      ${tab === "account" ? renderProfileAccountTab(active) : ""}
+      ${tab === "privacy" ? renderProfilePrivacyTab() : ""}
+    </div>
+  `;
+}
+
+function renderProfileTab() {
+  const profile = state.preachingProfile;
+  return `
+    <p class="pf-page-sub" style="margin-bottom:18px;">Your Preaching Profile helps PreachFlow remember your sermon defaults, preparation rhythm, review standards, and preferred ministry outputs — so every sermon starts closer to your real workflow. Everything here is optional and editable anytime.</p>
+
+    ${profileSection("Preaching role", "Who is preaching, where, and how often.", `
+      <div class="pf-form-grid">
+        ${profileSelect("role", "Role or title", PROFILE_OPTIONS.role)}
+        ${profileSelect("context", "Primary preaching context", PROFILE_OPTIONS.context)}
+        ${profileSelect("cadence", "Preaching cadence", PROFILE_OPTIONS.cadence)}
+        ${profileSelect("day", "Default preaching day", PROFILE_OPTIONS.day)}
+      </div>
+    `)}
+
+    ${profileSection("Homiletical preferences", "How you naturally build a sermon. Sermon Guide respects these instead of pushing a generic method.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("style", "Primary preaching style", PROFILE_OPTIONS.style)}
+        ${profileSelect("outlinePref", "Outline preference", PROFILE_OPTIONS.outlinePref)}
+        ${profileSelect("bigIdeaStyle", "Big idea style", PROFILE_OPTIONS.bigIdeaStyle)}
+        ${profileSelect("christConnection", "Christ connection preference", PROFILE_OPTIONS.christConnection)}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Application emphasis</label>
+      ${renderChipGroup("profile", "applicationEmphasis", PROFILE_APPLICATION_EMPHASES, profile.applicationEmphasis)}
+    `)}
+
+    ${profileSection("Theological and ministry convictions", "The stream you preach from and the values your ministry carries.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileInput("tradition", "Theological tradition or stream", "e.g. Reformed Baptist, Wesleyan, non-denominational…")}
+        ${profileInput("confession", "Confessional alignment", "e.g. 1689, Westminster, statement of faith…")}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Ministry values</label>
+      ${renderChipGroup("profile", "values", PROFILE_VALUES, profile.values)}
+      <div class="pf-ws-field" style="margin-top:14px;">
+        <label class="pf-label">Guardrails — lines Sermon Guide must not cross</label>
+        <textarea class="pf-ws-input" rows="5" data-action="profile-field" data-key="guardrails" placeholder="${attr(PROFILE_GUARDRAIL_HINT)}">${escapeHtml(profile.guardrails)}</textarea>
+      </div>
+    `)}
+
+    ${profileSection("Review rubric", "Before you preach, PreachFlow checks the sermon against this list — your standards, not generic ones.", `
+      <div class="pf-rubric-grid">
+        ${PROFILE_RUBRIC.map(
+          ([key, label]) => `
+            <label class="pf-toggle-row" style="margin-top:0;">
+              <input type="checkbox" data-action="rubric-toggle" data-key="${attr(key)}" ${rubricChecked(key) ? "checked" : ""} />
+              <span>${escapeHtml(label)}</span>
+            </label>
+          `,
+        ).join("")}
+      </div>
+      ${profile.rubricCustom.length ? `<div class="pf-filter-chips" style="margin:12px 0 0;">${profile.rubricCustom.map((item, index) => `<span class="pf-chip active">${escapeHtml(item)} <button class="pf-chip-x" data-action="rubric-remove" data-index="${index}" aria-label="Remove ${attr(item)}">✕</button></span>`).join("")}</div>` : ""}
+      <div class="pf-chip-add" style="margin-top:12px;">
+        <input class="pf-input" data-rubric-input placeholder="Add your own review standard…" />
+        <button type="button" class="pf-btn pf-btn-ghost" data-action="rubric-add">Add</button>
+      </div>
+    `)}
+
+    ${profileSection("Preparation rhythm", "How your week actually works — so nudges and defaults fit real life.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("prepRhythm", "Preferred prep rhythm", PROFILE_OPTIONS.prepRhythm)}
+        ${profileInput("weeklyTarget", "Ideal weekly target", "e.g. manuscript done by Thursday")}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Typical sermon-prep days</label>
+      ${renderChipGroup("profile", "prepDays", PROFILE_PREP_DAYS, profile.prepDays)}
+      <label class="pf-label" style="display:block;margin:14px 0 6px;">Common pressure points</label>
+      ${renderChipGroup("profile", "pressurePoints", PROFILE_PRESSURES, profile.pressurePoints)}
+    `)}
+
+    <p class="pf-helper">Your Preaching Profile is for sermon-prep preferences and ministry workflow defaults. Do not store confidential counseling details, private member information, or sensitive pastoral care notes here.</p>
+  `;
+}
+
+function renderProfileGuideTab() {
+  const profile = state.preachingProfile;
+  return `
+    ${profileSection("Sermon Guide posture", "How you want Sermon Guide to engage your work. It supports the process — the Word leads, and you preach.", `
+      ${renderChipGroup("profile", "posture", PROFILE_POSTURES, profile.posture)}
+    `)}
+    ${profileSection("Default behavior", "", `
+      ${profileToggle("useProfile", "Use Preaching Profile in Sermon Guide responses", "your preferences shape how it helps")}
+      ${profileToggle("useLens", "Use Congregational Lens in Sermon Guide responses", "application aimed at your actual church")}
+      ${profileToggle("pushBack", "Push back when the sermon is unclear", "honest friction, not flattery")}
+      ${profileToggle("questionsFirst", "Prefer questions before drafting", "Sermon Guide asks before it suggests")}
+      ${profileToggle("textInCharge", "Keep the text in charge", "challenge anything the passage doesn't support")}
+      ${profileToggle("noFullSections", "Avoid writing full sermon sections unless explicitly requested", "the pen stays in your hand")}
+    `)}
+    ${profileSection("Engine", "", `
+      <div class="pf-account-row" style="border:0;padding:0;">
+        <div style="flex:1;">
+          <div class="pf-account-label">Sermon Guide engine</div>
+          <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet — add one to enable Sermon Guide"}</div>
+        </div>
+        <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
+      </div>
+    `)}
+  `;
+}
+
+function renderProfileDefaultsTab() {
+  return `
+    ${profileSection("Sermon defaults", "Prefilled when you start a sermon — always editable per sermon.", `
+      <div class="pf-form-grid">
+        ${profileInput("translation", "Preferred Bible translation", "e.g. ESV, CSB, NIV, KJV")}
+        ${profileInput("length", "Default sermon length (minutes)", "40")}
+        ${profileInput("targetTime", "Target preaching time (minutes)", "40")}
+        ${profileSelect("format", "Default sermon format", PROFILE_OPTIONS.format)}
+        ${profileSelect("deliverable", "Default deliverable", PROFILE_OPTIONS.deliverable)}
+        ${profileSelect("seriesBehavior", "Default series behavior", PROFILE_OPTIONS.seriesBehavior)}
+      </div>
+    `)}
+    ${profileSection("Output defaults", "What you usually produce from a sermon and who it's for.", `
+      <div class="pf-form-grid" style="margin-bottom:14px;">
+        ${profileSelect("exportFormat", "Default export format", PROFILE_OPTIONS.exportFormat)}
+      </div>
+      <label class="pf-label" style="display:block;margin-bottom:6px;">Default production outputs</label>
+      ${renderChipGroup("profile", "productionOutputs", PROFILE_PRODUCTION_OUTPUTS, state.preachingProfile.productionOutputs)}
+      <label class="pf-label" style="display:block;margin:14px 0 6px;">Default audience outputs</label>
+      ${renderChipGroup("profile", "audienceOutputs", PROFILE_AUDIENCES, state.preachingProfile.audienceOutputs)}
+    `)}
+  `;
+}
+
+function renderProfileAccountTab(active) {
+  return `
+    ${profileSection("Account", "Identity, sign-in, security, integrations, and settings live here — your Preaching Profile is about your workflow.", `
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Cloud sync</div>
+          <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
+        </div>
+        <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Congregational Lens</div>
+          <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
+        </div>
+        <button class="pf-btn" data-action="open-lens">Open</button>
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Google Docs</div>
+          <div class="pf-account-meta">${ui.google.connected ? "Connected" : ui.google.configured ? "Not connected" : "Not configured"}</div>
+        </div>
+        ${active ? `<button class="pf-btn" data-action="open-google-docs">Manage</button>` : ""}
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Appearance</div>
+          <div class="pf-account-meta">${state.theme === "dark" ? "Dark theme" : "Light theme"}</div>
+        </div>
+        <button class="pf-btn" data-action="toggle-theme">Toggle</button>
+      </div>
+      <div class="pf-account-actions">
+        <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
+      </div>
+    `)}
+  `;
+}
+
+function renderProfilePrivacyTab() {
+  return `
+    ${profileSection("Where your data lives", "", `
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Your sermons, profile, and lens are saved on this device, and — when you're signed in — synced to your own account's cloud storage. Sermon Guide requests send only the sermon context needed for the request, using the API key you added on this device.</p>
+    `)}
+    ${profileSection("What is never shared", "", `
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Share links never include your Preaching Profile, your account details, your Congregational Lens (unless you intentionally include a broad ministry field), your private notes, or your Post-Sermon Debrief — unless you explicitly turn a section on.</p>
+    `)}
+    ${profileSection("What belongs elsewhere", "", `
+      <p class="pf-ministry-desc">PreachFlow is for sermon preparation and ministry workflow. Do not store confidential counseling details, private member information, or sensitive pastoral care notes anywhere in the app — the Preaching Profile, Congregational Lens, and Debrief all carry this same rule.</p>
+    `)}
   `;
 }
 
@@ -1378,6 +1739,25 @@ function renderEmpty() {
   `;
 }
 
+// Suggest the next occurrence of the profile's default preaching day.
+function nextPreachingDate() {
+  const day = state.preachingProfile.day;
+  const target = day === "Sunday" ? 0 : day === "Wednesday" ? 3 : null;
+  if (target === null) return "";
+  const now = new Date();
+  const delta = (target - now.getDay() + 7) % 7 || 7;
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + delta);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+}
+
+// The sermon form's deliverable is manuscript-or-notes; map the profile's
+// richer format preference onto it.
+function profileDefaultFormat() {
+  return state.preachingProfile.format === "Full manuscript" || !state.preachingProfile.format
+    ? "Full manuscript"
+    : "Preaching notes";
+}
+
 function renderNewSermon() {
   return `
     <div class="pf-page pf-page-narrow pf-fade">
@@ -1399,11 +1779,11 @@ function renderNewSermon() {
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-date">Preaching date</label>
-            <input id="new-date" class="pf-input" type="date" name="date" />
+            <input id="new-date" class="pf-input" type="date" name="date" value="${attr(nextPreachingDate())}" />
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-length">Length (min)</label>
-            <input id="new-length" class="pf-input" name="length" inputmode="numeric" value="${attr(DEFAULT_DRAFT.length)}" />
+            <input id="new-length" class="pf-input" name="length" inputmode="numeric" value="${attr(state.preachingProfile.length || DEFAULT_DRAFT.length)}" />
           </div>
           <div class="pf-field">
             <label class="pf-label" for="new-series">Series</label>
@@ -1412,8 +1792,8 @@ function renderNewSermon() {
           <div class="pf-field">
             <label class="pf-label" for="new-format">Deliverable</label>
             <select id="new-format" class="pf-select" name="format">
-              <option>Full manuscript</option>
-              <option>Preaching notes</option>
+              <option ${profileDefaultFormat() === "Full manuscript" ? "selected" : ""}>Full manuscript</option>
+              <option ${profileDefaultFormat() === "Preaching notes" ? "selected" : ""}>Preaching notes</option>
             </select>
           </div>
         </div>
@@ -2852,6 +3232,7 @@ function ministryStore(name, sermonId) {
   const sermon = sermonId ? state.sermons.find((item) => item.id === sermonId) : getActive();
   if (name === "impact" || name === "shepherd" || name === "pack" || name === "debrief") return sermon ? sermon[name] : null;
   if (name === "lens") return state.lens;
+  if (name === "profile") return state.preachingProfile;
   if (name === "series") return getSeries();
   if (name === "series-formation") return getSeries()?.formation || null;
   if (name === "series-outputs") return getSeries()?.outputs || null;
@@ -2887,9 +3268,50 @@ DRAFT_SPECS["pack.devotional"].instructions =
 DRAFT_SPECS["shepherd.sevenday"].instructions =
   "Keep each day to two or three lines the pastor could text or email to someone the sermon stirred.";
 
+// How the preacher wants help — fed to Sermon Guide behind the profile's
+// own toggles. Never included in exports or share links.
+function profileSummaryLines() {
+  const profile = state.preachingProfile || {};
+  if (profile.useProfile === false) return [];
+  const fields = [
+    ["Role / context / cadence", [profile.role, profile.context, profile.cadence].filter(Boolean).join(" · ")],
+    ["Preaching style", profile.style],
+    ["Outline preference", profile.outlinePref],
+    ["Big idea style", profile.bigIdeaStyle],
+    ["Application emphasis", (profile.applicationEmphasis || []).join(", ")],
+    ["Christ connection preference", profile.christConnection],
+    ["Tradition", [profile.tradition, profile.confession].filter(Boolean).join(" · ")],
+    ["Ministry values", (profile.values || []).join(", ")],
+    ["Preferred translation", profile.translation],
+  ].filter(([, value]) => value && String(value).trim());
+  const lines = [];
+  if (fields.length) {
+    lines.push(
+      "PREACHING PROFILE (how this pastor prepares and wants help — fit your help to it):",
+      ...fields.map(([label, value]) => `${label}: ${value}`),
+    );
+  }
+  const posture = (profile.posture || []).join("; ");
+  if (posture) lines.push(`SERMON GUIDE POSTURE: ${posture}.`);
+  const behaviors = [];
+  if (profile.pushBack) behaviors.push("push back when the work is unclear");
+  if (profile.questionsFirst) behaviors.push("prefer asking questions before suggesting");
+  if (profile.textInCharge) behaviors.push("keep the text in charge — challenge anything the passage does not support");
+  if (profile.noFullSections) behaviors.push("do not write full sermon sections unless explicitly requested");
+  if (behaviors.length) lines.push(`BEHAVIOR: ${behaviors.join("; ")}.`);
+  if ((profile.guardrails || "").trim()) {
+    lines.push("GUARDRAILS (hard constraints from the preacher — never cross these):", profile.guardrails.trim());
+  }
+  const rubric = activeRubricItems();
+  if (lines.length && rubric.length) lines.push(`REVIEW RUBRIC (when asked to review, check against these): ${rubric.join("; ")}.`);
+  if (!lines.length) return [];
+  return [...lines, ""];
+}
+
 function lensSummaryLines() {
   const lens = state.lens || {};
   if (!lens.enabled) return [];
+  if (state.preachingProfile?.useLens === false) return [];
   const fields = [
     ["Church", [lens["profile.name"], lens["profile.city"], lens["profile.size"]].filter(Boolean).join(", ")],
     ["Ministry context", [lens["profile.style"], lens["profile.context"], lens["profile.demographics"]].filter(Boolean).join(" · ")],
@@ -2920,7 +3342,7 @@ function sermonDraftContext(sermon) {
   if (applicationNote.trim()) extras.push(`APPLICATION NOTES:\n${applicationNote.slice(0, 900)}`);
   if (invitation.trim()) extras.push(`INVITATION PLAN:\n${invitation.slice(0, 500)}`);
   if (manuscript.trim()) extras.push(`MANUSCRIPT EXCERPT:\n${manuscript.slice(0, 1400)}`);
-  return [...lines, "", ...extras, "", ...lensSummaryLines()].join("\n");
+  return [...lines, "", ...extras, "", ...profileSummaryLines(), ...lensSummaryLines()].join("\n");
 }
 
 async function draftWithGuide(specKey) {
@@ -2989,6 +3411,7 @@ function seriesDraftContext(series) {
         `${index + 1}. ${row.when || ""} ${row.passage || "(passage tbd)"} — ${row.title || ""}${row.idea ? ` | Big idea: ${row.idea}` : ""}${row.emphasis ? ` | Formation: ${row.emphasis}` : ""}`,
     ),
     "",
+    ...profileSummaryLines(),
     ...lensSummaryLines(),
   ];
   return lines.join("\n");
@@ -3846,6 +4269,7 @@ async function reviewPreachingDiet() {
       .slice(0, 15)
       .map((sermon) => `- ${sermon.date} · ${sermon.passage}${sermon.title ? ` — ${sermon.title}` : ""}${worksheetValue(sermon, "aim", "burden").trim() ? ` | Big idea: ${worksheetValue(sermon, "aim", "burden").trim()}` : ""}`),
     "",
+    ...profileSummaryLines(),
     ...lensSummaryLines(),
   ];
   ui.drafting = "diet";
@@ -4605,7 +5029,7 @@ async function send(textArg, metaLabel) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
-        context: activeContext(getActive()),
+        context: [activeContext(getActive()), "", ...profileSummaryLines(), ...lensSummaryLines()].join("\n"),
         messages: next
           .filter((message) => message.role === "user" || message.role === "assistant")
           .map((message) => ({ role: message.role, content: message.content })),
@@ -6279,6 +6703,42 @@ document.addEventListener("click", (event) => {
     ui.impactTab = "home";
     render();
   }
+  if (action === "profile-tab") {
+    ui.profileTab = target.dataset.tab;
+    render();
+  }
+  if (action === "rubric-add") {
+    const input = target.parentElement?.querySelector("[data-rubric-input]");
+    const value = (input?.value || "").trim();
+    if (!value) return;
+    if (!state.preachingProfile.rubricCustom.includes(value)) state.preachingProfile.rubricCustom.push(value);
+    saveState();
+    render();
+  }
+  if (action === "rubric-remove") {
+    state.preachingProfile.rubricCustom.splice(Number(target.dataset.index), 1);
+    saveState();
+    render();
+  }
+  if (action === "onboard-start") {
+    state.preachingProfile.onboarded = true;
+    ui.profileTab = target.dataset.tab || "profile";
+    state.view = "signin";
+    saveState();
+    render();
+  }
+  if (action === "onboard-lens") {
+    state.preachingProfile.onboarded = true;
+    state.view = "lens";
+    saveState();
+    render();
+  }
+  if (action === "onboard-skip") {
+    state.preachingProfile.onboarded = true;
+    saveState();
+    showBanner("You can shape your Preaching Profile anytime from your avatar.");
+    render();
+  }
   if (action === "impact-tab-locked") {
     showBanner("The debrief opens once the sermon is preached (or its date passes).");
   }
@@ -6522,6 +6982,10 @@ document.addEventListener("input", (event) => {
     store[target.dataset.key] = target.value;
     touchMinistryStore(target.dataset.store, target.dataset.sermon);
   }
+  if (action === "profile-field") {
+    state.preachingProfile[target.dataset.key] = target.value;
+    saveState();
+  }
   if (action === "series-map-field") {
     const series = getSeries();
     const row = series?.map[Number(target.dataset.index)];
@@ -6586,6 +7050,19 @@ document.addEventListener("change", (event) => {
   if (action === "debrief-pick") {
     ui.debriefSermonId = target.value;
     render();
+  }
+  if (action === "profile-field") {
+    state.preachingProfile[target.dataset.key] = target.value;
+    saveState();
+  }
+  if (action === "profile-toggle") {
+    state.preachingProfile[target.dataset.key] = target.checked;
+    saveState();
+    render();
+  }
+  if (action === "rubric-toggle") {
+    state.preachingProfile.rubric = { ...state.preachingProfile.rubric, [target.dataset.key]: target.checked };
+    saveState();
   }
   if (action === "practice-pace") {
     state.practiceWpm = normalizeWpm(target.value);

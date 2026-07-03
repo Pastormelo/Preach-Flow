@@ -3026,3 +3026,29 @@ p {
   color: var(--ofc-danger);
   margin-left: auto;
 }
+
+/* ---- Preaching Profile ---- */
+.pf-rubric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 24px;
+}
+.pf-chip-x {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 0 0 4px;
+}
+.pf-onboard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+@media (max-width: 880px) {
+  .pf-rubric-grid {
+    grid-template-columns: 1fr;
+  }
+}
