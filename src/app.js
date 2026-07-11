@@ -519,6 +519,7 @@ const ui = {
     configured: false,
     client: null,
     user: null,
+    accessToken: "",
     emailInput: "",
     passwordInput: "",
     loading: false,
@@ -1699,9 +1700,15 @@ function renderProfileGuideTab() {
       <div class="pf-account-row" style="border:0;padding:0;">
         <div style="flex:1;">
           <div class="pf-account-label">Sermon Guide engine</div>
-          <div class="pf-account-meta">${ui.openai.hasKey ? "OpenAI key added on this device" : "No OpenAI key yet — add one to enable Sermon Guide"}</div>
+          <div class="pf-account-meta">${
+            ui.serverStatus.engineConfigured
+              ? `Included with your account${ui.openai.hasKey ? " — using your own key instead" : " — signed-in and ready"}`
+              : ui.openai.hasKey
+                ? "Using the OpenAI key on this device"
+                : "Not configured — add your own OpenAI key, or the site owner sets AI_API_KEY"
+          }</div>
         </div>
-        <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Add key"}</button>
+        <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Use my own key"}</button>
       </div>
     `)}
   `;
@@ -6842,8 +6849,11 @@ function getUserOpenAIKey() {
 }
 
 function openAIHeaders() {
+  const headers = {};
   const key = getUserOpenAIKey();
-  return key ? { "x-openai-api-key": key } : {};
+  if (key) headers["x-openai-api-key"] = key;
+  if (ui.auth.accessToken) headers["x-preachflow-auth"] = ui.auth.accessToken;
+  return headers;
 }
 
 function refreshOpenAIKeyState() {
@@ -6875,6 +6885,15 @@ function clearOpenAIKey() {
 function requireOpenAIKey() {
   refreshOpenAIKeyState();
   if (ui.openai.hasKey) return true;
+  // App-provided engine: included with the account — just needs sign-in.
+  if (ui.serverStatus.engineConfigured) {
+    if (!ui.auth.configured || ui.auth.user) return true;
+    ui.lastView = state.view !== "signin" ? state.view : "home";
+    state.view = "signin";
+    showBanner("Sign in to use Sermon Guide — it's included with your account.");
+    render();
+    return false;
+  }
   ui.showOpenAIKey = true;
   showBanner("Add your own OpenAI API key to power Sermon Guide.");
   render();
@@ -6949,12 +6968,14 @@ async function initSupabase(config) {
   });
 
   const { data } = await ui.auth.client.auth.getSession();
+  ui.auth.accessToken = data?.session?.access_token || "";
   ui.auth.user = data.session?.user || null;
   ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Sign in to sync across devices";
   ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
 
   ui.auth.client.auth.onAuthStateChange((event, session) => {
     ui.auth.user = session?.user || null;
+    ui.auth.accessToken = session?.access_token || "";
     ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Signed out. Saving on this device.";
     ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
     if (event === "SIGNED_IN" && state.view === "signin") state.view = "home";

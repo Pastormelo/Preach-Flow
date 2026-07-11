@@ -57,6 +57,28 @@ https://your-site.vercel.app
 
 Then add the Client ID to Vercel under Project Settings -> Environment Variables and redeploy. This is not a secret, but it must match the deployed origin.
 
+### Sermon Guide engine (make AI "just work")
+
+Add **one** environment variable in Vercel (Project Settings → Environment Variables) and every signed-in user's Sermon Guide works with zero setup:
+
+```txt
+AI_API_KEY = sk-...        # your OpenAI API key (platform.openai.com)
+```
+
+Optional overrides:
+
+```txt
+AI_PROVIDER = openai       # or: anthropic, gemini, groq
+AI_MODEL    = gpt-5.2      # any model your provider offers
+```
+
+Notes:
+
+1. **Cost:** a typical Sermon Guide call costs a fraction of a cent; a pastor preparing weekly lands in the low dollars per month. Set a spending limit in your OpenAI dashboard for peace of mind.
+2. **Protection:** when Supabase auth is configured, the app-provided engine only answers **signed-in users** — anonymous visitors are asked to sign in, so strangers can't consume your quota.
+3. **Overrides:** a user who adds their own OpenAI key in the app always uses their own quota instead.
+4. **Switching providers later:** change `AI_PROVIDER` + `AI_API_KEY` (e.g. `gemini` with a free key from aistudio.google.com, or `groq` from console.groq.com) and redeploy — no code changes.
+
 ### Share links (Sharing and Delivery Center)
 
 Share links need the updated Supabase schema: run `supabase/schema.sql` in the Supabase SQL editor (it now also creates `preach_flow_shared_views` and the token-gated `preach_flow_get_shared_view` function). Links are unguessable tokens, read-only, revocable, and served by `share.html`.
