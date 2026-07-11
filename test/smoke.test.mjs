@@ -101,7 +101,7 @@ test("GET /api/config returns the public config shape", async () => {
   }
 });
 
-test("POST /api/coach without a key asks for one instead of calling OpenAI", async () => {
+test("POST /api/coach without any key explains the engine setup instead of calling a provider", async () => {
   const res = await fetch(`${BASE}/api/coach`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -110,7 +110,7 @@ test("POST /api/coach without a key asks for one instead of calling OpenAI", asy
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.configured, false);
-  assert.match(body.text, /OpenAI API key/);
+  assert.match(body.text, /AI_API_KEY|OpenAI key/);
 });
 
 test("POST /api/extract-docx extracts text from a .docx", async () => {
@@ -129,6 +129,29 @@ test("POST /api/extract-docx extracts text from a .docx", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.text, "In the beginning");
+});
+
+test("engine config resolves providers and models", async () => {
+  const { createRequire } = await import("node:module");
+  const localRequire = createRequire(import.meta.url);
+  const { engineConfig } = localRequire("../api/_engine.js");
+  const saved = { ...process.env };
+  try {
+    process.env.AI_API_KEY = "test-key";
+    process.env.AI_PROVIDER = "gemini";
+    delete process.env.AI_MODEL;
+    delete process.env.OPENAI_MODEL;
+    let config = engineConfig();
+    assert.equal(config.provider, "gemini");
+    assert.ok(config.model.length > 0);
+    process.env.AI_PROVIDER = "not-a-provider";
+    config = engineConfig();
+    assert.equal(config.provider, "openai", "unknown providers fall back to openai");
+  } finally {
+    process.env.AI_API_KEY = saved.AI_API_KEY ?? "";
+    if (!saved.AI_API_KEY) delete process.env.AI_API_KEY;
+    if (saved.AI_PROVIDER) process.env.AI_PROVIDER = saved.AI_PROVIDER; else delete process.env.AI_PROVIDER;
+  }
 });
 
 test("unknown paths return 404", async () => {

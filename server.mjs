@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
+const { callEngine, engineConfig } = require("./api/_engine.js");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 4173);
@@ -91,17 +92,24 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`Preach Flow running at http://127.0.0.1:${PORT}`);
-  console.log("Coach/review calls use the OpenAI API key saved by each user in their browser.");
+  const engine = engineConfig();
+  console.log(
+    engine.apiKey
+      ? `Sermon Guide engine: app-provided (${engine.provider} · ${engine.model}).`
+      : "Sermon Guide engine: not configured — set AI_API_KEY (or let each user add an OpenAI key).",
+  );
 });
 
 async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/status") {
+    const engine = engineConfig();
     sendJson(res, 200, {
       available: true,
-      configured: false,
-      requiresUserOpenAIKey: true,
-      model: MODEL,
-      provider: "openai",
+      configured: Boolean(engine.apiKey),
+      engineConfigured: Boolean(engine.apiKey),
+      requiresUserOpenAIKey: !engine.apiKey,
+      model: engine.model,
+      provider: engine.provider,
       docx: Boolean(JSZip),
       googleDocs: Boolean(process.env.GOOGLE_CLIENT_ID),
       auth: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
@@ -123,8 +131,7 @@ async function handleApi(req, res, pathname) {
     const body = await readJsonBody(req);
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const context = typeof body.context === "string" ? body.context : "";
-    const text = await callOpenAI({
-      apiKey: getUserOpenAIKey(req),
+    const text = await callEngine(req, {
       system: `${COACH_SYSTEM}\n\n${context}`,
       messages,
       maxTokens: 1000,
@@ -137,8 +144,7 @@ async function handleApi(req, res, pathname) {
     const body = await readJsonBody(req);
     const prompt = typeof body.prompt === "string" ? body.prompt : "";
     const context = typeof body.context === "string" ? body.context : "";
-    const text = await callOpenAI({
-      apiKey: getUserOpenAIKey(req),
+    const text = await callEngine(req, {
       system: `${DRAFT_SYSTEM}\n\n${context}`,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1600,
@@ -152,8 +158,7 @@ async function handleApi(req, res, pathname) {
     const sermon = typeof body.sermon === "string" ? body.sermon : "";
     const meta = body.meta || {};
     const prompt = buildReviewPrompt(sermon, meta);
-    const text = await callOpenAI({
-      apiKey: getUserOpenAIKey(req),
+    const text = await callEngine(req, {
       system: COACH_SYSTEM,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1400,
@@ -193,70 +198,6 @@ SERMON:
 ${sermon}`;
 }
 
-async function callOpenAI({ apiKey, system, messages, maxTokens }) {
-  const key = apiKey;
-  if (!key) {
-    return {
-      configured: false,
-      text:
-        "Add your OpenAI API key in Preach Flow to enable coaching and review. The key is used only for your request.",
-    };
-  }
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        instructions: system,
-        max_output_tokens: maxTokens,
-        input: messages.map((message) => ({
-          role: message.role === "assistant" ? "assistant" : "user",
-          content: String(message.content || ""),
-        })),
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return {
-        configured: true,
-        text: `OpenAI returned ${response.status}: ${data.error?.message || "request failed"}`,
-      };
-    }
-    return {
-      configured: true,
-      text: extractOpenAIText(data) || "No text response came back.",
-    };
-  } catch (error) {
-    return {
-      configured: true,
-      text: `Could not reach OpenAI: ${error.message || "network error"}`,
-    };
-  }
-}
-
-function getUserOpenAIKey(req) {
-  const header = req.headers["x-openai-api-key"];
-  const value = Array.isArray(header) ? header[0] : header;
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function extractOpenAIText(data) {
-  if (typeof data.output_text === "string") return data.output_text.trim();
-  return (
-    data.output
-      ?.flatMap((item) => item.content || [])
-      .filter((content) => content.type === "output_text" || content.type === "text")
-      .map((content) => content.text || "")
-      .join("\n")
-      .trim() || ""
-  );
-}
 
 async function serveStatic(req, res, pathname) {
   if (req.method !== "GET" && req.method !== "HEAD") {

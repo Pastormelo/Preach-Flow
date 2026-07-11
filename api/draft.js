@@ -1,3 +1,5 @@
+const { callEngine } = require("./_engine.js");
+
 const DRAFT_SYSTEM = `You are Sermon Guide inside Preach Flow, helping a gospel-centered pastor turn HIS OWN completed sermon work into ministry resources for his church - staff notes, group discussion guides, prayer prompts, family discipleship material, communications, shepherding follow-up plans, devotionals, and series planning documents.
 
 THE HARD LINE: you never write the sermon itself - no exegesis, no big idea, no outline, no manuscript. You work strictly FROM the sermon material the pastor provides in the context. If the sermon material is thin or missing, say plainly which sermon work needs to be done first (big idea, outline, application) and draft only what the provided material honestly supports.
@@ -24,8 +26,7 @@ module.exports = async function handler(req, res) {
     const body = await readJsonBody(req);
     const prompt = typeof body.prompt === "string" ? body.prompt : "";
     const context = typeof body.context === "string" ? body.context : "";
-    const result = await callOpenAI({
-      apiKey: getUserOpenAIKey(req),
+    const result = await callEngine(req, {
       system: `${DRAFT_SYSTEM}\n\n${context}`,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1600,
@@ -37,64 +38,6 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function callOpenAI({ apiKey, system, messages, maxTokens }) {
-  const key = apiKey;
-  if (!key) {
-    return {
-      configured: false,
-      text:
-        "Add your OpenAI API key in Preach Flow to enable Sermon Guide drafting. The key is used only for your request.",
-    };
-  }
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-5.2",
-      instructions: system,
-      max_output_tokens: maxTokens,
-      input: messages.map((message) => ({
-        role: message.role === "assistant" ? "assistant" : "user",
-        content: String(message.content || ""),
-      })),
-    }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    return {
-      configured: true,
-      text: `OpenAI returned ${response.status}: ${data.error?.message || "request failed"}`,
-    };
-  }
-
-  return {
-    configured: true,
-    text: extractOpenAIText(data) || "No text response came back.",
-  };
-}
-
-function getUserOpenAIKey(req) {
-  const header = req.headers["x-openai-api-key"];
-  const value = Array.isArray(header) ? header[0] : header;
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function extractOpenAIText(data) {
-  if (typeof data.output_text === "string") return data.output_text.trim();
-  return (
-    data.output
-      ?.flatMap((item) => item.content || [])
-      .filter((content) => content.type === "output_text" || content.type === "text")
-      .map((content) => content.text || "")
-      .join("\n")
-      .trim() || ""
-  );
-}
 
 function readJsonBody(req) {
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
