@@ -57,7 +57,7 @@ const PHASES = [
     name: "Passage Map",
     block: 0,
     focus:
-      "Map the passage before you shape the sermon. Mark repeated words, commands, contrasts, and logical connectors; divide the text into movements — so the outline emerges from the structure and burden of the passage itself, not from a template.",
+      "Map the passage before you shape the sermon. Mark repeated words, commands, contrasts, and logical connectors; divide the text into movements - so the outline emerges from the structure and burden of the passage itself, not from a template.",
     doItems: [
       "Load or paste the passage into the Passage Map",
       "Mark repeated words, commands, contrasts, and connectors",
@@ -69,7 +69,7 @@ const PHASES = [
         label: "React to my passage map",
         placeholder: "Describe your marks, sections, and flow so far…",
         seed:
-          "I've been mapping the passage — marking repeated words, connectors, and movements, and dividing it into sections. React to my map: what patterns might I be missing, which section divisions feel imposed rather than observed, and what does the structure itself suggest the passage is doing? Don't map it for me. Here's where I am:\n\n",
+          "I've been mapping the passage - marking repeated words, connectors, and movements, and dividing it into sections. React to my map: what patterns might I be missing, which section divisions feel imposed rather than observed, and what does the structure itself suggest the passage is doing? Don't map it for me. Here's where I am:\n\n",
       },
     ],
     enc: "You've seen the shape of the text itself. Now the outline can come from the passage, not from a template.",
@@ -370,7 +370,7 @@ const PHASE_RESOURCES = {
   immersion: [
     { url: "https://www.biblegateway.com", label: "BibleGateway", note: "Read the passage in many translations, back to back." },
     { url: "https://www.stepbible.org", label: "STEP Bible", note: "Compare versions side by side, with the original languages." },
-    { url: "https://www.esv.org", label: "ESV.org", note: "Listen to the passage read aloud — hear what you've been missing." },
+    { url: "https://www.esv.org", label: "ESV.org", note: "Listen to the passage read aloud - hear what you've been missing." },
   ],
   exegesis: [
     { url: "https://www.blueletterbible.org", label: "Blue Letter Bible", note: "Word studies with Strong's numbers and lexicons." },
@@ -390,7 +390,7 @@ const PHASE_RESOURCES = {
     { url: "https://www.9marks.org", label: "9Marks", note: "Articles on expositional aim and purpose." },
   ],
   gospel: [
-    { url: "https://www.thegospelcoalition.org", label: "The Gospel Coalition", note: "Christ-centered preaching resources — hero, not moralism." },
+    { url: "https://www.thegospelcoalition.org", label: "The Gospel Coalition", note: "Christ-centered preaching resources - hero, not moralism." },
   ],
   structure: [],
   application: [
@@ -586,6 +586,7 @@ const ui = {
   refine: null,
   preparingAll: false,
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, suggestion: null },
+  libImport: { show: false, queue: [] },
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -714,7 +715,7 @@ function saveState() {
   if (!cloudSyncPaused) scheduleCloudSync();
 }
 
-// Persist to this device only — used by the work timer's periodic flush so a
+// Persist to this device only - used by the work timer's periodic flush so a
 // ticking clock doesn't trigger Google Docs / cloud syncs every minute. The
 // accumulated time rides along on the next regular saveState().
 function saveStateQuiet() {
@@ -818,8 +819,14 @@ function normalizeSermon(sermon) {
             lastAt: sermon.practice.lastAt || "",
             notes: typeof sermon.practice.notes === "string" ? sermon.practice.notes : "",
             marks: sermon.practice.marks && typeof sermon.practice.marks === "object" ? sermon.practice.marks : {},
+            history: Array.isArray(sermon.practice.history)
+              ? sermon.practice.history
+                  .filter((run) => run && Number(run.seconds) > 0)
+                  .map((run) => ({ seconds: Number(run.seconds), at: run.at || "" }))
+                  .slice(-10)
+              : [],
           }
-        : { runs: 0, lastSeconds: 0, lastAt: "", notes: "", marks: {} },
+        : { runs: 0, lastSeconds: 0, lastAt: "", notes: "", marks: {}, history: [] },
     impact: sermon.impact && typeof sermon.impact === "object" ? sermon.impact : {},
     shepherd:
       sermon.shepherd && typeof sermon.shepherd === "object"
@@ -1210,6 +1217,7 @@ function render() {
     ${ui.showGoogleDocs && active ? renderGoogleDocsModal(active) : ""}
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
+    ${ui.libImport.show ? renderLibImportModal() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
     ${ui.scripture.show ? renderScriptureModal() : ""}
     ${renderOnboarding()}
@@ -1285,7 +1293,7 @@ function restoreFocus(focus) {
   });
 }
 
-// The Word Ablaze — flat orange flame with a dark knockout core rising from
+// The Word Ablaze - flat orange flame with a dark knockout core rising from
 // the open book (the "shirt print" rendering). Sits on the dark brand chips.
 const PF_MARK_PATHS = `<path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/><path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#23272e"/><path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/><path d="M64 88L64 101" stroke="#23272e" stroke-width="3.6" stroke-linecap="round"/>`;
 
@@ -1524,7 +1532,7 @@ function renderSignin(active) {
           ${
             ui.auth.configured
               ? `<p class="pf-signin-status ${attr(ui.auth.statusKey)}" data-auth-panel-status>${escapeHtml(ui.auth.status)}</p>`
-              : `<p class="pf-signin-status missing">Accounts need setup — add <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in Vercel. Your work is saved on this device meanwhile.</p>`
+              : `<p class="pf-signin-status missing">Accounts need setup - add <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in Vercel. Your work is saved on this device meanwhile.</p>`
           }
         </div>
         <p class="pf-signin-footer">
@@ -1633,7 +1641,7 @@ function profileToggle(key, label, desc) {
   return `
     <label class="pf-toggle-row">
       <input type="checkbox" data-action="profile-toggle" data-key="${attr(key)}" ${state.preachingProfile[key] ? "checked" : ""} />
-      <span><strong>${escapeHtml(label)}</strong>${desc ? ` — ${escapeHtml(desc)}` : ""}</span>
+      <span><strong>${escapeHtml(label)}</strong>${desc ? ` - ${escapeHtml(desc)}` : ""}</span>
     </label>
   `;
 }
@@ -1666,7 +1674,7 @@ function renderOnboarding() {
           </button>
           <button class="pf-tool-card" data-action="onboard-start" data-tab="guide">
             <span class="pf-tool-card-title">Shape Sermon Guide</span>
-            <span class="pf-tool-card-desc">Posture, push-back, and guardrails — how you want help without handing over the pen.</span>
+            <span class="pf-tool-card-desc">Posture, push-back, and guardrails - how you want help without handing over the pen.</span>
           </button>
           <button class="pf-tool-card" data-action="onboard-lens">
             <span class="pf-tool-card-title">Add Congregational Lens</span>
@@ -1716,7 +1724,7 @@ function renderProfile(active) {
 function renderProfileTab() {
   const profile = state.preachingProfile;
   return `
-    <p class="pf-page-sub" style="margin-bottom:18px;">Your Preaching Profile helps PreachFlow remember your sermon defaults, preparation rhythm, review standards, and preferred ministry outputs — so every sermon starts closer to your real workflow. Everything here is optional and editable anytime.</p>
+    <p class="pf-page-sub" style="margin-bottom:18px;">Your Preaching Profile helps PreachFlow remember your sermon defaults, preparation rhythm, review standards, and preferred ministry outputs - so every sermon starts closer to your real workflow. Everything here is optional and editable anytime.</p>
 
     ${profileSection("Preaching role", "Who is preaching, where, and how often.", `
       <div class="pf-form-grid">
@@ -1746,12 +1754,12 @@ function renderProfileTab() {
       <label class="pf-label" style="display:block;margin-bottom:6px;">Ministry values</label>
       ${renderChipGroup("profile", "values", PROFILE_VALUES, profile.values)}
       <div class="pf-ws-field" style="margin-top:14px;">
-        <label class="pf-label">Guardrails — lines Sermon Guide must not cross</label>
+        <label class="pf-label">Guardrails - lines Sermon Guide must not cross</label>
         <textarea class="pf-ws-input" rows="5" data-action="profile-field" data-key="guardrails" placeholder="${attr(PROFILE_GUARDRAIL_HINT)}">${escapeHtml(profile.guardrails)}</textarea>
       </div>
     `)}
 
-    ${profileSection("Review rubric", "Before you preach, PreachFlow checks the sermon against this list — your standards, not generic ones.", `
+    ${profileSection("Review rubric", "Before you preach, PreachFlow checks the sermon against this list - your standards, not generic ones.", `
       <div class="pf-rubric-grid">
         ${PROFILE_RUBRIC.map(
           ([key, label]) => `
@@ -1769,7 +1777,7 @@ function renderProfileTab() {
       </div>
     `)}
 
-    ${profileSection("Preparation rhythm", "How your week actually works — so nudges and defaults fit real life.", `
+    ${profileSection("Preparation rhythm", "How your week actually works - so nudges and defaults fit real life.", `
       <div class="pf-form-grid" style="margin-bottom:14px;">
         ${profileSelect("prepRhythm", "Preferred prep rhythm", PROFILE_OPTIONS.prepRhythm)}
         ${profileInput("weeklyTarget", "Ideal weekly target", "e.g. manuscript done by Thursday")}
@@ -1787,7 +1795,7 @@ function renderProfileTab() {
 function renderProfileGuideTab() {
   const profile = state.preachingProfile;
   return `
-    ${profileSection("Sermon Guide posture", "How you want Sermon Guide to engage your work. It supports the process — the Word leads, and you preach.", `
+    ${profileSection("Sermon Guide posture", "How you want Sermon Guide to engage your work. It supports the process - the Word leads, and you preach.", `
       ${renderChipGroup("profile", "posture", PROFILE_POSTURES, profile.posture)}
     `)}
     ${profileSection("Personalization", "", `
@@ -1795,10 +1803,10 @@ function renderProfileGuideTab() {
       ${profileToggle("useLens", "Use Congregational Lens in Sermon Guide responses", "application aimed at your actual church")}
       ${profileToggle("questionsFirst", "Prefer questions before drafting", "Sermon Guide asks before it suggests")}
     `)}
-    ${profileSection("Commitments", "These aren't settings. They're how PreachFlow works — no toggle, no API key, and no phrasing changes them.", `
+    ${profileSection("Commitments", "These aren't settings. They're how PreachFlow works - no toggle, no API key, and no phrasing changes them.", `
       <ul class="pf-commit-list">
         <li>The text stays in charge. Claims the passage doesn't support get challenged, not accommodated.</li>
-        <li>Sermon Guide never writes your sermon — no sections, outlines, big ideas, applications, illustrations, or manuscripts. Asking again doesn't change the answer.</li>
+        <li>Sermon Guide never writes your sermon - no sections, outlines, big ideas, applications, illustrations, or manuscripts. Asking again doesn't change the answer.</li>
         <li>Honest push-back, never flattery. When avoiding the work runs against Scripture's own charge, expect the text itself brought to bear (2 Tim. 2:15).</li>
         <li>Real encouragement: what's genuinely strong gets named plainly, and the aim is always to get your own study moving.</li>
       </ul>
@@ -1809,10 +1817,10 @@ function renderProfileGuideTab() {
           <div class="pf-account-label">Sermon Guide engine</div>
           <div class="pf-account-meta">${
             ui.serverStatus.engineConfigured
-              ? `Included with your account${ui.openai.hasKey ? " — using your own key instead" : " — signed-in and ready"}`
+              ? `Included with your account${ui.openai.hasKey ? " - using your own key instead" : " - signed-in and ready"}`
               : ui.openai.hasKey
                 ? "Using the OpenAI key on this device"
-                : "Not configured — add your own OpenAI key, or the site owner sets AI_API_KEY"
+                : "Not configured - add your own OpenAI key, or the site owner sets AI_API_KEY"
           }</div>
         </div>
         <button class="pf-btn" data-action="openai-key">${ui.openai.hasKey ? "Manage key" : "Use my own key"}</button>
@@ -1823,7 +1831,7 @@ function renderProfileGuideTab() {
 
 function renderProfileDefaultsTab() {
   return `
-    ${profileSection("Sermon defaults", "Prefilled when you start a sermon — always editable per sermon.", `
+    ${profileSection("Sermon defaults", "Prefilled when you start a sermon - always editable per sermon.", `
       <div class="pf-form-grid">
         ${profileInput("translation", "Preferred Bible translation", "e.g. ESV, CSB, NIV, KJV")}
         ${profileInput("length", "Default sermon length (minutes)", "40")}
@@ -1841,9 +1849,9 @@ function renderProfileDefaultsTab() {
       </div>
       <label class="pf-toggle-row" style="margin-top:0;">
         <input type="checkbox" data-action="bible-attribution" ${state.bibleProvider.attribution ? "checked" : ""} />
-        <span><strong>Show attribution on Scripture blocks</strong> — translation credit stays with the text</span>
+        <span><strong>Show attribution on Scripture blocks</strong> - translation credit stays with the text</span>
       </label>
-      <p class="pf-helper" style="margin-top:8px;">Built-in fetching covers public-domain texts (WEB, KJV). For licensed translations, use manual paste inside Insert Scripture — support for licensed API providers can plug into this setting later.</p>
+      <p class="pf-helper" style="margin-top:8px;">Built-in fetching covers public-domain texts (WEB, KJV). For licensed translations, use manual paste inside Insert Scripture - support for licensed API providers can plug into this setting later.</p>
     `)}
     ${profileSection("Output defaults", "What you usually produce from a sermon and who it's for.", `
       <div class="pf-form-grid" style="margin-bottom:14px;">
@@ -1853,14 +1861,14 @@ function renderProfileDefaultsTab() {
       ${renderChipGroup("profile", "productionOutputs", PROFILE_PRODUCTION_OUTPUTS, state.preachingProfile.productionOutputs)}
       <label class="pf-label" style="display:block;margin:14px 0 6px;">Default audience outputs</label>
       ${renderChipGroup("profile", "audienceOutputs", PROFILE_AUDIENCES, state.preachingProfile.audienceOutputs)}
-      <p class="pf-helper" style="margin-top:12px;"><strong>How this works:</strong> tap a chip to select it. “Add your own…” creates a custom chip — type it, press Add, and it joins the list already selected (tap a custom chip again to unselect it, and it disappears). Sermon Guide reads your selections when drafting ministry resources, so the outputs and audiences you actually use come first.</p>
+      <p class="pf-helper" style="margin-top:12px;"><strong>How this works:</strong> tap a chip to select it. “Add your own…” creates a custom chip - type it, press Add, and it joins the list already selected (tap a custom chip again to unselect it, and it disappears). Sermon Guide reads your selections when drafting ministry resources, so the outputs and audiences you actually use come first.</p>
     `)}
   `;
 }
 
 function renderProfileAccountTab(active) {
   return `
-    ${profileSection("Account", "Identity, sign-in, security, integrations, and settings live here — your Preaching Profile is about your workflow.", `
+    ${profileSection("Account", "Identity, sign-in, security, integrations, and settings live here - your Preaching Profile is about your workflow.", `
       <div class="pf-account-row">
         <div style="flex:1;">
           <div class="pf-account-label">Cloud sync</div>
@@ -1871,7 +1879,7 @@ function renderProfileAccountTab(active) {
       <div class="pf-account-row">
         <div style="flex:1;">
           <div class="pf-account-label">Congregational Lens</div>
-          <div class="pf-account-meta">${state.lens?.enabled ? "On — shaping application to your church" : "Off"}</div>
+          <div class="pf-account-meta">${state.lens?.enabled ? "On - shaping application to your church" : "Off"}</div>
         </div>
         <button class="pf-btn" data-action="open-lens">Open</button>
       </div>
@@ -1899,20 +1907,20 @@ function renderProfileAccountTab(active) {
 function renderProfilePrivacyTab() {
   return `
     ${profileSection("Where your data lives", "", `
-      <p class="pf-ministry-desc" style="margin-bottom:10px;">Your sermons, profile, and lens are saved on this device, and — when you're signed in — synced to your own account's cloud storage. Sermon Guide requests send only the sermon context needed for the request, using the API key you added on this device.</p>
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Your sermons, profile, and lens are saved on this device, and - when you're signed in - synced to your own account's cloud storage. Sermon Guide requests send only the sermon context needed for the request, using the API key you added on this device.</p>
     `)}
     ${profileSection("What is never shared", "", `
-      <p class="pf-ministry-desc" style="margin-bottom:10px;">Share links never include your Preaching Profile, your account details, your Congregational Lens (unless you intentionally include a broad ministry field), your private notes, or your Post-Sermon Debrief — unless you explicitly turn a section on.</p>
+      <p class="pf-ministry-desc" style="margin-bottom:10px;">Share links never include your Preaching Profile, your account details, your Congregational Lens (unless you intentionally include a broad ministry field), your private notes, or your Post-Sermon Debrief - unless you explicitly turn a section on.</p>
     `)}
     ${profileSection("What belongs elsewhere", "", `
-      <p class="pf-ministry-desc">PreachFlow is for sermon preparation and ministry workflow. Do not store confidential counseling details, private member information, or sensitive pastoral care notes anywhere in the app — the Preaching Profile, Congregational Lens, and Debrief all carry this same rule.</p>
+      <p class="pf-ministry-desc">PreachFlow is for sermon preparation and ministry workflow. Do not store confidential counseling details, private member information, or sensitive pastoral care notes anywhere in the app - the Preaching Profile, Congregational Lens, and Debrief all carry this same rule.</p>
     `)}
   `;
 }
 
 // ---- Home: the directional landing page ----
 // Every session starts here; the logo always returns here. You choose the
-// work — the app never drops you into a workspace uninvited.
+// work - the app never drops you into a workspace uninvited.
 function renderHome(active) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -1924,7 +1932,7 @@ function renderHome(active) {
     days === null || days === undefined ? "" : days < 0 ? `preached ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago` : days === 0 ? "preaching today" : `${days} day${days === 1 ? "" : "s"} to Sunday`;
   const directions = [
     ["new-sermon", "action", "Start a new sermon", "Begin at Plan & Pray with a fresh text."],
-    ["library", "view", "Sermon Library", "Everything you've preached — searchable and editable."],
+    ["library", "view", "Sermon Library", "Everything you've preached - searchable and editable."],
     ["pipeline", "view", "Pipeline", "Every sermon in motion, and where each one stands."],
     ["impact", "view", "Ministry response", "Impact Plan, shepherding, and the Discipleship Pack."],
     ["sharing", "view", "Sharing & Delivery", "Resources and read-only links for your teams."],
@@ -1935,7 +1943,7 @@ function renderHome(active) {
       <div class="pf-page-head" style="display:block;margin-bottom:24px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">${escapeHtml(greeting)}</span>
         <h1 class="pf-h1">What are we working on?</h1>
-        <p class="pf-page-sub">Pick a direction — nothing is selected until you choose it.</p>
+        <p class="pf-page-sub">Pick a direction - nothing is selected until you choose it.</p>
       </div>
 
       ${
@@ -1944,7 +1952,7 @@ function renderHome(active) {
         <section class="pf-card-box pf-home-continue">
           <div class="pf-home-continue-info">
             <span class="pf-eyebrow">Continue where you left off</span>
-            <h2 class="pf-home-passage">${escapeHtml(active.passage || "Untitled sermon")}${active.title ? ` — ${escapeHtml(active.title)}` : ""}</h2>
+            <h2 class="pf-home-passage">${escapeHtml(active.passage || "Untitled sermon")}${active.title ? ` - ${escapeHtml(active.title)}` : ""}</h2>
             <p class="pf-helper" style="margin-top:4px;">${escapeHtml([phase ? `In ${phase.name}` : "", daysLine, `${progressPct(active)}% ready`].filter(Boolean).join(" · "))}</p>
           </div>
           <div class="pf-home-continue-actions">
@@ -1975,7 +1983,7 @@ function renderHome(active) {
           <div class="pf-checklist-head" style="align-items:center;">
             <div style="min-width:0;">
               <span class="pf-eyebrow">Before new work: debrief last Sunday</span>
-              <p class="pf-ministry-desc" style="margin-top:2px;">You haven't debriefed <strong>${escapeHtml(pending.passage || "your last sermon")}</strong> yet — five minutes now shapes everything next.</p>
+              <p class="pf-ministry-desc" style="margin-top:2px;">You haven't debriefed <strong>${escapeHtml(pending.passage || "your last sermon")}</strong> yet - five minutes now shapes everything next.</p>
             </div>
             <button class="pf-btn pf-btn-primary" data-action="open-debrief" data-sermon="${attr(pending.id)}">Debrief it</button>
           </div>
@@ -2021,34 +2029,34 @@ function renderMain(active) {
   return renderHome(null);
 }
 
-// The Stay Ahead teaching page — Preach Flow's multi-week preparation
+// The Stay Ahead teaching page - Preach Flow's multi-week preparation
 // rhythm, built around the four movements.
 function renderAhead() {
   const rotation = [
-    ["This Sunday", "Polish & Delivery", "The sermon you preach this week gets its final pass: readiness check, delivery prep, heart prep. No new construction — sharpening and surrender."],
+    ["This Sunday", "Polish & Delivery", "The sermon you preach this week gets its final pass: readiness check, delivery prep, heart prep. No new construction - sharpening and surrender."],
     ["1 week out", "Outline & Application", "Next week's sermon gets its skeleton: structure, specific application, invitation. The heavy thinking happens while there's still margin."],
-    ["2 weeks out", "Study", "Two weeks ahead, you're in commentaries and cross-references — testing your own exegesis against the faithful, settling the aim and the gospel center."],
+    ["2 weeks out", "Study", "Two weeks ahead, you're in commentaries and cross-references - testing your own exegesis against the faithful, settling the aim and the gospel center."],
     ["3 weeks out", "Exegesis", "The newest sermon starts on your knees: plan and pray, immersion, first-pass exegesis, personal meditation. Just you, the text, and the Spirit."],
   ];
   const habits = [
-    "Block one working session per sermon per week — four focused sessions beats one crushed Saturday.",
+    "Block one working session per sermon per week - four focused sessions beats one crushed Saturday.",
     "Always finish the current movement before touching the next sermon. The phases keep each session honest.",
     "Let texts simmer. Ideas, illustrations, and applications surface all week once a passage is living in you.",
     "Use the Pipeline clock. \"Behind\" on a sermon three weeks out is a nudge; behind on Saturday is a crisis.",
-    "When you get a free week — vacation swap, guest preacher — don't rest the system. Bank a week of margin.",
+    "When you get a free week - vacation swap, guest preacher - don't rest the system. Bank a week of margin.",
   ];
   return `
     <div class="pf-page pf-page-read pf-fade">
       <div class="pf-page-head" style="display:block;margin-bottom:26px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Stay ahead</span>
         <h1 class="pf-h1">Four sermons. Four weeks. Ready every Sunday.</h1>
-        <p class="pf-page-sub">The Preach Flow rhythm: keep four sermons alive at once, each a week further along — so no sermon is ever built in a panic.</p>
+        <p class="pf-page-sub">The Preach Flow rhythm: keep four sermons alive at once, each a week further along - so no sermon is ever built in a panic.</p>
       </div>
 
       <section class="pf-note-group" style="padding:24px 26px;margin-bottom:18px;">
         <h2 style="font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:10px;">Why work weeks ahead?</h2>
-        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">A sermon written in one desperate push tends to preach like one: thin illustrations, borrowed applications, a conclusion that arrives before the burden does. The way out for a weary preacher is to stop writing one sermon at a time and instead keep several simmering at once — each at a different stage — so that no sermon is ever rushed from first reading to pulpit in a single week.</p>
-        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">The gain isn't only time management. A text you've lived with for a month has been prayed over, meditated on, and tested against real pastoral moments. Illustrations find you. Applications sharpen. The sermon stops being a product you assemble and becomes a burden you carry — and your church can hear the difference between a word you're carrying and one you finished on Saturday night.</p>
+        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">A sermon written in one desperate push tends to preach like one: thin illustrations, borrowed applications, a conclusion that arrives before the burden does. The way out for a weary preacher is to stop writing one sermon at a time and instead keep several simmering at once - each at a different stage - so that no sermon is ever rushed from first reading to pulpit in a single week.</p>
+        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">The gain isn't only time management. A text you've lived with for a month has been prayed over, meditated on, and tested against real pastoral moments. Illustrations find you. Applications sharpen. The sermon stops being a product you assemble and becomes a burden you carry - and your church can hear the difference between a word you're carrying and one you finished on Saturday night.</p>
         <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);">Preach Flow's four movements are built for exactly this rotation: every week, each active sermon advances one movement.</p>
       </section>
 
@@ -2060,7 +2068,7 @@ function renderAhead() {
               <div style="display:flex;gap:14px;padding:13px 0;${index ? "border-top:1px solid var(--border-subtle);" : ""}">
                 <span class="wf-num" style="flex-shrink:0;width:34px;height:34px;border-radius:999px;background:var(--brand);color:var(--on-brand);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:13px;">${index + 1}</span>
                 <div>
-                  <div style="font-family:var(--font-display);font-weight:800;font-size:14.5px;">${escapeHtml(when)} — <span style="color:var(--text-brand);">${escapeHtml(movement)}</span></div>
+                  <div style="font-family:var(--font-display);font-weight:800;font-size:14.5px;">${escapeHtml(when)} - <span style="color:var(--text-brand);">${escapeHtml(movement)}</span></div>
                   <p style="font-size:14px;line-height:1.6;color:var(--text-secondary);margin-top:3px;">${escapeHtml(body)}</p>
                 </div>
               </div>
@@ -2071,7 +2079,7 @@ function renderAhead() {
 
       <section class="pf-note-group" style="padding:24px 26px;margin-bottom:18px;">
         <h2 style="font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:10px;">Getting four weeks ahead (without a sabbatical)</h2>
-        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">You don't need a month off — you need a running start. Pick your next four passages today and create all four sermons in the Pipeline with their dates. This week, do this Sunday's prep as normal, but give next week's sermon one extra session: plan, pray, and read the passage until it's familiar. Next week it will already be a week old, and the sermon after it becomes your new "3 weeks out." Within about a month the rotation is fully loaded, and from then on every sermon gets four weeks of simmering for one week's rhythm of work.</p>
+        <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);margin-bottom:12px;">You don't need a month off - you need a running start. Pick your next four passages today and create all four sermons in the Pipeline with their dates. This week, do this Sunday's prep as normal, but give next week's sermon one extra session: plan, pray, and read the passage until it's familiar. Next week it will already be a week old, and the sermon after it becomes your new "3 weeks out." Within about a month the rotation is fully loaded, and from then on every sermon gets four weeks of simmering for one week's rhythm of work.</p>
         <p style="font-size:15.5px;line-height:1.65;color:var(--text-secondary);">Planning a series helps enormously: when the next four texts are already chosen, "what do I preach next?" never steals prep hours again.</p>
       </section>
 
@@ -2255,19 +2263,19 @@ function estPreachMinutes(words) {
 
 // ---- Sermon Guide refinement tools ----
 // Selection- and section-based helps. Every result is a suggestion card the
-// preacher can copy, insert as a note, or dismiss — the manuscript is never
+// preacher can copy, insert as a note, or dismiss - the manuscript is never
 // overwritten.
 const REFINE_ACTIONS = [
-  ["clarify", "Clarify this section", "Suggest how to make this clearer without changing the preacher's voice. Point at what is unclear and offer a clarified rendering as a suggestion — do not expand it."],
+  ["clarify", "Clarify this section", "Suggest how to make this clearer without changing the preacher's voice. Point at what is unclear and offer a clarified rendering as a suggestion - do not expand it."],
   ["tighten", "Tighten wording", "Suggest a tighter version: remove filler, repetition, and unnecessary length while keeping the preacher's voice and conviction. Show the tightened text as a suggestion."],
   ["transition", "Strengthen transition", "Evaluate the transition into and out of this section and suggest one or two stronger ways to connect the movements. Do not rewrite the sections themselves."],
   ["check-text", "Check against the text", "Ask whether each claim here is clearly supported by the passage being preached. Flag anything the text does not say, and note what would need to change to stay faithful."],
   ["big-idea", "Pressure-test the big idea", "Evaluate the sermon's big idea: faithful to the passage, clear, memorable, text-driven? Push where it is weak. Affirm what is genuinely strong."],
-  ["application", "Strengthen application", "Evaluate the application: specific and pastoral, or generic and religious? Suggest how to make it concrete for real people this week — name the kinds of people it should reach."],
-  ["gospel", "Check gospel clarity", "Evaluate whether grace, repentance, faith, and Christ come through clearly here — without forcing the text. Note what is missing or muddy."],
+  ["application", "Strengthen application", "Evaluate the application: specific and pastoral, or generic and religious? Suggest how to make it concrete for real people this week - name the kinds of people it should reach."],
+  ["gospel", "Check gospel clarity", "Evaluate whether grace, repentance, faith, and Christ come through clearly here - without forcing the text. Note what is missing or muddy."],
   ["weak-spots", "Identify weak spots", "Find unclear logic, unsupported claims, thin application, overexplaining, missing transitions, or a vague call to respond. List them plainly with a pointer for each."],
-  ["preach-ready", "Make this more preach-ready", "Suggest how to improve this for oral delivery: shorter sentences, spoken cadence, concrete words — in the preacher's own voice, offered as a suggestion."],
-  ["questions", "Create discussion questions", "Draft four to six group discussion questions from this section: observation, meaning, application, and heart. Questions only — no commentary."],
+  ["preach-ready", "Make this more preach-ready", "Suggest how to improve this for oral delivery: shorter sentences, spoken cadence, concrete words - in the preacher's own voice, offered as a suggestion."],
+  ["questions", "Create discussion questions", "Draft four to six group discussion questions from this section: observation, meaning, application, and heart. Questions only - no commentary."],
 ];
 
 async function runRefine(kind) {
@@ -2282,7 +2290,7 @@ async function runRefine(kind) {
   const source = inEditor ? raw : phaseNoteText(active, manuscriptPhaseDef()).slice(0, 4500);
   const scope = inEditor ? "selected section" : "whole sermon";
   if (!source.trim()) {
-    showBanner("Write something first — refinement works on your words.");
+    showBanner("Write something first - refinement works on your words.");
     return;
   }
   ui.refine = { loading: true, label: def[1], text: "", scope };
@@ -2293,11 +2301,11 @@ async function runRefine(kind) {
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
         context: `${sermonDraftContext(active)}\n\nTHE PREACHER'S TEXT (${scope}):\n${source}`,
-        prompt: `${def[2]} Respond as a brief, concrete suggestion for the preacher to weigh — clearly theirs to accept or reject. Never present your words as the sermon itself.`,
+        prompt: `${def[2]} Respond as a brief, concrete suggestion for the preacher to weigh - clearly theirs to accept or reject. Never present your words as the sermon itself.`,
       }),
     });
     const data = await response.json();
-    ui.refine = { loading: false, label: def[1], text: data.text || "No suggestion came back — try again.", scope };
+    ui.refine = { loading: false, label: def[1], text: data.text || "No suggestion came back - try again.", scope };
   } catch {
     ui.refine = null;
     showBanner("Could not reach Sermon Guide.");
@@ -2313,7 +2321,7 @@ function renderRefineCard() {
       <div class="pf-checklist-head" style="align-items:flex-start;">
         <div style="min-width:0;">
           <span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · ${escapeHtml(refine.label)}</span>
-          <p class="pf-helper" style="margin-top:2px;">Reviewing the ${escapeHtml(refine.scope)} — a suggestion, never an overwrite.</p>
+          <p class="pf-helper" style="margin-top:2px;">Reviewing the ${escapeHtml(refine.scope)} - a suggestion, never an overwrite.</p>
         </div>
         <button class="pf-btn pf-btn-ghost" data-action="refine-dismiss">Dismiss</button>
       </div>
@@ -2336,7 +2344,7 @@ function renderRefineCard() {
 // "1 Corinthians 13:1-7". Validated against the canonical book list.
 function parseBibleRef(input) {
   const clean = String(input || "").trim().replace(/\s+/g, " ");
-  const match = clean.match(/^((?:[1-3]\s)?[A-Za-z][A-Za-z .]+?)\s+(\d{1,3})(?::(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?$/);
+  const match = clean.match(/^((?:[1-3]\s)?[A-Za-z][A-Za-z .]+?)\s+(\d{1,3})(?::(\d{1,3})(?:\s*[--]\s*(\d{1,3}))?)?$/);
   if (!match) return null;
   const book = passageBook(match[1]);
   if (!book) return null;
@@ -2349,7 +2357,7 @@ function parseBibleRef(input) {
   };
 }
 
-// Public-domain provider (bible-api.com — WEB and KJV only).
+// Public-domain provider (bible-api.com - WEB and KJV only).
 async function fetchScripturePassage(reference, translation) {
   const url = `https://bible-api.com/${encodeURIComponent(reference)}?translation=${translation === "KJV" ? "kjv" : "web"}`;
   const response = await fetch(url);
@@ -2475,14 +2483,14 @@ function renderScriptureModal() {
         ${modal.error ? `<p class="pf-helper" style="color:var(--ofc-danger);margin-bottom:10px;">${escapeHtml(modal.error)} You can paste the passage below with attribution instead.</p>` : ""}
         <div class="pf-ws-field">
           <label class="pf-label">Passage text ${manualOnly ? "(paste from your licensed copy)" : ""}</label>
-          <textarea class="pf-ws-input" rows="5" data-action="scripture-text" placeholder="Fetched text appears here — or paste the passage from a translation you have rights to use.">${escapeHtml(modal.text)}</textarea>
+          <textarea class="pf-ws-input" rows="5" data-action="scripture-text" placeholder="Fetched text appears here - or paste the passage from a translation you have rights to use.">${escapeHtml(modal.text)}</textarea>
         </div>
         <div class="pf-scripture-flags">
           <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="slide" ${modal.slide ? "checked" : ""} /> <span>Include in slides</span></label>
           <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="pulpit" ${modal.pulpit ? "checked" : ""} /> <span>Show in Pulpit View</span></label>
           <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="production" ${modal.production ? "checked" : ""} /> <span>Include in Production Link</span></label>
         </div>
-        <p class="pf-helper" style="margin:8px 0 0;">Built-in fetching serves public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use — attribution is kept with the block.</p>
+        <p class="pf-helper" style="margin:8px 0 0;">Built-in fetching serves public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use - attribution is kept with the block.</p>
         <div class="pf-modal-actions">
           <button class="pf-btn" data-action="scripture-close">Cancel</button>
           <button class="pf-btn pf-btn-primary" data-action="scripture-insert" ${modal.text.trim() ? "" : "disabled"}>Insert Scripture block</button>
@@ -2495,7 +2503,7 @@ function renderScriptureModal() {
 async function fetchScriptureIntoModal() {
   const parsed = parseBibleRef(ui.scripture.ref);
   if (!parsed) {
-    ui.scripture.error = "That reference didn't parse — try the form “John 3:16-18”.";
+    ui.scripture.error = "That reference didn't parse - try the form “John 3:16-18”.";
     render();
     return;
   }
@@ -2517,7 +2525,7 @@ async function fetchScriptureIntoModal() {
 }
 
 function renderEditorPage(active) {
-  if (!active) return renderNeedSermon("The Sermon Editor writes the manuscript of your current sermon — start one first.");
+  if (!active) return renderNeedSermon("The Sermon Editor writes the manuscript of your current sermon - start one first.");
   const words = manuscriptWordCount(active);
   const est = estPreachMinutes(words);
   const target = Number(active.length) || 0;
@@ -2527,7 +2535,7 @@ function renderEditorPage(active) {
       <div class="pf-editor-topline">
         <div style="min-width:0;">
           <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:6px;">Sermon Editor</span>
-          <p class="pf-helper" style="margin-top:4px;">Same manuscript as the Workspace's Manuscript phase — write here or there, it's one document.</p>
+          <p class="pf-helper" style="margin-top:4px;">Same manuscript as the Workspace's Manuscript phase - write here or there, it's one document.</p>
         </div>
         <div class="pf-editor-actions">
           <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync"><span class="pf-sync-dot"></span>${escapeHtml(sync.text)}</button>
@@ -2552,7 +2560,7 @@ function renderEditorPage(active) {
         spellcheck="true"
         data-action="phase-editor"
         data-phase="manuscript"
-        data-placeholder="Write the sermon here — introduction, points, gospel, conclusion, call."
+        data-placeholder="Write the sermon here - introduction, points, gospel, conclusion, call."
       >${sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()))}</div>
     </div>
   `;
@@ -2600,7 +2608,7 @@ function fmtClock(totalSeconds) {
 
 // ---- Pulpit View ----
 // A focused preaching interface: Practice mode to rehearse against the
-// clock, Live mode to take to the pulpit. Read-only by design — Sermon
+// clock, Live mode to take to the pulpit. Read-only by design - Sermon
 // Guide never interrupts live preaching.
 const PULPIT_FONT_SIZES = [18, 20, 23, 27, 32, 38];
 const PULPIT_LINE_HEIGHTS = { compact: 1.55, comfortable: 1.75, spacious: 2.0 };
@@ -2671,13 +2679,13 @@ function pulpitTargetEnd(sermon) {
 
 function renderPulpitView(active) {
   if (!active) {
-    return `<div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">${renderNeedSermon("Pulpit View opens your current sermon — start one first.")}</div>`;
+    return `<div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">${renderNeedSermon("Pulpit View opens your current sermon - start one first.")}</div>`;
   }
   const sections = pulpitSections(active);
   if (!sections.length) {
     return `
       <div class="pf-page pf-page-read pf-fade" style="padding-top:60px;">
-        <div class="pf-empty">Pulpit View opens once this sermon has content — a manuscript with headings, or an outline.
+        <div class="pf-empty">Pulpit View opens once this sermon has content - a manuscript with headings, or an outline.
           <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
             <button class="pf-btn pf-btn-primary" data-view="editor">Write the manuscript</button>
             <button class="pf-btn" data-view="workspace">Back to the Workspace</button>
@@ -2703,15 +2711,15 @@ function renderPulpitView(active) {
       <header class="pf-pulpit-bar pf-pulpit-controls">
         <button class="pf-pulpit-btn" data-action="pulpit-exit" aria-label="Leave Pulpit View">&larr; Exit</button>
         <div class="pf-pulpit-modes" role="tablist" aria-label="Pulpit mode">
-          <button class="pf-pulpit-chip ${mode === "practice" ? "active" : ""}" data-action="pulpit-mode" data-mode="practice">Practice</button>
-          <button class="pf-pulpit-chip ${mode === "live" ? "active" : ""}" data-action="pulpit-mode" data-mode="live">Live</button>
+          <button class="pf-pulpit-chip ${mode === "practice" ? "active" : ""}" data-action="pulpit-mode" data-mode="practice" title="Rehearse: pace coach, run history, section marks, and debrief notes">Practice</button>
+          <button class="pf-pulpit-chip ${mode === "live" ? "active" : ""}" data-action="pulpit-mode" data-mode="live" title="Preach: a clean screen with your notes, the timer, and the clock">Live</button>
         </div>
-        <span class="pf-pulpit-id">${escapeHtml(active.passage)}${active.title ? ` — ${escapeHtml(active.title)}` : ""}</span>
+        <span class="pf-pulpit-id">${escapeHtml(active.passage)}${active.title ? ` - ${escapeHtml(active.title)}` : ""}</span>
         <div class="pf-pulpit-tools">
           <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="-1" ${prefs.fontStep <= -2 ? "disabled" : ""} aria-label="Smaller text">A−</button>
           <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="1" ${prefs.fontStep >= 3 ? "disabled" : ""} aria-label="Larger text">A+</button>
           <button class="pf-pulpit-btn" data-action="pulpit-theme" aria-label="Switch theme" title="Theme: ${attr(prefs.theme)}">◐</button>
-          <button class="pf-pulpit-btn" data-action="pulpit-focus" aria-label="Toggle focus mode" title="${prefs.focusMode ? "One section at a time" : "Continuous scroll"}">${prefs.focusMode ? "☰" : "▭"}</button>
+          <button class="pf-pulpit-btn" data-action="pulpit-focus" aria-label="Toggle reading mode" title="${prefs.focusMode ? "Switch to continuous scroll (whole manuscript, scroll freely)" : "Switch to one section at a time"}">${prefs.focusMode ? "☰" : "▭"}</button>
           <button class="pf-pulpit-btn" data-action="pulpit-fullscreen" aria-label="Fullscreen">⛶</button>
           <button class="pf-pulpit-btn" data-action="pulpit-settings" aria-label="Display settings" aria-haspopup="true">⚙</button>
         </div>
@@ -2732,7 +2740,7 @@ function renderPulpitView(active) {
                 <h2 class="pf-pulpit-title">${escapeHtml(section.title)}</h2>
                 ${section.html}
               </section>
-              ${next ? `<footer class="pf-pulpit-next">Next: ${escapeHtml(next.title)}</footer>` : `<footer class="pf-pulpit-next">Last section — land it.</footer>`}
+              ${next ? `<footer class="pf-pulpit-next">Next: ${escapeHtml(next.title)}</footer>` : `<footer class="pf-pulpit-next">Last section - land it.</footer>`}
             `
             : sections
                 .map(
@@ -2772,11 +2780,11 @@ function renderPulpitView(active) {
           <div class="pf-pulpit-marks" role="group" aria-label="Mark this section">
             ${PULPIT_MARKS.map(([key, label]) => `<button class="pf-pulpit-chip ${mark === key ? "active" : ""}" data-action="pulpit-mark" data-mark="${key}">${label}</button>`).join("")}
           </div>`
-            : `<span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "—"} min</span>`
+            : `<span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "-"} min</span>`
         }
       </footer>
 
-      ${mode === "practice" ? renderPulpitPracticePanel(active) : ""}
+      ${mode === "practice" ? renderPulpitPracticePanel(active, sections, index) : ""}
     </div>
   `;
 }
@@ -2794,6 +2802,10 @@ function renderPulpitSettings(prefs) {
       <div class="pf-pulpit-settings-row">
         <span>Line height</span>
         <button class="pf-pulpit-chip" data-action="pulpit-lineheight">${escapeHtml(prefs.lineHeight)}</button>
+      </div>
+      <div class="pf-pulpit-settings-row">
+        <span>Reading mode</span>
+        <button class="pf-pulpit-chip" data-action="pulpit-focus">${prefs.focusMode ? "One section at a time" : "Continuous scroll"}</button>
       </div>
       <div class="pf-pulpit-settings-row">
         <span>Reading column</span>
@@ -2823,15 +2835,42 @@ function renderPulpitSettings(prefs) {
   `;
 }
 
-// Practice-mode side panel: run history + debrief notes. Never shown live.
-function renderPulpitPracticePanel(active) {
+// Rehearsal coach, only in practice mode: live pace vs target, run history
+// with deltas, section marks, and debrief notes. Live mode stays clean.
+function pmRunDelta(seconds, target) {
+  if (!target) return "";
+  const delta = seconds - target * 60;
+  if (Math.abs(delta) < 30) return "on target";
+  const clock = fmtClock(Math.abs(delta));
+  return delta > 0 ? `${clock} over` : `${clock} under`;
+}
+
+function renderPulpitPracticePanel(active, sections, index) {
   const practice = active.practice;
+  const target = Number(active.length) || 0;
+  const fraction = sections.length ? Math.min(1, (index + 0.5) / sections.length) : 0;
+  const history = (practice.history || []).slice(-4).reverse();
   return `
     <aside class="pf-pulpit-practice pf-pulpit-controls">
       <div class="pf-pulpit-practice-head">
-        <strong>Practice</strong>
-        <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} · last ${fmtClock(practice.lastSeconds)}` : "No timed runs yet"}</span>
+        <strong>Rehearsal coach</strong>
+        <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} so far` : "Start the timer and preach it through"}</span>
       </div>
+      ${
+        target
+          ? `<div class="pf-pulpit-pace" data-practice-pace data-target="${target * 60}" data-fraction="${fraction.toFixed(3)}">${ui.practice.running ? "Checking your pace…" : `Target ${target} min. Pace feedback appears while the timer runs.`}</div>`
+          : `<div class="pf-pulpit-pace">Set a target length in the sermon details to get pace feedback.</div>`
+      }
+      ${
+        history.length
+          ? `<ul class="pf-pulpit-runs">${history
+              .map((run, runIndex) => {
+                const runNumber = (practice.history || []).length - runIndex;
+                return `<li><span>Run ${runNumber}</span><strong>${fmtClock(run.seconds)}</strong><em>${target ? pmRunDelta(run.seconds, target) : ""}</em></li>`;
+              })
+              .join("")}</ul>`
+          : ""
+      }
       <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>
     </aside>
   `;
@@ -2843,6 +2882,7 @@ const LIBRARY_SORTS = [
   ["book", "By Book"],
   ["topic", "By Topic"],
   ["series", "By Series"],
+  ["year", "By Year"],
 ];
 
 const BOOK_ORDER = {};
@@ -2900,7 +2940,7 @@ function libraryGroups(sermons) {
     );
   }
   if (ui.librarySort === "topic") {
-    // A sermon appears under each of its topic tags — that's the point of
+    // A sermon appears under each of its topic tags - that's the point of
     // browsing by topic. Untagged sermons gather at the end.
     const groups = new Map();
     for (const sermon of sorted) {
@@ -2917,6 +2957,17 @@ function libraryGroups(sermons) {
     }
     return [...groups.entries()].sort((a, b) =>
       a[0] === "No topic tags" ? 1 : b[0] === "No topic tags" ? -1 : a[0].localeCompare(b[0]),
+    );
+  }
+  if (ui.librarySort === "year") {
+    const groups = new Map();
+    for (const sermon of sorted) {
+      const year = sermon.date ? sermon.date.slice(0, 4) : "No date";
+      if (!groups.has(year)) groups.set(year, []);
+      groups.get(year).push(sermon);
+    }
+    return [...groups.entries()].sort((a, b) =>
+      a[0] === "No date" ? 1 : b[0] === "No date" ? -1 : b[0].localeCompare(a[0]),
     );
   }
   return [["", sorted]];
@@ -2956,10 +3007,11 @@ function renderLibrary() {
       <div class="pf-page-head" style="display:block;margin-bottom:20px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Sermon Library</span>
         <h1 class="pf-h1">Everything you've preached, at hand</h1>
-        <p class="pf-page-sub">Every completed sermon lands here — searchable, sortable by book, topic, or series, and still fully editable. Open any of them to revisit the work or the debrief.</p>
+        <p class="pf-page-sub">Every completed sermon lands here - searchable, sortable by book, topic, series, or year, and still fully editable. Bring in the sermons you preached before PreachFlow too: import Word, PDF, or text files and your whole preaching history lives in one place.</p>
       </div>
 
       <div class="pf-lib-controls">
+        <button class="pf-btn pf-btn-primary" data-action="lib-import-open">Import sermons</button>
         <div class="pf-lib-search">
           <input class="pf-input" data-action="library-query" placeholder="Search passage, title, topic, series, or debrief notes…" value="${attr(ui.libraryQuery)}" />
           ${query ? `<button class="pf-btn pf-btn-ghost" data-action="library-clear">Clear</button>` : ""}
@@ -2971,7 +3023,10 @@ function renderLibrary() {
 
       ${
         !all.length
-          ? `<div class="pf-empty">Your library fills as you preach. Once a sermon's date passes (or every phase is complete), it lands here — searchable and ready to revisit.</div>`
+          ? `<div class="pf-empty">Your library fills as you preach, and it can hold everything you preached before PreachFlow too.
+              <div style="margin-top:14px;"><button class="pf-btn pf-btn-primary" data-action="lib-import-open">Import your past sermons</button></div>
+              <p class="pf-helper" style="margin-top:10px;">Word, PDF, and text files all work. Bring several at once from Google Docs, Word, or Notes exports.</p>
+            </div>`
           : !filtered.length
             ? `<div class="pf-empty">Nothing matches “${escapeHtml(ui.libraryQuery)}”. <button class="pf-inline-link" data-action="library-clear">Clear the search</button> to see all ${all.length} sermon${all.length === 1 ? "" : "s"}.</div>`
             : groups
@@ -3174,7 +3229,7 @@ function renderWorkspace(active) {
 function renderContextStrip(active, phase) {
   const status = sermonStatus(active);
   const days = status.days;
-  const daysOut = days === null ? "—" : days < 0 ? `${Math.abs(days)}` : `${days}`;
+  const daysOut = days === null ? "-" : days < 0 ? `${Math.abs(days)}` : `${days}`;
   const daysLabel = days === null ? "no date set" : days < 0 ? "days ago" : "until Sunday";
 
   const movements = BLOCKS.map((block, bi) => {
@@ -3195,7 +3250,7 @@ function renderContextStrip(active, phase) {
         <div class="pf-stats" style="margin-right:auto;">
           <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(daysOut)} days</div><div class="pf-stat-label">${escapeHtml(daysLabel)}</div></div>
           <div class="pf-stat-div"></div>
-          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(active.length || "—")} min</div><div class="pf-stat-label">target length</div></div>
+          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(active.length || "-")} min</div><div class="pf-stat-label">target length</div></div>
           <div class="pf-stat-div"></div>
           ${
             isPreachedSermon(active)
@@ -3266,7 +3321,7 @@ const WORKSHEETS = {
   gospel: {
     eyebrow: "Christ connection check",
     fields: [
-      ["christ", "How this text points to Christ", "Does it necessitate, foreshadow, or elucidate Jesus — without forcing allegory?"],
+      ["christ", "How this text points to Christ", "Does it necessitate, foreshadow, or elucidate Jesus - without forcing allegory?"],
       ["grace", "How grace empowers the response", "How does Christ's grace power the obedience you will call for?"],
     ],
   },
@@ -3316,7 +3371,7 @@ function renderApplicationCard(active, phase) {
       </div>
       <div class="pf-ws-field">
         <label class="pf-label">For the ${escapeHtml(audience.toLowerCase())}</label>
-        <textarea class="pf-ws-input" data-action="worksheet-field" data-note-key="${attr(`application.${audience}`)}" data-phase="application" data-key="${attr(audience)}" rows="3" placeholder="Specific, concrete counsel — something for Monday.">${escapeHtml(worksheetValue(active, "application", audience))}</textarea>
+        <textarea class="pf-ws-input" data-action="worksheet-field" data-note-key="${attr(`application.${audience}`)}" data-phase="application" data-key="${attr(audience)}" rows="3" placeholder="Specific, concrete counsel - something for Monday.">${escapeHtml(worksheetValue(active, "application", audience))}</textarea>
       </div>
     </section>
   `;
@@ -3340,7 +3395,7 @@ function renderOutlineCard(active, phase) {
                 <button class="pf-outline-btn" data-action="outline-down" data-index="${index}" title="Move down" ${index === outline.length - 1 ? "disabled" : ""}>▼</button>
               </div>
               <div style="flex:1;min-width:0;">
-                <input class="pf-ws-input pf-outline-title" data-action="outline-title" data-note-key="ol-t-${index}" data-index="${index}" value="${attr(movement.title)}" placeholder="Movement ${index + 1} — point title" />
+                <input class="pf-ws-input pf-outline-title" data-action="outline-title" data-note-key="ol-t-${index}" data-index="${index}" value="${attr(movement.title)}" placeholder="Movement ${index + 1} - point title" />
                 <input class="pf-ws-input pf-outline-sub" data-action="outline-sub" data-note-key="ol-s-${index}" data-index="${index}" value="${attr(movement.sub)}" placeholder="Verses · transition · notes" />
               </div>
               <button class="pf-outline-btn" data-action="outline-remove" data-index="${index}" title="Remove">✕</button>
@@ -3364,6 +3419,7 @@ function renderCanvas(active, phase) {
       <h1 class="pf-phase-title">${escapeHtml(phase.name)}</h1>
       <p class="pf-phase-focus">${escapeHtml(phase.focus)}</p>
       ${renderDebriefNudge(active, phase)}
+      ${renderLibraryEcho(active, phase)}
       ${phase.id === "passagemap" ? renderPassageMapLaunchCard(active) : ""}
       ${renderChecklistCard(active, phase)}
       ${renderWorksheetCard(active, phase)}
@@ -3373,7 +3429,7 @@ function renderCanvas(active, phase) {
       ${renderResourcesCard(active, phase)}
       <div class="pf-complete-row">
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
-          ${complete ? "Phase complete · undo" : checklistReady ? "Mark phase complete" : `Checklist ${checkedCount}/${phase.doItems.length} — finish to complete`}
+          ${complete ? "Phase complete · undo" : checklistReady ? "Mark phase complete" : `Checklist ${checkedCount}/${phase.doItems.length} - finish to complete`}
         </button>
         ${daysUntil(active.date) !== null && daysUntil(active.date) < 0 && !active.preached && !isPreachedSermon(active) ? `<button class="pf-btn pf-btn-ghost" data-action="mark-preached" title="Move this sermon to the Library and open the debrief">Mark as preached ✓</button>` : ""}
         <button class="pf-btn pf-btn-ghost" data-view="pulpit">Open Pulpit View</button>
@@ -3394,8 +3450,9 @@ function renderResourcesCard(active, phase) {
   const custom = state.resources[phase.id] || [];
   return `
     <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow">Helpful for this phase</span></div>
-      ${!curated.length && !custom.length ? `<p class="pf-section-hint">No suggestions here yet — add the tools and articles you personally reach for in this phase.</p>` : ""}
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Your study shelf for this phase</span></div>
+      <p class="pf-section-hint">Save the sites you personally reach for during ${escapeHtml(phase.name)} (online commentaries, lexicons, articles, tools). Links you add stay attached to this phase for every future sermon, so next week they are one click away right where you use them.</p>
+      ${!curated.length && !custom.length ? `<p class="pf-helper" style="margin-bottom:10px;">Nothing saved yet. Add your first link below.</p>` : ""}
       <div class="pf-resource-list">
         ${curated
           .map((resource) =>
@@ -3422,10 +3479,41 @@ function renderResourcesCard(active, phase) {
           .join("")}
       </div>
       <div class="pf-resource-add">
-        <input class="pf-input" data-resource-label placeholder="Name" />
+        <input class="pf-input" data-resource-label placeholder="Name (e.g. Blue Letter Bible)" />
         <input class="pf-input" data-resource-url placeholder="https://…" />
-        <button class="pf-btn pf-btn-ghost" data-action="resource-add" data-phase="${attr(phase.id)}">Add link</button>
+        <button class="pf-btn pf-btn-ghost" data-action="resource-add" data-phase="${attr(phase.id)}">Save to this phase</button>
       </div>
+    </section>
+  `;
+}
+
+// The Library talks back: starting a text you've preached from before
+// surfaces those sermons right in the Plan phase.
+function renderLibraryEcho(active, phase) {
+  if (phase.id !== "plan") return "";
+  const book = passageBook(active.passage)?.name;
+  if (!book) return "";
+  const related = librarySermons().filter(
+    (sermon) => sermon.id !== active.id && passageBook(sermon.passage)?.name === book,
+  );
+  if (!related.length) return "";
+  const shown = related.slice(0, 3);
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">From your Library</span><span class="pf-checklist-count">${related.length}</span></div>
+      <p class="pf-section-hint">You've preached from ${escapeHtml(book)} before. A quick look back keeps this sermon fresh and builds on what your church has already heard.</p>
+      ${shown
+        .map(
+          (sermon) => `
+            <button class="pf-lib-echo-row" data-sermon-card="${attr(sermon.id)}" title="Open this sermon">
+              <strong>${escapeHtml(sermon.passage)}</strong>
+              <span>${escapeHtml(sermon.title || "")}</span>
+              <em>${sermon.date ? escapeHtml(fmtDate(sermon.date)) : ""}</em>
+            </button>
+          `,
+        )
+        .join("")}
+      ${related.length > shown.length ? `<button class="pf-inline-link" data-view="library" style="margin-top:6px;">See all ${related.length} in the Library</button>` : ""}
     </section>
   `;
 }
@@ -3441,7 +3529,7 @@ function renderDebriefNudge(active, phase) {
       <div class="pf-checklist-head" style="align-items:flex-start;">
         <div style="min-width:0;">
           <span class="pf-eyebrow">First: debrief last Sunday</span>
-          <p class="pf-ministry-desc">You haven't debriefed <strong>${escapeHtml(pending.passage || "your last sermon")}</strong>${pending.date ? ` (${escapeHtml(fmtDate(pending.date))})` : ""} yet. There's always a sermon to learn from before you start the next one — five minutes now shapes everything below.</p>
+          <p class="pf-ministry-desc">You haven't debriefed <strong>${escapeHtml(pending.passage || "your last sermon")}</strong>${pending.date ? ` (${escapeHtml(fmtDate(pending.date))})` : ""} yet. There's always a sermon to learn from before you start the next one - five minutes now shapes everything below.</p>
         </div>
         <button class="pf-btn pf-btn-primary" data-action="open-debrief" data-sermon="${attr(pending.id)}">Debrief it</button>
       </div>
@@ -3462,7 +3550,7 @@ function renderChecklistCard(active, phase) {
             const auto = autoCheckFor(phase.id, index);
             const autoOn = auto ? auto.test(active) : false;
             const done = isChecked(active, phase.id, index);
-            const autoTitle = auto ? (autoOn ? `Checked automatically — ${auto.why}` : `Checks itself once ${auto.why}`) : "";
+            const autoTitle = auto ? (autoOn ? `Checked automatically - ${auto.why}` : `Checks itself once ${auto.why}`) : "";
             return `
               <button class="pf-check-item" data-action="toggle-check" data-phase="${attr(phase.id)}" data-index="${index}" ${autoTitle ? `title="${attr(autoTitle)}"` : ""}>
                 <span class="pf-check-box ${done ? "done" : ""}">${done ? SVG_CHECK(12, 3.5) : ""}</span>
@@ -3750,7 +3838,7 @@ function renderDetailsModal(active) {
             <div class="pf-field full">
               <label class="pf-toggle-row" style="margin-top:2px;">
                 <input type="checkbox" name="preached" ${active.preached ? "checked" : ""} />
-                <span><strong>Preached</strong> — this sermon has been delivered; show it in the Sermon Library</span>
+                <span><strong>Preached</strong> - this sermon has been delivered; show it in the Sermon Library</span>
               </label>
             </div>
           </div>
@@ -3870,7 +3958,7 @@ function deckPlainText(sermon) {
 }
 
 function deckMarkdown(sermon) {
-  return `# ${sermon.title || sermon.passage || "Sermon"} — slides\n\n${sermon.slideDeck.slides
+  return `# ${sermon.title || sermon.passage || "Sermon"} - slides\n\n${sermon.slideDeck.slides
     .map((slide, index) => {
       const lines = [`## ${index + 1}. ${slide.title || SLIDE_TYPES[slide.type]}`];
       if (slide.text.trim()) lines.push(slide.text.trim());
@@ -3908,10 +3996,10 @@ function ensureDeck(sermon) {
 
 // ---- Passage Map workspace ----
 // Map the passage before you shape the sermon: the pastor's own marks,
-// sections, observations, and flow — the outline emerges from the text.
+// sections, observations, and flow - the outline emerges from the text.
 const PM_CATEGORIES = [
   ["repeated", "Repeated Words", "Words or phrases the author repeats on purpose"],
-  ["command", "Commands", "Imperatives — what the text calls people to do"],
+  ["command", "Commands", "Imperatives - what the text calls people to do"],
   ["promise", "Promises", "What God commits to do"],
   ["warning", "Warnings", "What the text warns against"],
   ["contrast", "Contrasts", "Two ways, two outcomes, but/yet turns"],
@@ -3927,7 +4015,7 @@ const PM_CATEGORIES = [
   ["support", "Supporting Thought", "Reasons and support for the claim"],
   ["shift", "Transition / Shift", "Where the passage turns"],
 ];
-// Auto-scan skips "and" on purpose — marking every "and" is noise; the
+// Auto-scan skips "and" on purpose - marking every "and" is noise; the
 // connector pen can still mark one by hand.
 const PM_SCAN_CONNECTORS = ["in order that", "so that", "therefore", "nevertheless", "although", "because", "since", "then", "but", "yet", "for", "if"];
 const PM_RELATIONS = ["Cause", "Result", "Contrast", "Purpose", "Explanation", "Condition", "Progression", "Summary"];
@@ -3948,7 +4036,7 @@ const PM_SUMMARY_FIELDS = [
   ["god", "What does the passage reveal about God?", ""],
   ["humanity", "What does the passage reveal about humanity?", ""],
   ["response", "What response does the passage call for?", ""],
-  ["movements", "What sermon movements seem to arise naturally?", "Sketch them — they'll feed the outline."],
+  ["movements", "What sermon movements seem to arise naturally?", "Sketch them - they'll feed the outline."],
 ];
 const PM_STOPWORDS = new Set(["the", "and", "that", "for", "his", "her", "with", "they", "them", "shall", "will", "not", "but", "who", "you", "your", "him", "have", "has", "was", "were", "are", "this", "from", "all", "their", "which", "when", "then", "there", "unto", "upon", "into", "our", "out", "she", "did", "does", "been", "what", "who", "whom", "also", "may", "one", "than", "more", "very", "had", "its", "any", "each"]);
 
@@ -4040,7 +4128,7 @@ async function pmFetchPassage() {
   const active = getActive();
   const parsed = parseBibleRef(active?.passage || "");
   if (!parsed) {
-    showBanner("Couldn't parse the passage reference — paste the text instead.");
+    showBanner("Couldn't parse the passage reference - paste the text instead.");
     return;
   }
   const translation = state.bibleProvider.translation;
@@ -4060,9 +4148,9 @@ async function pmFetchPassage() {
     active.passageMap.translation = translation;
     active.passageMap.attribution = translation === "KJV" ? "KJV · Public domain" : "World English Bible · Public domain";
     pmSave();
-    showBanner("Passage loaded — pick a pen and start marking.");
+    showBanner("Passage loaded - pick a pen and start marking.");
   } catch (error) {
-    showBanner(`Could not fetch (${error.message || "network error"}) — paste the text instead.`);
+    showBanner(`Could not fetch (${error.message || "network error"}) - paste the text instead.`);
   }
   render();
 }
@@ -4132,8 +4220,67 @@ function pmRemoveHighlight(id) {
   pmSerializeVerses();
 }
 
+// A plain-language walkthrough of what the map is for and how to work it.
+function renderPmHowTo(open) {
+  return `
+    <details class="pm-howto" ${open ? "open" : ""}>
+      <summary>How to use the Passage Map (and why it matters)</summary>
+      <div class="pm-howto-body">
+        <p>Most weak outlines happen because the structure was decided before the text was really seen. The Passage Map fixes the order: you study the shape of the passage first, and the outline comes out of what you find. Nothing here is automated. Every mark is yours.</p>
+        <ol>
+          <li><strong>Load the passage.</strong> Fetch it verse by verse, or paste your preferred translation.</li>
+          <li><strong>Mark what the text is doing.</strong> Pick a pen on the right, then select words or phrases in the passage. Start simple: repeated words, commands, and contrasts. Use the quick scans to catch connectors like "therefore" and "because," then click each connector and label what it joins.</li>
+          <li><strong>Divide it into sections.</strong> Where does the passage turn? Give each movement a title and name what it is doing (rebuking, comforting, arguing, resolving).</li>
+          <li><strong>Sketch the flow and answer the summary.</strong> The seven questions turn your discoveries into words: what the passage is doing, what it reveals, and what response it calls for.</li>
+          <li><strong>Send your sections to the Outline Lab.</strong> Your movements become the sermon's skeleton. You shaped it from the text, and it will preach that way.</li>
+        </ol>
+        <p class="pf-helper" style="margin:0;">The Guide tab can react to your map with observations and questions, but it will never mark the text, divide it, or build the outline for you. That work is the point.</p>
+      </div>
+    </details>
+  `;
+}
+
+// Ring the currently selected mark in the passage text.
+function pmDecorateSelected(html) {
+  if (!ui.pm.selected) return html;
+  return html.split(`data-id="${ui.pm.selected}"`).join(`data-id="${ui.pm.selected}" data-sel="1"`);
+}
+
+// A small floating x that appears on the clicked mark for one-tap removal.
+let pmChipEl = null;
+function pmHideRemoveChip() {
+  if (pmChipEl) pmChipEl.style.display = "none";
+}
+function pmShowRemoveChip() {
+  const mark = document.querySelector('.pm-m[data-sel]');
+  if (!mark) return;
+  if (!pmChipEl) {
+    pmChipEl = document.createElement("button");
+    pmChipEl.id = "pf-pm-chip";
+    pmChipEl.type = "button";
+    pmChipEl.textContent = "\u2715";
+    pmChipEl.title = "Remove this mark";
+    pmChipEl.setAttribute("aria-label", "Remove this mark");
+    pmChipEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const id = pmChipEl.dataset.id;
+      pmHideRemoveChip();
+      if (id) {
+        pmRemoveHighlight(id);
+        render();
+      }
+    });
+    document.body.appendChild(pmChipEl);
+  }
+  const rect = mark.getBoundingClientRect();
+  pmChipEl.dataset.id = mark.getAttribute("data-id") || "";
+  pmChipEl.style.display = "flex";
+  pmChipEl.style.left = `${Math.min(window.innerWidth - 26, Math.max(4, rect.right - 9))}px`;
+  pmChipEl.style.top = `${Math.max(4, rect.top - 19)}px`;
+}
+
 function renderPassageMap(active) {
-  if (!active) return renderNeedSermon("The Passage Map works on your current sermon — start one first.");
+  if (!active) return renderNeedSermon("The Passage Map works on your current sermon - start one first.");
   const map = active.passageMap;
   if (!map.verses.length) return renderPassageMapSetup(active);
   const hiddenClasses = map.hiddenCategories.map((key) => `hide-${key}`).join(" ");
@@ -4143,14 +4290,15 @@ function renderPassageMap(active) {
       <div class="pf-page-head" style="display:block;margin-bottom:14px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Passage Map</span>
         <h1 class="pf-h1">Map the passage before you shape the sermon</h1>
-        <p class="pf-page-sub">Mark repeated words, commands, contrasts, movements, and logical connections — so your sermon outline emerges from the structure of the text.</p>
+        <p class="pf-page-sub">Mark repeated words, commands, contrasts, movements, and logical connections - so your sermon outline emerges from the structure of the text.</p>
       </div>
+      ${renderPmHowTo(false)}
       <div class="pm-grid">
         <section class="pm-passage-col">
           <div class="pm-penbar" aria-live="polite">
             ${
               pen
-                ? `Marking as <strong class="pm-pen-chip pm-c-${attr(pen[0])}">${escapeHtml(pen[1])}</strong> — select text in the passage. <button class="pf-inline-link" data-action="pm-pen" data-cat="">Done marking</button>`
+                ? `Marking as <strong class="pm-pen-chip pm-c-${attr(pen[0])}">${escapeHtml(pen[1])}</strong> - select text in the passage. <button class="pf-inline-link" data-action="pm-pen" data-cat="">Done marking</button>`
                 : `Pick a pen on the right, then select words or phrases to mark. Click any mark to note or remove it.`
             }
           </div>
@@ -4160,7 +4308,7 @@ function renderPassageMap(active) {
                 (verse, index) => `
                   <p class="pm-verse" data-ref="${attr(verse.ref)}">
                     ${verse.ref ? `<sup class="pm-vnum">${escapeHtml(verse.ref)}</sup>` : ""}
-                    <span class="pm-text" data-pm-verse data-idx="${index}">${sanitizePmHtml(verse.html)}</span>
+                    <span class="pm-text" data-pm-verse data-idx="${index}">${pmDecorateSelected(sanitizePmHtml(verse.html))}</span>
                   </p>
                 `,
               )
@@ -4199,14 +4347,15 @@ function renderPassageMapSetup(active) {
       <div class="pf-page-head" style="display:block;margin-bottom:20px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Passage Map</span>
         <h1 class="pf-h1">Map the passage before you shape the sermon</h1>
-        <p class="pf-page-sub">Load <strong>${escapeHtml(active.passage || "your passage")}</strong> verse by verse, then mark repeated words, commands, contrasts, and connections — the outline will come from what you see.</p>
+        <p class="pf-page-sub">Load <strong>${escapeHtml(active.passage || "your passage")}</strong> verse by verse, then mark repeated words, commands, contrasts, and connections - the outline will come from what you see.</p>
       </div>
+      ${renderPmHowTo(true)}
       <section class="pf-card-box pf-checklist-card">
         <div class="pf-modal-actions" style="margin-top:0;">
           ${canFetch ? `<button class="pf-btn pf-btn-primary" data-action="pm-fetch">Load ${escapeHtml(active.passage)} (${escapeHtml(state.bibleProvider.translation)})</button>` : ""}
           <button class="pf-btn ${canFetch ? "" : "pf-btn-primary"}" data-action="pm-paste-open">Paste Passage Text</button>
         </div>
-        <p class="pf-helper" style="margin-top:12px;">Built-in loading uses public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use — attribution stays with the map. Nothing is scraped, and no copyrighted text is bundled.</p>
+        <p class="pf-helper" style="margin-top:12px;">Built-in loading uses public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use - attribution stays with the map. Nothing is scraped, and no copyrighted text is bundled.</p>
       </section>
       ${ui.pm.paste ? renderPmPasteModal() : ""}
     </div>
@@ -4246,21 +4395,6 @@ function renderPmMarkPanel(map) {
     counts[item.category] = (counts[item.category] || 0) + 1;
   });
   return `
-    <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow">Pens</span><span class="pf-checklist-count">${map.highlights.length} mark${map.highlights.length === 1 ? "" : "s"}</span></div>
-      <div class="pm-pens">
-        ${PM_CATEGORIES.map(
-          ([key, label, desc]) => `
-            <span class="pm-pen-row">
-              <button class="pm-pen ${ui.pm.pen === key ? "active" : ""}" data-action="pm-pen" data-cat="${key}" title="${attr(desc)}">
-                <i class="pm-dot pm-c-${key}"></i>${escapeHtml(label)}${counts[key] ? ` <em>${counts[key]}</em>` : ""}
-              </button>
-              <button class="pm-eye ${map.hiddenCategories.includes(key) ? "off" : ""}" data-action="pm-cat-vis" data-cat="${key}" title="${map.hiddenCategories.includes(key) ? "Show" : "Hide"} ${attr(label)} marks" aria-label="Toggle ${attr(label)} visibility">${map.hiddenCategories.includes(key) ? "◌" : "●"}</button>
-            </span>
-          `,
-        ).join("")}
-      </div>
-    </section>
     ${
       selected
         ? `
@@ -4288,7 +4422,22 @@ function renderPmMarkPanel(map) {
         : ""
     }
     <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow">Quick scans (no AI — just the text)</span></div>
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Pens</span><span class="pf-checklist-count">${map.highlights.length} mark${map.highlights.length === 1 ? "" : "s"}</span></div>
+      <div class="pm-pens">
+        ${PM_CATEGORIES.map(
+          ([key, label, desc]) => `
+            <span class="pm-pen-row">
+              <button class="pm-pen ${ui.pm.pen === key ? "active" : ""}" data-action="pm-pen" data-cat="${key}" title="${attr(desc)}">
+                <i class="pm-dot pm-c-${key}"></i>${escapeHtml(label)}${counts[key] ? ` <em>${counts[key]}</em>` : ""}
+              </button>
+              <button class="pm-eye ${map.hiddenCategories.includes(key) ? "off" : ""}" data-action="pm-cat-vis" data-cat="${key}" title="${map.hiddenCategories.includes(key) ? "Show" : "Hide"} ${attr(label)} marks" aria-label="Toggle ${attr(label)} visibility">${map.hiddenCategories.includes(key) ? "◌" : "●"}</button>
+            </span>
+          `,
+        ).join("")}
+      </div>
+    </section>
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Quick scans (no AI - just the text)</span></div>
       <button class="pf-btn pf-btn-ghost" data-action="pm-scan-connectors" style="margin-bottom:10px;">Mark logical connectors</button>
       ${
         repeated.length
@@ -4309,17 +4458,17 @@ function renderPmSectionsPanel(active, map) {
         <span class="pf-eyebrow">Sections / movements</span>
         <span class="pf-checklist-count">${map.sections.length}</span>
       </div>
-      <p class="pf-section-hint">Divide the passage where IT turns — title each movement and name what it's doing.</p>
+      <p class="pf-section-hint">Divide the passage where IT turns - title each movement and name what it's doing.</p>
       ${map.sections
         .map(
           (section, index) => `
             <div class="pm-section">
               <div class="pm-section-head">
                 <input class="pf-input" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="title" value="${attr(section.title)}" placeholder="Section title" />
-                <input class="pf-input pm-range" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="verseRange" value="${attr(section.verseRange)}" placeholder="vv. 1–2" />
+                <input class="pf-input pm-range" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="verseRange" value="${attr(section.verseRange)}" placeholder="vv. 1-2" />
               </div>
               <input class="pf-input" style="margin-top:6px;" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="mainIdea" value="${attr(section.mainIdea)}" placeholder="Main idea of this movement" />
-              <textarea class="pf-ws-input" style="margin-top:6px;" rows="2" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="functionInPassage" placeholder="Function in the passage — what is this movement doing?">${escapeHtml(section.functionInPassage)}</textarea>
+              <textarea class="pf-ws-input" style="margin-top:6px;" rows="2" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="functionInPassage" placeholder="Function in the passage - what is this movement doing?">${escapeHtml(section.functionInPassage)}</textarea>
               <div class="pm-section-tools">
                 <button class="pf-outline-btn" data-action="pm-section-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move up">▲</button>
                 <button class="pf-outline-btn" data-action="pm-section-down" data-index="${index}" ${index === map.sections.length - 1 ? "disabled" : ""} aria-label="Move down">▼</button>
@@ -4377,7 +4526,7 @@ function renderPmNotesPanel(map) {
               </div>
             `,
           )
-          .join("") || `<p class="pf-helper">No notes yet — observations, questions, seeds for application and Christ connection all live here.</p>`}
+          .join("") || `<p class="pf-helper">No notes yet - observations, questions, seeds for application and Christ connection all live here.</p>`}
       </div>
     </section>
   `;
@@ -4439,12 +4588,12 @@ function renderPmSummaryPanel(map) {
 // Suggest-only Sermon Guide actions: observations and questions the preacher
 // tests against the text. The Guide never marks, divides, or outlines.
 const PM_GUIDE_ACTIONS = [
-  ["patterns", "What patterns stand out?", "Point at two to four features of the text itself — repetition, contrast, cause and effect, a turn — that the preacher may want to look at. Ask at least one question that sends them back to the passage."],
-  ["connectors", "Weigh the connectors", "Look at the logical connectors in the passage (therefore, because, so that, but) and what each one joins. Suggest which relationships the preacher should trace, as observations and questions — never as finished conclusions."],
+  ["patterns", "What patterns stand out?", "Point at two to four features of the text itself - repetition, contrast, cause and effect, a turn - that the preacher may want to look at. Ask at least one question that sends them back to the passage."],
+  ["connectors", "Weigh the connectors", "Look at the logical connectors in the passage (therefore, because, so that, but) and what each one joins. Suggest which relationships the preacher should trace, as observations and questions - never as finished conclusions."],
   ["sections", "React to my sections", "React to the preacher's section divisions: which ones follow the text's own turns, and which may be imposed on it? You may say where a break MAY belong and why, but do not re-divide the passage for them."],
   ["claim", "Pressure-test the main claim", "Weigh the preacher's marked main claim (or their summary of what the passage is doing) against the passage itself. Is it what THIS text says? Push where it drifts; affirm only what the text supports."],
-  ["movement", "Trace the movement", "Consider where the passage starts and where it lands. Offer observations about the journey between — as things for the preacher to verify in the text, not as a finished flow."],
-  ["audience", "Original audience questions", "Raise three to five questions about what this passage meant to its first hearers — questions the preacher should answer from their own study, not answers you supply."],
+  ["movement", "Trace the movement", "Consider where the passage starts and where it lands. Offer observations about the journey between - as things for the preacher to verify in the text, not as a finished flow."],
+  ["audience", "Original audience questions", "Raise three to five questions about what this passage meant to its first hearers - questions the preacher should answer from their own study, not answers you supply."],
   ["missing", "What might I be missing?", "Given the preacher's marks, sections, and summary, gently point at parts of the passage they have not touched yet, and what work those parts may be doing. Never produce an outline or sermon points."],
 ];
 
@@ -4464,7 +4613,7 @@ function pmGuideContext(active, map) {
       lines.push(
         `- ${label}: ${items
           .slice(0, 20)
-          .map((item) => `"${item.text}"${item.verseRef ? ` (v.${item.verseRef})` : ""}${item.relation ? ` [${item.relation}]` : ""}${item.note ? ` — note: ${item.note}` : ""}`)
+          .map((item) => `"${item.text}"${item.verseRef ? ` (v.${item.verseRef})` : ""}${item.relation ? ` [${item.relation}]` : ""}${item.note ? ` - note: ${item.note}` : ""}`)
           .join("; ")}`,
       );
     });
@@ -4472,7 +4621,7 @@ function pmGuideContext(active, map) {
   if (map.sections.length) {
     lines.push("", "THE PREACHER'S SECTIONS:");
     map.sections.forEach((section, index) => {
-      lines.push(`${index + 1}. ${section.title || "(untitled)"}${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` — ${section.mainIdea}` : ""}${section.functionInPassage ? ` — function: ${section.functionInPassage}` : ""}`);
+      lines.push(`${index + 1}. ${section.title || "(untitled)"}${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` - ${section.mainIdea}` : ""}${section.functionInPassage ? ` - function: ${section.functionInPassage}` : ""}`);
     });
   }
   if (map.flow.steps.length) {
@@ -4502,11 +4651,11 @@ async function runPmGuide(kind) {
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
         context: pmGuideContext(active, map),
-        prompt: `${def[2]}\nHard rules: you are looking at the text WITH the preacher, not mapping it for them. Respond with brief observations and questions — "Notice…", "Consider…", "This may suggest…". Never write sermon points, an outline, applications, or marked-up text. Everything you say is a suggestion for the preacher to test against the passage.`,
+        prompt: `${def[2]}\nHard rules: you are looking at the text WITH the preacher, not mapping it for them. Respond with brief observations and questions - "Notice…", "Consider…", "This may suggest…". Never write sermon points, an outline, applications, or marked-up text. Everything you say is a suggestion for the preacher to test against the passage.`,
       }),
     });
     const data = await response.json();
-    ui.pm.suggestion = { loading: false, label: def[1], text: data.text || "No suggestion came back — try again." };
+    ui.pm.suggestion = { loading: false, label: def[1], text: data.text || "No suggestion came back - try again." };
   } catch {
     ui.pm.suggestion = null;
     showBanner("Could not reach Sermon Guide.");
@@ -4519,7 +4668,7 @@ function renderPmGuidePanel(active, map) {
   return `
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head"><span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · suggestions only</span></div>
-      <p class="pf-section-hint">The Guide looks at the text with you. It never marks the passage, divides it, or writes your outline — every response is an observation or question for you to test against the text, then keep or reject.</p>
+      <p class="pf-section-hint">The Guide looks at the text with you. It never marks the passage, divides it, or writes your outline - every response is an observation or question for you to test against the text, then keep or reject.</p>
       <div class="pm-guide-actions">
         ${PM_GUIDE_ACTIONS.map(([key, label]) => `<button class="pf-btn pf-btn-ghost" data-action="pm-guide" data-kind="${key}" ${suggestion?.loading ? "disabled" : ""}>${escapeHtml(label)}</button>`).join("")}
       </div>
@@ -4531,7 +4680,7 @@ function renderPmGuidePanel(active, map) {
         <div class="pf-checklist-head" style="align-items:flex-start;">
           <div style="min-width:0;">
             <span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · ${escapeHtml(suggestion.label)}</span>
-            <p class="pf-helper" style="margin-top:2px;">A suggestion to test against the text — yours to keep or reject.</p>
+            <p class="pf-helper" style="margin-top:2px;">A suggestion to test against the text - yours to keep or reject.</p>
           </div>
           <button class="pf-btn pf-btn-ghost" data-action="pm-suggest-dismiss">Dismiss</button>
         </div>
@@ -4572,7 +4721,7 @@ function renderPmBridgeModal(active, map) {
     <div class="pf-overlay" data-action="pm-bridge-cancel" data-overlay>
       <div class="pf-modal" data-stop style="max-width:520px;">
         <div class="pf-modal-head"><span class="pf-eyebrow pf-eyebrow-brand">Send to Outline Lab</span></div>
-        <p class="pf-ministry-desc" style="margin-top:0;">These movements come from your section divisions — the outline starts where the text turns, and it stays yours to reshape.</p>
+        <p class="pf-ministry-desc" style="margin-top:0;">These movements come from your section divisions - the outline starts where the text turns, and it stays yours to reshape.</p>
         <ol class="pm-bridge-list">
           ${movements.map((movement) => `<li><strong>${escapeHtml(movement.title)}</strong>${movement.sub ? ` <span class="pf-helper">${escapeHtml(movement.sub)}</span>` : ""}</li>`).join("")}
         </ol>
@@ -4607,8 +4756,8 @@ function renderPassageMapLaunchCard(active) {
       <p class="pf-section-hint" style="margin-bottom:0;">
         ${
           map.verses.length
-            ? "The map is a full-screen workspace — the passage on one side, your pens, sections, notes, flow, and summary on the other."
-            : `Load ${escapeHtml(active.passage || "your passage")} verse by verse, then mark what the text itself is doing — before any outline exists.`
+            ? "The map is a full-screen workspace - the passage on one side, your pens, sections, notes, flow, and summary on the other."
+            : `Load ${escapeHtml(active.passage || "your passage")} verse by verse, then mark what the text itself is doing - before any outline exists.`
         }
       </p>
       <div class="pf-modal-actions" style="margin-top:12px;">
@@ -4634,13 +4783,13 @@ function pmApplySelection() {
   if (!container) return;
   const verseEl = container.closest("[data-pm-verse]");
   if (!verseEl) {
-    if (container.closest("[data-pm-passage]")) showBanner("Select within a single verse — marks don't cross verse lines.");
+    if (container.closest("[data-pm-passage]")) showBanner("Select within a single verse - marks don't cross verse lines.");
     return;
   }
   const text = range.toString().replace(/\s+/g, " ").trim();
   if (!text) return;
   if (container.closest(".pm-m")) {
-    showBanner("That text is already marked — click the mark to note or remove it.");
+    showBanner("That text is already marked - click the mark to note or remove it.");
     selection.removeAllRanges();
     return;
   }
@@ -4667,14 +4816,14 @@ function pmApplySelection() {
 }
 
 function renderSlideBuilder(active) {
-  if (!active) return renderNeedSermon("Slide Builder creates slides from your current sermon — start one first.");
+  if (!active) return renderNeedSermon("Slide Builder creates slides from your current sermon - start one first.");
   const deck = ensureDeck(active);
   return `
     <div class="pf-page pf-page-wide pf-fade">
       <div class="pf-page-head" style="display:block;margin-bottom:18px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Slide Builder</span>
         <h1 class="pf-h1">Create clean sermon slides from the message you already prepared</h1>
-        <p class="pf-page-sub">Everything you marked while writing — points, Scripture blocks, slide cues, the big idea — becomes a deck. Edit, reorder, and export; slides serve the preaching, not the other way around.</p>
+        <p class="pf-page-sub">Everything you marked while writing - points, Scripture blocks, slide cues, the big idea - becomes a deck. Edit, reorder, and export; slides serve the preaching, not the other way around.</p>
       </div>
 
       <div class="pf-deck-controls">
@@ -4701,7 +4850,7 @@ function renderSlideBuilder(active) {
             (slide, index) => `
               <div class="pf-slide-card theme-${attr(deck.theme)}" data-slide-card>
                 <div class="pf-slide-thumb scale-${deck.fontScale}">
-                  <span class="pf-slide-type">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}${slideTooHeavy(slide) ? ` <em class="pf-slide-heavy" title="This slide is text-heavy — prefer short, readable lines">Heavy text</em>` : ""}</span>
+                  <span class="pf-slide-type">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}${slideTooHeavy(slide) ? ` <em class="pf-slide-heavy" title="This slide is text-heavy - prefer short, readable lines">Heavy text</em>` : ""}</span>
                   <input class="pf-slide-title-input" data-action="slide-title" data-index="${index}" value="${attr(slide.title)}" placeholder="Slide title" aria-label="Slide ${index + 1} title" />
                   <textarea class="pf-slide-text-input" data-action="slide-text" data-index="${index}" rows="3" placeholder="On-screen text" aria-label="Slide ${index + 1} on-screen text">${escapeHtml(slide.text)}</textarea>
                 </div>
@@ -4731,7 +4880,7 @@ function renderSlidesModal(active) {
           <span class="pf-eyebrow">Production</span>
           <h2 class="pf-modal-title">Slides doc for the production team</h2>
         </div>
-        <p class="pf-modal-text">Pre-filled from this sermon — edit anything, then export and send. Quotes in the "On screen" lines are what the congregation reads.</p>
+        <p class="pf-modal-text">Pre-filled from this sermon - edit anything, then export and send. Quotes in the "On screen" lines are what the congregation reads.</p>
         <div class="pf-editor pf-scroll" contenteditable="true" spellcheck="false" data-action="slides-editor" style="min-height:260px;max-height:380px;font-size:14.5px;line-height:1.6;border:1px solid var(--border-default);border-radius:12px;background:var(--surface-page);">${sanitizeRichHtml(html)}</div>
         <div class="pf-modal-actions">
           <button class="pf-btn pf-btn-primary" data-action="slides-export-pdf">Download PDF</button>
@@ -4779,8 +4928,8 @@ function renderImportModal() {
           </div>
           <div class="pf-field">
             <label class="pf-label">Where does it land?</label>
-            <label class="pf-toggle-row" style="margin-top:6px;"><input type="radio" name="importStatus" value="progress" checked /> <span>In progress — drops into the pipeline at the Manuscript phase</span></label>
-            <label class="pf-toggle-row"><input type="radio" name="importStatus" value="preached" /> <span>Already preached — filed as a completed sermon</span></label>
+            <label class="pf-toggle-row" style="margin-top:6px;"><input type="radio" name="importStatus" value="progress" checked /> <span>In progress - drops into the pipeline at the Manuscript phase</span></label>
+            <label class="pf-toggle-row"><input type="radio" name="importStatus" value="preached" /> <span>Already preached - filed as a completed sermon</span></label>
           </div>
           <div class="pf-modal-actions">
             <button class="pf-btn pf-btn-primary" type="submit" ${ui.importText ? "" : "disabled"}>Import sermon</button>
@@ -4826,6 +4975,22 @@ async function extractPdfFileText(file) {
   return pages.join("\n\n");
 }
 
+async function extractSermonFileText(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".docx")) {
+    const response = await fetch("./api/extract-docx", {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: await file.arrayBuffer(),
+    });
+    const data = await response.json();
+    if (!data.text) throw new Error(data.error || "No text found in that document.");
+    return data.text;
+  }
+  if (name.endsWith(".pdf")) return extractPdfFileText(file);
+  return file.text();
+}
+
 async function handleImportFile(input) {
   const file = input.files?.[0];
   if (!file) return;
@@ -4833,28 +4998,143 @@ async function handleImportFile(input) {
   ui.importStatusNote = "Reading file…";
   render();
   try {
-    const name = file.name.toLowerCase();
-    if (name.endsWith(".docx")) {
-      const response = await fetch("./api/extract-docx", {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: await file.arrayBuffer(),
-      });
-      const data = await response.json();
-      ui.importText = data.text || "";
-      if (!ui.importText) throw new Error(data.error || "No text found in that document.");
-    } else if (name.endsWith(".pdf")) {
-      ui.importText = await extractPdfFileText(file);
-    } else {
-      ui.importText = await file.text();
-    }
+    ui.importText = await extractSermonFileText(file);
     const words = ui.importText.trim().split(/\s+/).filter(Boolean).length;
-    ui.importStatusNote = `Ready — ${words.toLocaleString()} words extracted from ${file.name}.`;
+    ui.importStatusNote = `Ready - ${words.toLocaleString()} words extracted from ${file.name}.`;
   } catch (error) {
     ui.importText = "";
     ui.importStatusNote = error.message || "Could not read that file.";
   }
   render();
+}
+
+// Guess passage, title, and date from a sermon file's name, so bulk imports
+// arrive mostly pre-filled. "2023-06-11 Psalm 32 - Coming Clean.docx" fills
+// all three; anything unrecognized just lands in the title.
+function guessImportMeta(fileName) {
+  let base = fileName.replace(/\.[a-z0-9]+$/i, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  let date = "";
+  const dateMatch = base.match(/(\d{4})[-. ](\d{1,2})[-. ](\d{1,2})/);
+  if (dateMatch && Number(dateMatch[2]) >= 1 && Number(dateMatch[2]) <= 12 && Number(dateMatch[3]) >= 1 && Number(dateMatch[3]) <= 31) {
+    date = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
+    base = base.replace(dateMatch[0], " ").replace(/\s+/g, " ").trim();
+  }
+  let passage = "";
+  const segments = base.split(/\s*[-|·]\s*/).map((segment) => segment.trim()).filter(Boolean);
+  for (const segment of segments) {
+    const parsed = parseBibleRef(segment);
+    if (parsed) {
+      passage = parsed.reference;
+      break;
+    }
+  }
+  if (!passage) {
+    const inline = base.match(/((?:[1-3]\s)?[A-Z][a-z]+(?:\s[A-Za-z]+)?)\s\d{1,3}(?::\d{1,3}(?:\s*-\s*\d{1,3})?)?/);
+    if (inline && parseBibleRef(inline[0])) passage = parseBibleRef(inline[0]).reference;
+  }
+  const title = segments.filter((segment) => !parseBibleRef(segment)).join(" - ").trim();
+  return { passage, title, date };
+}
+
+// Read each chosen file into the Library import queue.
+async function handleLibImportFiles(input) {
+  const files = [...(input.files || [])];
+  if (!files.length) return;
+  for (const file of files) {
+    const item = { id: genId(), fileName: file.name, text: "", status: "reading", note: "Reading…", series: "", tags: "", ...guessImportMeta(file.name) };
+    ui.libImport.queue.push(item);
+    render();
+    try {
+      item.text = await extractSermonFileText(file);
+      const words = item.text.trim().split(/\s+/).filter(Boolean).length;
+      if (!words) throw new Error("No text found in this file.");
+      item.status = "ready";
+      item.note = `${words.toLocaleString()} words`;
+    } catch (error) {
+      item.status = "error";
+      item.note = error.message || "Could not read this file.";
+    }
+    render();
+  }
+}
+
+function applyLibImport() {
+  const ready = ui.libImport.queue.filter((item) => item.status === "ready");
+  if (!ready.length) {
+    showBanner("Add at least one readable file first.");
+    return;
+  }
+  for (const item of ready) {
+    const sermon = normalizeSermon({
+      id: genId(),
+      imported: true,
+      preached: true,
+      passage: item.passage.trim(),
+      title: item.title.trim(),
+      series: item.series.trim(),
+      date: item.date || "",
+      tags: item.tags.split(",").map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean),
+      activePhase: "heart",
+      completed: PHASES.map((phase) => phase.id),
+      notes: { manuscript: textToRichHtml(item.text) },
+    });
+    state.sermons.push(sermon);
+  }
+  ui.libImport = { show: false, queue: [] };
+  state.view = "library";
+  saveState();
+  showBanner(`${ready.length} sermon${ready.length === 1 ? "" : "s"} filed in your Library - searchable, sortable, and ready to revisit.`);
+  render();
+}
+
+function renderLibImportModal() {
+  const queue = ui.libImport.queue;
+  const ready = queue.filter((item) => item.status === "ready").length;
+  const reading = queue.some((item) => item.status === "reading");
+  return `
+    <div class="pf-overlay" data-action="lib-import-close" data-overlay>
+      <div class="pf-modal wide" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow pf-eyebrow-brand">Sermon Library</span>
+          <h2 class="pf-modal-title">Bring in the sermons you've already preached</h2>
+        </div>
+        <p class="pf-helper" style="margin-top:0;">Select as many files as you like (.docx, .pdf, .txt, .md). Exports from Google Docs, Word, Pages, and Notes all work. Each file becomes a complete Library sermon: searchable by every word, sortable by book, series, topic, or year, and openable in the Editor and Pulpit View like anything you prepared here.</p>
+        <label class="pf-lib-drop">
+          <input type="file" multiple accept=".docx,.txt,.md,.markdown,.pdf" data-action="lib-import-files" />
+          <strong>Choose sermon files</strong>
+          <span>Dates and passages in file names (like "2023-06-11 Psalm 32 - Coming Clean.docx") fill in automatically.</span>
+        </label>
+        ${queue
+          .map(
+            (item) => `
+              <div class="pf-lib-qrow ${item.status}">
+                <div class="pf-lib-qhead">
+                  <strong>${escapeHtml(item.fileName)}</strong>
+                  <span class="pf-helper">${escapeHtml(item.note)}</span>
+                  <button class="pf-chip-x" data-action="lib-import-remove" data-id="${attr(item.id)}" aria-label="Remove ${attr(item.fileName)}">✕</button>
+                </div>
+                ${
+                  item.status === "ready"
+                    ? `<div class="pf-lib-qfields">
+                        <input class="pf-input" data-action="lib-import-field" data-id="${attr(item.id)}" data-field="passage" value="${attr(item.passage)}" placeholder="Passage (Psalm 32)" />
+                        <input class="pf-input" data-action="lib-import-field" data-id="${attr(item.id)}" data-field="title" value="${attr(item.title)}" placeholder="Title" />
+                        <input class="pf-input" type="date" data-action="lib-import-field" data-id="${attr(item.id)}" data-field="date" value="${attr(item.date)}" />
+                        <input class="pf-input" data-action="lib-import-field" data-id="${attr(item.id)}" data-field="series" value="${attr(item.series)}" placeholder="Series" />
+                        <input class="pf-input" data-action="lib-import-field" data-id="${attr(item.id)}" data-field="tags" value="${attr(item.tags)}" placeholder="Topics: grace, repentance" />
+                      </div>`
+                    : ""
+                }
+              </div>
+            `,
+          )
+          .join("")}
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="lib-import-apply" ${ready && !reading ? "" : "disabled"}>${ready ? `Add ${ready} to the Library` : "Add to the Library"}</button>
+          <button class="pf-btn pf-btn-ghost" data-action="lib-import-close">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function textToRichHtml(text) {
@@ -4892,18 +5172,18 @@ function importSermon(form) {
   ui.importText = "";
   ui.importStatusNote = "";
   saveState();
-  showBanner(preached ? "Imported as a preached sermon." : "Imported — picked up at the Manuscript phase.");
+  showBanner(preached ? "Imported as a preached sermon." : "Imported - picked up at the Manuscript phase.");
   render();
 }
 
 // ============================================================
-// MINISTRY WORKFLOW — Impact Plan, Shepherding Follow-Up,
+// MINISTRY WORKFLOW - Impact Plan, Shepherding Follow-Up,
 // Discipleship Pack, Post-Sermon Debrief, Series Architect,
 // Congregational Lens, Preaching Diet Review
 // ============================================================
 
 // Impact Plan = church-wide ministry action. People-facing resources live in
-// the Discipleship Pack; pastoral-care planning lives in Shepherding — the
+// the Discipleship Pack; pastoral-care planning lives in Shepherding - the
 // Impact tab points to both so each feature keeps one clear purpose.
 const IMPACT_CARDS = [
   {
@@ -4948,15 +5228,15 @@ const SHEPHERD_CARDS = [
   {
     key: "sevenday",
     title: "Seven-Day Follow-Up",
-    desc: "For someone this sermon stirred — short daily encouragements a pastor can text or email during the week.",
+    desc: "For someone this sermon stirred - short daily encouragements a pastor can text or email during the week.",
     fields: [
-      "Day 1 — Remember the big idea",
-      "Day 2 — Return to the passage",
-      "Day 3 — Confess and repent",
-      "Day 4 — Believe the gospel promise",
-      "Day 5 — Practice obedience",
-      "Day 6 — Pray with others",
-      "Day 7 — Prepare for the next gathering",
+      "Day 1 - Remember the big idea",
+      "Day 2 - Return to the passage",
+      "Day 3 - Confess and repent",
+      "Day 4 - Believe the gospel promise",
+      "Day 5 - Practice obedience",
+      "Day 6 - Pray with others",
+      "Day 7 - Prepare for the next gathering",
     ],
   },
 ];
@@ -4983,7 +5263,7 @@ const PACK_CARDS = [
   {
     key: "devotional",
     title: "Seven-Day Devotional",
-    desc: "For the whole church — a daily Scripture, reflection, prayer, and practice that extends the sermon through the week.",
+    desc: "For the whole church - a daily Scripture, reflection, prayer, and practice that extends the sermon through the week.",
     fields: ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
   },
   {
@@ -5084,7 +5364,7 @@ DRAFT_SPECS["pack.devotional"].instructions =
 DRAFT_SPECS["shepherd.sevenday"].instructions =
   "Keep each day to two or three lines the pastor could text or email to someone the sermon stirred.";
 
-// How the preacher wants help — fed to Sermon Guide behind the profile's
+// How the preacher wants help - fed to Sermon Guide behind the profile's
 // own toggles. Never included in exports or share links.
 function profileSummaryLines() {
   const profile = state.preachingProfile || {};
@@ -5105,7 +5385,7 @@ function profileSummaryLines() {
   const lines = [];
   if (fields.length) {
     lines.push(
-      "PREACHING PROFILE (how this pastor prepares and wants help — fit your help to it):",
+      "PREACHING PROFILE (how this pastor prepares and wants help - fit your help to it):",
       ...fields.map(([label, value]) => `${label}: ${value}`),
     );
   }
@@ -5113,7 +5393,7 @@ function profileSummaryLines() {
   if (posture) lines.push(`SERMON GUIDE POSTURE: ${posture}.`);
   if (profile.questionsFirst) lines.push("BEHAVIOR: prefer asking questions before suggesting.");
   if ((profile.guardrails || "").trim()) {
-    lines.push("GUARDRAILS (hard constraints from the preacher — never cross these):", profile.guardrails.trim());
+    lines.push("GUARDRAILS (hard constraints from the preacher - never cross these):", profile.guardrails.trim());
   }
   const rubric = activeRubricItems();
   if (lines.length && rubric.length) lines.push(`REVIEW RUBRIC (when asked to review, check against these): ${rubric.join("; ")}.`);
@@ -5140,7 +5420,7 @@ function lensSummaryLines() {
   ].filter(([, value]) => value && String(value).trim());
   if (!fields.length) return [];
   return [
-    "CONGREGATIONAL CONTEXT (broad, non-confidential — shape application and language to this real church):",
+    "CONGREGATIONAL CONTEXT (broad, non-confidential - shape application and language to this real church):",
     ...fields.map(([label, value]) => `${label}: ${value}`),
     "",
   ];
@@ -5192,7 +5472,7 @@ async function draftWithGuide(specKey) {
     if (data.text) {
       store[spec.key] = data.text;
       touchMinistryStore(spec.store);
-      showBanner(`Draft ready — review and adapt it before you use it.`);
+      showBanner(`Draft ready - review and adapt it before you use it.`);
     } else {
       showBanner("No draft came back. Try again.");
     }
@@ -5207,7 +5487,7 @@ async function draftWithGuide(specKey) {
 function seriesDraftContext(series) {
   if (!series) return "";
   const lines = [
-    `SERIES: ${series.title || "Untitled series"}${series.subtitle ? ` — ${series.subtitle}` : ""}`,
+    `SERIES: ${series.title || "Untitled series"}${series.subtitle ? ` - ${series.subtitle}` : ""}`,
     `Passages: ${series.passages || "-"}`,
     `Window: ${series.startDate || "?"} to ${series.endDate || "?"} (${series.count || "?"} sermons)`,
     `Description: ${series.description || "-"}`,
@@ -5221,7 +5501,7 @@ function seriesDraftContext(series) {
     "Series map:",
     ...(series.map || []).map(
       (row, index) =>
-        `${index + 1}. ${row.when || ""} ${row.passage || "(passage tbd)"} — ${row.title || ""}${row.idea ? ` | Big idea: ${row.idea}` : ""}${row.emphasis ? ` | Formation: ${row.emphasis}` : ""}`,
+        `${index + 1}. ${row.when || ""} ${row.passage || "(passage tbd)"} - ${row.title || ""}${row.idea ? ` | Big idea: ${row.idea}` : ""}${row.emphasis ? ` | Formation: ${row.emphasis}` : ""}`,
     ),
     "",
     ...profileSummaryLines(),
@@ -5243,7 +5523,7 @@ async function reviewSeriesArc(seriesId) {
       body: JSON.stringify({
         context: seriesDraftContext(series),
         prompt:
-          "Review this sermon series arc pastorally. Consider: Does the series have a clear progression? Are the sermons connected without being repetitive? Is the church being formed doctrinally and pastorally? Are we confronting sin and applying grace? Is there evangelistic clarity? Is there a clear landing point? Name what is strong first, then genuine gaps, then two or three practical suggestions. Observe and consider — no scores or grades.",
+          "Review this sermon series arc pastorally. Consider: Does the series have a clear progression? Are the sermons connected without being repetitive? Is the church being formed doctrinally and pastorally? Are we confronting sin and applying grace? Is there evangelistic clarity? Is there a clear landing point? Name what is strong first, then genuine gaps, then two or three practical suggestions. Observe and consider - no scores or grades.",
       }),
     });
     const data = await response.json();
@@ -5303,7 +5583,7 @@ function renderMinistryCard(store, card, storeObj) {
 function renderLensNotice() {
   return state.lens?.enabled
     ? `<span class="pf-lens-notice on" data-action="open-lens" role="button">Using Congregational Lens</span>`
-    : `<span class="pf-lens-notice" data-action="open-lens" role="button">Congregational Lens off — set your church context</span>`;
+    : `<span class="pf-lens-notice" data-action="open-lens" role="button">Congregational Lens off - set your church context</span>`;
 }
 
 function debriefAvailable(sermon) {
@@ -5324,12 +5604,12 @@ const IMPACT_TOOLS = [
   {
     key: "shepherd",
     title: "Shepherding",
-    desc: "Pastoral care pathways for the responses this message may surface — conviction, grief, questions, decisions.",
+    desc: "Pastoral care pathways for the responses this message may surface - conviction, grief, questions, decisions.",
   },
   {
     key: "pack",
     title: "Discipleship Pack",
-    desc: "Group guides, family worship, personal devotion, and next steps — so the sermon doesn't die on Sunday.",
+    desc: "Group guides, family worship, personal devotion, and next steps - so the sermon doesn't die on Sunday.",
   },
 ];
 
@@ -5346,7 +5626,7 @@ function renderImpact(active) {
   if (!active) {
     return `
       <div class="pf-page pf-page-read pf-fade">
-        <div class="pf-empty">Start a sermon first — the ministry response is built from your actual sermon work.
+        <div class="pf-empty">Start a sermon first - the ministry response is built from your actual sermon work.
           <div style="margin-top:14px;"><button class="pf-btn pf-btn-primary" data-action="new-sermon">Start a sermon</button></div>
         </div>
       </div>
@@ -5367,16 +5647,16 @@ function renderImpact(active) {
       <div class="pf-page-head" style="display:block;margin-bottom:20px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Ministry response</span>
         <h1 class="pf-h1">Turn Sunday's sermon into a week of ministry</h1>
-        <p class="pf-page-sub">All drawn from <strong>${escapeHtml(active.passage || "this sermon")}</strong>. Pick the tool you need right now — each opens on its own, so you only see what you're working on. ${renderLensNotice()}</p>
+        <p class="pf-page-sub">All drawn from <strong>${escapeHtml(active.passage || "this sermon")}</strong>. Pick the tool you need right now - each opens on its own, so you only see what you're working on. ${renderLensNotice()}</p>
       </div>
 
       <section class="pf-card-box pf-checklist-card" style="margin-bottom:18px;">
         <div class="pf-impact-summary">
-          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "—")}</p></div>
-          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "—")}</p></div>
-          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : '<em>Not yet — set it in The Aim phase.</em>'}</p></div>
-          <div><span class="pf-label">Pastoral burden</span><p>${burden ? escapeHtml(burden) : "—"}</p></div>
-          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "—"}</p></div>
+          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "-")}</p></div>
+          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "-")}</p></div>
+          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : '<em>Not yet - set it in The Aim phase.</em>'}</p></div>
+          <div><span class="pf-label">Pastoral burden</span><p>${burden ? escapeHtml(burden) : "-"}</p></div>
+          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "-"}</p></div>
         </div>
         <div class="pf-ws-field" style="margin-top:12px;">
           <label class="pf-label">This week's ministry emphasis</label>
@@ -5384,7 +5664,7 @@ function renderImpact(active) {
         </div>
       </section>
 
-      ${thin ? `<div class="pf-empty" style="margin-bottom:18px;">This sermon's big idea and outline are still thin — the more sermon work you bring, the more faithful these drafts will be. <button class="pf-btn pf-btn-ghost" data-view="workspace">Back to the Workspace</button></div>` : ""}
+      ${thin ? `<div class="pf-empty" style="margin-bottom:18px;">This sermon's big idea and outline are still thin - the more sermon work you bring, the more faithful these drafts will be. <button class="pf-btn pf-btn-ghost" data-view="workspace">Back to the Workspace</button></div>` : ""}
 
       <div class="pf-tool-cards">
         ${IMPACT_TOOLS.map((tool) => {
@@ -5405,7 +5685,7 @@ function renderImpact(active) {
         <button class="pf-tool-card ${debriefOpen ? "" : "locked"}" data-action="${debriefOpen ? "open-debrief" : "impact-tab-locked"}" data-sermon="${attr(active.id)}">
           <span class="pf-tool-card-title">Debrief</span>
           <span class="pf-tool-card-desc">After Sunday: what landed, what was unclear, what should shape future preaching. Attached to this sermon and searchable later.</span>
-          <span class="pf-tool-card-meta">${debriefOpen ? (debriefFilled(active) ? "In progress" : "Ready — the sermon has been preached") : "Opens after the sermon is preached"} <span class="pf-tool-card-go">${debriefOpen ? "Open →" : "🔒"}</span></span>
+          <span class="pf-tool-card-meta">${debriefOpen ? (debriefFilled(active) ? "In progress" : "Ready - the sermon has been preached") : "Opens after the sermon is preached"} <span class="pf-tool-card-go">${debriefOpen ? "Open →" : "🔒"}</span></span>
         </button>
       </div>
 
@@ -5440,7 +5720,7 @@ function renderImpactPlanTab(active) {
 
 function renderShepherdTab(active) {
   return `
-    <p class="pf-page-sub" style="margin-bottom:14px;">Turn sermon conviction into pastoral care — the responses this message may surface and the follow-up pathways for them.</p>
+    <p class="pf-page-sub" style="margin-bottom:14px;">Turn sermon conviction into pastoral care - the responses this message may surface and the follow-up pathways for them.</p>
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head"><span class="pf-eyebrow">Likely responses</span></div>
       ${renderChipGroup("shepherd", "responses", SHEPHERD_RESPONSES, active.shepherd.responses)}
@@ -5451,7 +5731,7 @@ function renderShepherdTab(active) {
 
 function renderPackTab(active) {
   return `
-    <p class="pf-page-sub" style="margin-bottom:18px;">Don't let the sermon die on Sunday — resources for groups, families, personal reflection, prayer, and next steps.</p>
+    <p class="pf-page-sub" style="margin-bottom:18px;">Don't let the sermon die on Sunday - resources for groups, families, personal reflection, prayer, and next steps.</p>
     ${PACK_CARDS.map((card) => renderMinistryCard("pack", card, active.pack)).join("")}
   `;
 }
@@ -5466,7 +5746,7 @@ const DEBRIEF_CARDS = [
   {
     key: "followup",
     title: "Pastoral follow-up needed",
-    desc: "Broad categories only — no names or confidential details.",
+    desc: "Broad categories only - no names or confidential details.",
     fields: ["People / categories to follow up with", "Issues to address", "Resources to send", "Meetings to schedule", "Staff / elder notes"],
   },
   {
@@ -5490,7 +5770,7 @@ function debriefFilled(sermon) {
   return Object.values(debrief).some((value) => typeof value === "string" && value.trim());
 }
 
-// Preached (or past-date) sermons, most recent first — the debrief candidates.
+// Preached (or past-date) sermons, most recent first - the debrief candidates.
 function debriefTargets() {
   return state.sermons
     .filter((sermon) => debriefAvailable(sermon))
@@ -5505,7 +5785,7 @@ function debriefSearchText(sermon) {
   return [sermon.passage, sermon.title, sermon.series, ...pieces].join(" ").toLowerCase();
 }
 
-// The most recent preached sermon that hasn't been debriefed yet — the
+// The most recent preached sermon that hasn't been debriefed yet - the
 // "first thing to do this week" before new prep starts.
 function pendingDebriefSermon() {
   return debriefTargets().find((sermon) => !debriefFilled(sermon)) || null;
@@ -5515,7 +5795,7 @@ function pendingDebriefSermon() {
 // Finished ministry resources with a status, plus secure read-only share
 // links. Share links never carry the Preaching Profile, Congregational
 // Lens, private notes, or the Post-Sermon Debrief unless a section is
-// explicitly turned on — and those four are never even offered by default.
+// explicitly turned on - and those four are never even offered by default.
 const DELIVERY_RESOURCES = [
   { key: "staff", label: "Staff Alignment", store: "impact", field: "staff" },
   { key: "group", label: "Family Group Guide", store: "pack", field: "group" },
@@ -5554,7 +5834,7 @@ function deliveryStatusLabel(status) {
   return { none: "Not started", drafted: "Drafted", reviewed: "Reviewed", ready: "Ready", shared: "Shared" }[status] || "Not started";
 }
 
-// Draft every missing resource with Sermon Guide — existing drafts are
+// Draft every missing resource with Sermon Guide - existing drafts are
 // never overwritten.
 async function prepareAllResources() {
   const active = getActive();
@@ -5564,7 +5844,7 @@ async function prepareAllResources() {
     (resource) => !deliveryText(active, resource).trim() && DRAFT_SPECS[`${resource.store}.${resource.field}`],
   );
   if (!missing.length) {
-    showBanner("Every resource already has a draft — nothing was overwritten.");
+    showBanner("Every resource already has a draft - nothing was overwritten.");
     return;
   }
   ui.preparingAll = true;
@@ -5574,7 +5854,7 @@ async function prepareAllResources() {
     await draftWithGuide(`${resource.store}.${resource.field}`);
   }
   ui.preparingAll = false;
-  showBanner("Resources prepared — review and adapt each one before it goes out.");
+  showBanner("Resources prepared - review and adapt each one before it goes out.");
   render();
 }
 
@@ -5583,7 +5863,7 @@ const SHARE_KINDS = [
   {
     key: "preacher",
     label: "Preacher Link",
-    desc: "A read-only Pulpit View for your own device or a backup — notes, Scripture, points, and timing.",
+    desc: "A read-only Pulpit View for your own device or a backup - notes, Scripture, points, and timing.",
     sections: [
       ["notes", "Preaching notes (sections)", true],
       ["personal", "Personal preaching notes", true],
@@ -5674,7 +5954,7 @@ function sharePlain(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-// Build exactly what a link is allowed to carry — and nothing else.
+// Build exactly what a link is allowed to carry - and nothing else.
 function buildSharePayload(sermon, kind) {
   const link = shareLink(sermon, kind);
   const on = (key) => link.sections[key] !== false;
@@ -5705,7 +5985,7 @@ function buildSharePayload(sermon, kind) {
   }
   if (kind === "production") {
     if (on("outline")) {
-      add("Outline", (sermon.outline || []).filter((m) => m.title.trim()).map((m, i) => `${i + 1}. ${m.title}${m.sub ? ` — ${m.sub}` : ""}`).join("\n"));
+      add("Outline", (sermon.outline || []).filter((m) => m.title.trim()).map((m, i) => `${i + 1}. ${m.title}${m.sub ? ` - ${m.sub}` : ""}`).join("\n"));
     }
     if (on("slides") && sermon.slideDeck.slides.length) add("Slides", deckPlainText(sermon));
     if (on("scripture")) {
@@ -5801,21 +6081,21 @@ async function revokeSharedView(sermon, kind) {
   saveState();
 }
 
-// Local read-only preview of exactly what a link would show — works
+// Local read-only preview of exactly what a link would show - works
 // offline and without an account.
 function openSharePreview(sermon, kind) {
   const payload = buildSharePayload(sermon, kind);
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(`
-    <title>${escapeHtml(payload.label)} — preview</title>
+    <title>${escapeHtml(payload.label)} - preview</title>
     <body style="margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#f4fbfe;color:#20242a;">
       <div style="max-width:680px;margin:0 auto;padding:40px 22px;">
         <p style="font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#dc6a12;">${escapeHtml(payload.label)} · preview</p>
         <h1 style="margin:6px 0 4px;font-size:26px;">${escapeHtml(payload.header.title || payload.header.passage || "Sermon")}</h1>
         <p style="color:#5e6c7a;margin:0 0 6px;">${escapeHtml([payload.header.passage, payload.header.series, payload.header.date].filter(Boolean).join(" · "))}</p>
         ${payload.header.bigIdea ? `<p style="font-weight:700;margin:10px 0 0;">${escapeHtml(payload.header.bigIdea)}</p>` : ""}
-        ${payload.blocks.map((block) => `<h2 style="font-size:16px;margin:26px 0 6px;">${escapeHtml(block.label)}</h2><p style="white-space:pre-wrap;line-height:1.65;margin:0;">${escapeHtml(block.text)}</p>`).join("") || `<p style="margin-top:26px;color:#5e6c7a;">Nothing to show yet — draft the underlying resources first.</p>`}
+        ${payload.blocks.map((block) => `<h2 style="font-size:16px;margin:26px 0 6px;">${escapeHtml(block.label)}</h2><p style="white-space:pre-wrap;line-height:1.65;margin:0;">${escapeHtml(block.text)}</p>`).join("") || `<p style="margin-top:26px;color:#5e6c7a;">Nothing to show yet - draft the underlying resources first.</p>`}
         <p style="margin-top:40px;font-size:12px;color:#5e6c7a;">Read-only preview. The live link shows the same content.</p>
       </div>
     </body>`);
@@ -5823,7 +6103,7 @@ function openSharePreview(sermon, kind) {
 }
 
 function renderSharingCenter(active) {
-  if (!active) return renderNeedSermon("The Sharing and Delivery Center works from your current sermon — start one first.");
+  if (!active) return renderNeedSermon("The Sharing and Delivery Center works from your current sermon - start one first.");
   const bigIdea = worksheetValue(active, "aim", "burden").trim();
   const purpose = worksheetValue(active, "aim", "purpose").trim();
   const statuses = DELIVERY_RESOURCES.map((resource) => deliveryStatus(active, resource));
@@ -5831,34 +6111,34 @@ function renderSharingCenter(active) {
   const sharedCount = statuses.filter((status) => status === "shared").length;
   const draftedCount = statuses.filter((status) => status !== "none").length;
   const nextStep = !draftedCount
-    ? "Draft your first resource — start with the Family Group Guide."
+    ? "Draft your first resource - start with the Family Group Guide."
     : readyCount < draftedCount
       ? "Review drafted resources and mark them ready."
       : !sharedCount
         ? "Create a share link and send the first resource out."
-        : "Carry the message into the week — everything is moving.";
+        : "Carry the message into the week - everything is moving.";
 
   return `
     <div class="pf-page pf-page-wide pf-fade">
       <div class="pf-page-head" style="display:block;margin-bottom:18px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Sharing and Delivery Center</span>
         <h1 class="pf-h1">Share the right sermon resources with the right people</h1>
-        <p class="pf-page-sub">Create secure, read-only links for preaching notes, production cues, group guides, discipleship resources, and ministry follow-up outputs — and get every resource ready to use the moment Sunday ends.</p>
+        <p class="pf-page-sub">Create secure, read-only links for preaching notes, production cues, group guides, discipleship resources, and ministry follow-up outputs - and get every resource ready to use the moment Sunday ends.</p>
       </div>
 
       <section class="pf-card-box pf-checklist-card">
         <div class="pf-checklist-head"><span class="pf-eyebrow">This week's ministry package</span></div>
         <div class="pf-impact-summary">
-          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "—")}</p></div>
-          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "—")}</p></div>
-          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : "—"}</p></div>
-          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "—"}</p></div>
+          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "-")}</p></div>
+          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "-")}</p></div>
+          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : "-"}</p></div>
+          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "-"}</p></div>
           <div><span class="pf-label">Resources</span><p>${draftedCount}/${DELIVERY_RESOURCES.length} drafted · ${readyCount} ready · ${sharedCount} shared</p></div>
         </div>
         <p class="pf-section-hint" style="margin:12px 0 0;">Next: ${escapeHtml(nextStep)}</p>
         <div class="pf-modal-actions" style="margin-top:12px;">
           <button class="pf-btn pf-btn-primary" data-action="prepare-all" ${ui.preparingAll || ui.drafting ? "disabled" : ""}>${ui.preparingAll ? "Preparing…" : "Prepare all resources"}</button>
-          <span class="pf-helper" style="align-self:center;">Drafts only what's missing — your existing work is never overwritten. Review everything before it goes out.</span>
+          <span class="pf-helper" style="align-self:center;">Drafts only what's missing - your existing work is never overwritten. Review everything before it goes out.</span>
         </div>
       </section>
 
@@ -5906,7 +6186,7 @@ function renderSharingCenter(active) {
 
 function renderShareCard(active, def) {
   const link = shareLink(active, def.key);
-  const status = link.revoked ? "Revoked" : link.token ? "Public — anyone with the link" : "Unshared";
+  const status = link.revoked ? "Revoked" : link.token ? "Public - anyone with the link" : "Unshared";
   return `
     <div class="pf-share-card">
       <div class="pf-delivery-head">
@@ -5973,7 +6253,7 @@ function renderDebriefPage() {
       <div class="pf-page-head" style="display:block;margin-bottom:20px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Debrief</span>
         <h1 class="pf-h1">Learn from last Sunday before you build the next one</h1>
-        <p class="pf-page-sub">There's always a sermon to debrief. Each debrief stays attached to its sermon — search below to recall the feedback on anything you've preached.</p>
+        <p class="pf-page-sub">There's always a sermon to debrief. Each debrief stays attached to its sermon - search below to recall the feedback on anything you've preached.</p>
       </div>
 
       <section class="pf-card-box pf-checklist-card">
@@ -5984,7 +6264,7 @@ function renderDebriefPage() {
               ${targets
                 .map(
                   (sermon) =>
-                    `<option value="${attr(sermon.id)}" ${sermon.id === selected.id ? "selected" : ""}>${escapeHtml(sermon.passage || "Untitled")}${sermon.date ? ` — ${escapeHtml(fmtDate(sermon.date))}` : ""}${debriefFilled(sermon) ? " · debriefed" : ""}</option>`,
+                    `<option value="${attr(sermon.id)}" ${sermon.id === selected.id ? "selected" : ""}>${escapeHtml(sermon.passage || "Untitled")}${sermon.date ? ` - ${escapeHtml(fmtDate(sermon.date))}` : ""}${debriefFilled(sermon) ? " · debriefed" : ""}</option>`,
                 )
                 .join("")}
             </select>
@@ -6005,7 +6285,7 @@ function renderDebriefPage() {
                       (sermon) => `
                         <button class="pf-switcher-item" data-action="debrief-pick-btn" data-sermon="${attr(sermon.id)}">
                           <div style="flex:1;min-width:0;">
-                            <div class="label">${escapeHtml(sermon.passage || "Untitled")}${sermon.title ? ` — ${escapeHtml(sermon.title)}` : ""}</div>
+                            <div class="label">${escapeHtml(sermon.passage || "Untitled")}${sermon.title ? ` - ${escapeHtml(sermon.title)}` : ""}</div>
                             <div class="meta">${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date"}${sermon.series ? ` · ${escapeHtml(sermon.series)}` : ""}</div>
                           </div>
                           <span class="pf-badge">${debriefFilled(sermon) ? "Debriefed" : "Not debriefed"}</span>
@@ -6023,7 +6303,7 @@ function renderDebriefPage() {
       </section>
 
       <div class="pf-page-head" style="display:block;margin:6px 0 14px;">
-        <h2 style="font-family:var(--font-display);font-weight:800;font-size:18px;">${escapeHtml(selected.passage || "Untitled")}${selected.title ? ` — ${escapeHtml(selected.title)}` : ""}</h2>
+        <h2 style="font-family:var(--font-display);font-weight:800;font-size:18px;">${escapeHtml(selected.passage || "Untitled")}${selected.title ? ` - ${escapeHtml(selected.title)}` : ""}</h2>
         <p class="pf-helper">${selected.date ? `Preached ${escapeHtml(fmtDate(selected.date))}` : "No date recorded"}${selected.series ? ` · ${escapeHtml(selected.series)}` : ""}</p>
       </div>
 
@@ -6106,19 +6386,19 @@ const LENS_FIELDS = [
 const LENS_EXPLAINER = [
   [
     "What it is",
-    "A short profile of your actual church — who they are, what season they're in, what the leadership is emphasizing. You fill it in once and nudge it as seasons change. It belongs to your whole ministry, not to any one sermon.",
+    "A short profile of your actual church - who they are, what season they're in, what the leadership is emphasizing. You fill it in once and nudge it as seasons change. It belongs to your whole ministry, not to any one sermon.",
   ],
   [
     "What it does",
-    "When the lens is on, Sermon Guide reads this profile every time it helps you with application, the Impact Plan, Shepherding drafts, the Discipleship Pack, or series planning. Suggestions start fitting your church — the young families, the new believers, the season you're actually in — instead of a generic congregation.",
+    "When the lens is on, Sermon Guide reads this profile every time it helps you with application, the Impact Plan, Shepherding drafts, the Discipleship Pack, or series planning. Suggestions start fitting your church - the young families, the new believers, the season you're actually in - instead of a generic congregation.",
   ],
   [
     "How to use it",
-    "Fill in what you know below (every field is optional), turn the toggle on, and prepare sermons as normal. Wherever the lens shapes a draft you'll see a small “Using Congregational Lens” notice. Revisit it when the season changes — a few minutes each quarter is plenty.",
+    "Fill in what you know below (every field is optional), turn the toggle on, and prepare sermons as normal. Wherever the lens shapes a draft you'll see a small “Using Congregational Lens” notice. Revisit it when the season changes - a few minutes each quarter is plenty.",
   ],
   [
     "What it never does",
-    "It never writes your sermon, and it is not a member database. Keep names, counseling situations, and private details out — broad patterns only.",
+    "It never writes your sermon, and it is not a member database. Keep names, counseling situations, and private details out - broad patterns only.",
   ],
 ];
 
@@ -6129,7 +6409,7 @@ function renderLens() {
       <div class="pf-page-head" style="display:block;margin-bottom:20px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Congregational Lens</span>
         <h1 class="pf-h1">Apply sermons with your actual church in view</h1>
-        <p class="pf-page-sub">You prepare every sermon for real people, not an audience in the abstract. The Congregational Lens tells Preach Flow who those people are — once — so application and ministry planning land on your church. Entirely optional; the app works without it.</p>
+        <p class="pf-page-sub">You prepare every sermon for real people, not an audience in the abstract. The Congregational Lens tells Preach Flow who those people are - once - so application and ministry planning land on your church. Entirely optional; the app works without it.</p>
       </div>
 
       <section class="pf-card-box pf-checklist-card">
@@ -6209,7 +6489,7 @@ function renderSeriesArchitect() {
     <div class="pf-page-head" style="display:block;margin-bottom:22px;">
       <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Series Architect</span>
       <h1 class="pf-h1">Plan series that form the church</h1>
-      <p class="pf-page-sub">Clarify the theological, pastoral, and discipleship goals of a series before you preach it — formation over time, not just passages on dates.</p>
+      <p class="pf-page-sub">Clarify the theological, pastoral, and discipleship goals of a series before you preach it - formation over time, not just passages on dates.</p>
     </div>
     ${
       state.series.length
@@ -6238,7 +6518,7 @@ function renderSeriesEditor(series) {
       <button class="pf-btn pf-btn-ghost" data-action="series-back" style="margin-bottom:12px;">&larr; All series</button>
       <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Series Architect</span>
       <h1 class="pf-h1">${escapeHtml(series.title || "New series")}</h1>
-      <p class="pf-page-sub">Plan the formation arc — then prepare each sermon in the Workspace as its week comes. ${renderLensNotice()}</p>
+      <p class="pf-page-sub">Plan the formation arc - then prepare each sermon in the Workspace as its week comes. ${renderLensNotice()}</p>
     </div>
 
     <section class="pf-card-box pf-checklist-card">
@@ -6275,7 +6555,7 @@ function renderSeriesEditor(series) {
 
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head"><span class="pf-eyebrow">Doctrinal anchors</span></div>
-      <p class="pf-section-hint">The two or three truths this series must teach clearly by the time it ends. Anchors keep a long series from wandering — when a week's text tempts you sideways, they pull the message back on course.</p>
+      <p class="pf-section-hint">The two or three truths this series must teach clearly by the time it ends. Anchors keep a long series from wandering - when a week's text tempts you sideways, they pull the message back on course.</p>
       ${renderChipGroup("series", "anchors", SERIES_ANCHORS, series.anchors)}
     </section>
 
@@ -6290,7 +6570,7 @@ function renderSeriesEditor(series) {
         <span class="pf-eyebrow">Series map</span>
         <span class="pf-checklist-count">${series.map.length} sermon${series.map.length === 1 ? "" : "s"}</span>
       </div>
-      <p class="pf-section-hint">One row per sermon: when, the passage, the big idea, and the formation emphasis. Mapping the arc up front exposes gaps and repetition while they're still cheap to fix — months before you'd discover them from the pulpit.</p>
+      <p class="pf-section-hint">One row per sermon: when, the passage, the big idea, and the formation emphasis. Mapping the arc up front exposes gaps and repetition while they're still cheap to fix - months before you'd discover them from the pulpit.</p>
       ${series.map
         .map(
           (row, index) => `
@@ -6322,7 +6602,7 @@ function renderSeriesEditor(series) {
       <div class="pf-checklist-head" style="align-items:flex-start;">
         <div style="min-width:0;">
           <span class="pf-eyebrow">Series arc review</span>
-          <p class="pf-ministry-desc">Once a few sermons are mapped, ask Sermon Guide to read the whole arc the way your church will experience it over the weeks: Does it progress instead of repeating? Are the doctrinal anchors actually taught? Are the pastoral burdens shepherded — sin confronted, grace applied? Would an unbeliever attending the whole series hear the gospel clearly and know how to respond? Does it land somewhere? It reviews the plan and flags gaps — it never writes the series for you.</p>
+          <p class="pf-ministry-desc">Once a few sermons are mapped, ask Sermon Guide to read the whole arc the way your church will experience it over the weeks: Does it progress instead of repeating? Are the doctrinal anchors actually taught? Are the pastoral burdens shepherded - sin confronted, grace applied? Would an unbeliever attending the whole series hear the gospel clearly and know how to respond? Does it land somewhere? It reviews the plan and flags gaps - it never writes the series for you.</p>
         </div>
         <button class="pf-btn" data-action="series-arc-review" ${ui.drafting ? "disabled" : ""}>${ui.drafting === "series-arc" ? "Reviewing…" : "Review with Sermon Guide"}</button>
       </div>
@@ -6357,7 +6637,7 @@ function seriesDocHtml(series) {
         series.map.length
           ? section(
               "Series map",
-              `<ol>${series.map.map((row) => `<li><strong>${escapeHtml(row.title || row.passage || "TBD")}</strong> — ${escapeHtml([row.when, row.passage].filter(Boolean).join(" · "))}${row.idea ? `<br>Big idea: ${escapeHtml(row.idea)}` : ""}${row.emphasis ? `<br>Formation: ${escapeHtml(row.emphasis)}` : ""}</li>`).join("")}</ol>`,
+              `<ol>${series.map.map((row) => `<li><strong>${escapeHtml(row.title || row.passage || "TBD")}</strong> - ${escapeHtml([row.when, row.passage].filter(Boolean).join(" · "))}${row.idea ? `<br>Big idea: ${escapeHtml(row.idea)}` : ""}${row.emphasis ? `<br>Formation: ${escapeHtml(row.emphasis)}` : ""}</li>`).join("")}</ol>`,
             )
           : ""
       }
@@ -6453,7 +6733,7 @@ function renderDietReview() {
     <div class="pf-page-head" style="display:block;margin-bottom:18px;">
       <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Preaching Diet Review</span>
       <h1 class="pf-h1">See what your church is being fed</h1>
-      <p class="pf-page-sub">Observe your preaching calendar over time — textual coverage, application patterns, and emphases. This is a mirror for a shepherd, not a report card.</p>
+      <p class="pf-page-sub">Observe your preaching calendar over time - textual coverage, application patterns, and emphases. This is a mirror for a shepherd, not a report card.</p>
     </div>
     <div class="pf-filter-chips" style="margin-bottom:20px;">
       ${ranges.map(([value, label]) => `<button class="pf-chip ${ui.dietRange === value ? "active" : ""}" data-action="diet-range" data-range="${value}">${label}</button>`).join("")}
@@ -6469,13 +6749,13 @@ function renderDietReview() {
         ${digest.byTestament.Unknown ? dietBar("Unrecognized passage", digest.byTestament.Unknown, total) : ""}
         <div style="height:10px;"></div>
         ${Object.entries(digest.byGenre).sort((a, b) => b[1] - a[1]).map(([genre, count]) => dietBar(genre, count, total)).join("")}
-        <p class="pf-helper" style="margin-top:10px;">Books preached: ${digest.books.size ? escapeHtml([...digest.books].sort().join(", ")) : "—"} · ${66 - digest.books.size} of 66 books not yet in this window.</p>
+        <p class="pf-helper" style="margin-top:10px;">Books preached: ${digest.books.size ? escapeHtml([...digest.books].sort().join(", ")) : "-"} · ${66 - digest.books.size} of 66 books not yet in this window.</p>
       </section>
 
       <section class="pf-card-box pf-checklist-card">
         <div class="pf-checklist-head"><span class="pf-eyebrow">Application balance</span></div>
         ${digest.audiences.map(([audience, count]) => dietBar(audience, count, total)).join("")}
-        <p class="pf-helper" style="margin-top:10px;">Counted from the Application Engine — sermons with counsel written for each audience.</p>
+        <p class="pf-helper" style="margin-top:10px;">Counted from the Application Engine - sermons with counsel written for each audience.</p>
       </section>
 
       <section class="pf-card-box pf-checklist-card">
@@ -6522,7 +6802,7 @@ async function reviewPreachingDiet() {
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 15)
-      .map((sermon) => `- ${sermon.date} · ${sermon.passage}${sermon.title ? ` — ${sermon.title}` : ""}${worksheetValue(sermon, "aim", "burden").trim() ? ` | Big idea: ${worksheetValue(sermon, "aim", "burden").trim()}` : ""}`),
+      .map((sermon) => `- ${sermon.date} · ${sermon.passage}${sermon.title ? ` - ${sermon.title}` : ""}${worksheetValue(sermon, "aim", "burden").trim() ? ` | Big idea: ${worksheetValue(sermon, "aim", "burden").trim()}` : ""}`),
     "",
     ...profileSummaryLines(),
     ...lensSummaryLines(),
@@ -6536,7 +6816,7 @@ async function reviewPreachingDiet() {
       body: JSON.stringify({
         context: lines.join("\n"),
         prompt:
-          "Review this preaching diet as a wise pastoral mentor. Cover: strengths to keep; potential imbalances to notice; emphases that may be missing; two or three future series worth considering; one or two one-off sermon ideas; pastoral cautions; and genuine encouragement. Observe and consider — never score, rank, or grade. Be concise and concrete.",
+          "Review this preaching diet as a wise pastoral mentor. Cover: strengths to keep; potential imbalances to notice; emphases that may be missing; two or three future series worth considering; one or two one-off sermon ideas; pastoral cautions; and genuine encouragement. Observe and consider - never score, rank, or grade. Be concise and concrete.",
       }),
     });
     const data = await response.json();
@@ -6747,18 +7027,18 @@ function renderJournal(active) {
       <div class="pf-page-head" style="display:block;margin-bottom:22px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Notes</span>
         <h1 class="pf-h1">Everything you've captured</h1>
-        <p class="pf-page-sub">Pick a sermon, then open just the phase you're after — no more scrolling the whole bank. Search still reaches every note in every sermon.</p>
+        <p class="pf-page-sub">Pick a sermon, then open just the phase you're after - no more scrolling the whole bank. Search still reaches every note in every sermon.</p>
       </div>
       <div class="pf-tools" style="margin-bottom:14px;gap:10px;flex-wrap:wrap;">
         <div class="pf-search" style="max-width:none;flex:2;min-width:220px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-          <input data-action="notes-query" value="${attr(ui.notesQuery || "")}" placeholder="Search every note, worksheet, and sermon — try “atonement”" />
+          <input data-action="notes-query" value="${attr(ui.notesQuery || "")}" placeholder="Search every note, worksheet, and sermon - try “atonement”" />
         </div>
         <select class="pf-select" data-action="notes-sermon" style="flex:1;min-width:200px;" aria-label="Choose a sermon">
           ${state.sermons
             .map((sermon) => {
               const count = collectActiveNoteGroups(sermon).reduce((sum, group) => sum + group.entries.length, 0);
-              return `<option value="${attr(sermon.id)}" ${sermon.id === selectedId ? "selected" : ""}>${escapeHtml(sermon.passage || "Untitled")}${sermon.title ? ` — ${escapeHtml(sermon.title)}` : ""}${count ? ` (${count})` : ""}</option>`;
+              return `<option value="${attr(sermon.id)}" ${sermon.id === selectedId ? "selected" : ""}>${escapeHtml(sermon.passage || "Untitled")}${sermon.title ? ` - ${escapeHtml(sermon.title)}` : ""}${count ? ` (${count})` : ""}</option>`;
             })
             .join("")}
         </select>
@@ -6777,7 +7057,7 @@ function renderJournal(active) {
             ? `<div class="pf-empty">No sermons yet. Start one and your phase notes will be filed here automatically.</div>`
             : groups.length
               ? `
-                <p class="pf-helper" style="margin-bottom:12px;">${totalNotes} note${totalNotes === 1 ? "" : "s"} across ${groups.length} phase${groups.length === 1 ? "" : "s"} for <strong>${escapeHtml(selected.passage || "this sermon")}</strong> — tap a phase to open it.</p>
+                <p class="pf-helper" style="margin-bottom:12px;">${totalNotes} note${totalNotes === 1 ? "" : "s"} across ${groups.length} phase${groups.length === 1 ? "" : "s"} for <strong>${escapeHtml(selected.passage || "this sermon")}</strong> - tap a phase to open it.</p>
                 <div class="pf-notes-list">${groups.map((group, index) => renderNoteGroup(group, selected, index === 0)).join("")}</div>`
               : `<div class="pf-empty">No notes on <strong>${escapeHtml(selected.passage || "this sermon")}</strong> yet. Write in any phase of its Workspace and it lands here.</div>`
       }
@@ -6809,7 +7089,7 @@ function renderNoteGroup(group, sermon, openByDefault = false) {
                   data-phase="${attr(entry.phaseId)}"
                   data-sermon="${attr(sermon?.id || "")}"
                   data-placeholder="Write a note for this phase…"
-                  title="Click to edit — saves automatically"
+                  title="Click to edit - saves automatically"
                 >${sanitizeRichHtml(entry.html)}</div>
               </div>
             `
@@ -7019,7 +7299,7 @@ function renderEmptyJournal() {
 
 const REVIEW_CHECKS = [
   ["gospel", "The gospel is clearly present"],
-  ["hero", "Christ is the hero — not the hearer"],
+  ["hero", "Christ is the hero - not the hearer"],
   ["illustration", "At least one concrete illustration"],
   ["application", "Application is specific (something for Monday)"],
   ["invitation", "A clear invitation to respond"],
@@ -7034,7 +7314,7 @@ function renderReview() {
       <div class="pf-page-head" style="display:block;margin-bottom:26px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Readiness check</span>
         <h1 class="pf-h1">Is it ready to preach?</h1>
-        <p class="pf-page-sub">The non-negotiables before Sunday. Nothing here writes the sermon for you — it just makes sure nothing's missing.</p>
+        <p class="pf-page-sub">The non-negotiables before Sunday. Nothing here writes the sermon for you - it just makes sure nothing's missing.</p>
       </div>
 
       <section class="pf-score-card">
@@ -7156,7 +7436,7 @@ function toggleComplete(phaseId) {
   if (!done && phase) {
     const checked = phaseCheckCount(active, phase);
     if (checked < phase.doItems.length) {
-      showBanner(`Finish the checklist first — ${checked} of ${phase.doItems.length} done.`);
+      showBanner(`Finish the checklist first - ${checked} of ${phase.doItems.length} done.`);
       return;
     }
   }
@@ -7190,7 +7470,7 @@ function worksheetSummaryLines(sermon) {
   const movements = (sermon.outline || []).filter((m) => m.title.trim() || m.sub.trim());
   if (movements.length) {
     lines.push("OUTLINE");
-    movements.forEach((m, i) => lines.push(`${i + 1}. ${m.title}${m.sub ? ` — ${m.sub}` : ""}`));
+    movements.forEach((m, i) => lines.push(`${i + 1}. ${m.title}${m.sub ? ` - ${m.sub}` : ""}`));
     lines.push("");
   }
   const applications = APPLICATION_AUDIENCES.map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
@@ -7416,7 +7696,7 @@ async function handleReviewFile(input) {
   render();
 }
 
-// Passage Map export sections — only when the preacher opted in.
+// Passage Map export sections - only when the preacher opted in.
 function pmVersePlain(verse) {
   const template = document.createElement("template");
   template.innerHTML = verse.html;
@@ -7434,13 +7714,13 @@ function pmMarkdownLines(sermon) {
     PM_CATEGORIES.forEach(([key, label]) => {
       const items = map.highlights.filter((item) => item.category === key);
       if (!items.length) return;
-      lines.push(`- **${label}:** ${items.map((item) => `"${item.text}"${item.verseRef ? ` (v.${item.verseRef})` : ""}${item.relation ? ` [${item.relation}]` : ""}${item.note ? ` — ${item.note}` : ""}`).join("; ")}`);
+      lines.push(`- **${label}:** ${items.map((item) => `"${item.text}"${item.verseRef ? ` (v.${item.verseRef})` : ""}${item.relation ? ` [${item.relation}]` : ""}${item.note ? ` - ${item.note}` : ""}`).join("; ")}`);
     });
   }
   if (map.sections.length) {
     lines.push("", "### Sections", "");
     map.sections.forEach((section, index) => {
-      lines.push(`${index + 1}. **${section.title || "Untitled"}**${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` — ${section.mainIdea}` : ""}${section.functionInPassage ? ` — _${section.functionInPassage}_` : ""}`);
+      lines.push(`${index + 1}. **${section.title || "Untitled"}**${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` - ${section.mainIdea}` : ""}${section.functionInPassage ? ` - _${section.functionInPassage}_` : ""}`);
     });
   }
   if (map.flow.steps.length) {
@@ -7468,12 +7748,12 @@ function pmSectionsHtml(sermon) {
     const rows = PM_CATEGORIES.map(([key, label]) => {
       const items = map.highlights.filter((item) => item.category === key);
       if (!items.length) return "";
-      return `<li><strong>${escapeHtml(label)}:</strong> ${items.map((item) => `“${escapeHtml(item.text)}”${item.verseRef ? ` (v.${escapeHtml(item.verseRef)})` : ""}${item.relation ? ` [${escapeHtml(item.relation)}]` : ""}${item.note ? ` — ${escapeHtml(item.note)}` : ""}`).join("; ")}</li>`;
+      return `<li><strong>${escapeHtml(label)}:</strong> ${items.map((item) => `“${escapeHtml(item.text)}”${item.verseRef ? ` (v.${escapeHtml(item.verseRef)})` : ""}${item.relation ? ` [${escapeHtml(item.relation)}]` : ""}${item.note ? ` - ${escapeHtml(item.note)}` : ""}`).join("; ")}</li>`;
     }).join("");
     html += `<h3>Marks</h3><div class="note"><ul>${rows}</ul></div>`;
   }
   if (map.sections.length) {
-    html += `<h3>Sections</h3><div class="note"><ol>${map.sections.map((section) => `<li><strong>${escapeHtml(section.title || "Untitled")}</strong>${section.verseRange ? ` (${escapeHtml(section.verseRange)})` : ""}${section.mainIdea ? ` — ${escapeHtml(section.mainIdea)}` : ""}${section.functionInPassage ? ` — <em>${escapeHtml(section.functionInPassage)}</em>` : ""}</li>`).join("")}</ol></div>`;
+    html += `<h3>Sections</h3><div class="note"><ol>${map.sections.map((section) => `<li><strong>${escapeHtml(section.title || "Untitled")}</strong>${section.verseRange ? ` (${escapeHtml(section.verseRange)})` : ""}${section.mainIdea ? ` - ${escapeHtml(section.mainIdea)}` : ""}${section.functionInPassage ? ` - <em>${escapeHtml(section.functionInPassage)}</em>` : ""}</li>`).join("")}</ol></div>`;
   }
   if (map.flow.steps.length) {
     html += `<h3>Passage flow</h3><div class="note"><p>${map.flow.steps.map((step) => `${escapeHtml(step.label)}${step.verseRange ? ` (${escapeHtml(step.verseRange)})` : ""}`).join(" → ")}</p></div>`;
@@ -7565,7 +7845,7 @@ function worksheetSectionsHtml(sermon) {
   const movements = (sermon.outline || []).filter((m) => m.title.trim() || m.sub.trim());
   if (movements.length) {
     html += `<h2>Outline</h2><div class="note"><ol>${movements
-      .map((m) => `<li>${escapeHtml(m.title)}${m.sub ? ` — ${escapeHtml(m.sub)}` : ""}</li>`)
+      .map((m) => `<li>${escapeHtml(m.title)}${m.sub ? ` - ${escapeHtml(m.sub)}` : ""}</li>`)
       .join("")}</ol></div>`;
   }
   const applications = APPLICATION_AUDIENCES.map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
@@ -7607,7 +7887,7 @@ function sermonDocHtml(sermon) {
       ${sermon.title ? `<p class="subtitle">${escapeHtml(sermon.title)}</p>` : ""}
       <p class="meta">
         ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date"} ·
-        ${escapeHtml(sermon.length || "—")} min ·
+        ${escapeHtml(sermon.length || "-")} min ·
         ${escapeHtml(sermon.format || "")} ·
         ${sermon.completed.length}/${PHASES.length} phases (${progressPct(sermon)}%) · ${escapeHtml(status.label)}
       </p>
@@ -7763,7 +8043,7 @@ function downloadBlob(filename, content, mime) {
   URL.revokeObjectURL(url);
 }
 
-// Word-compatible .doc (HTML-based) — opens in Word and Google Docs.
+// Word-compatible .doc (HTML-based) - opens in Word and Google Docs.
 function exportDoc(filename, bodyHtml) {
   const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escapeHtml(filename)}</title>
 <style>
@@ -7832,12 +8112,12 @@ function clearOpenAIKey() {
 function requireOpenAIKey() {
   refreshOpenAIKeyState();
   if (ui.openai.hasKey) return true;
-  // App-provided engine: included with the account — just needs sign-in.
+  // App-provided engine: included with the account - just needs sign-in.
   if (ui.serverStatus.engineConfigured) {
     if (!ui.auth.configured || ui.auth.user) return true;
     ui.lastView = state.view !== "signin" ? state.view : "home";
     state.view = "signin";
-    showBanner("Sign in to use Sermon Guide — it's included with your account.");
+    showBanner("Sign in to use Sermon Guide - it's included with your account.");
     render();
     return false;
   }
@@ -8036,7 +8316,7 @@ async function signUpWithPassword() {
     showBanner("Account created.");
   } else {
     ui.signinMode = "signin";
-    ui.auth.status = "Account created — check your email to confirm, then sign in.";
+    ui.auth.status = "Account created - check your email to confirm, then sign in.";
     ui.auth.statusKey = "ready";
     showBanner("Check your email to confirm your account.");
   }
@@ -8614,7 +8894,7 @@ function slug(value) {
 }
 
 // Deleting a sermon always flows through the confirmation modal
-// (ui.confirmDeleteId) — never a bare click, never a browser confirm().
+// (ui.confirmDeleteId) - never a bare click, never a browser confirm().
 function renderConfirmDeleteModal() {
   const sermon = state.sermons.find((item) => item.id === ui.confirmDeleteId);
   if (!sermon) return "";
@@ -8625,7 +8905,7 @@ function renderConfirmDeleteModal() {
         <div class="pf-modal-head">
           <span class="pf-eyebrow" style="color:var(--ofc-danger);">Delete sermon</span>
         </div>
-        <p style="font-size:15.5px;line-height:1.55;margin:6px 0 10px;">Delete <strong>${escapeHtml(sermon.passage || "this sermon")}</strong>${sermon.title ? ` — “${escapeHtml(sermon.title)}”` : ""}${sermon.date ? ` (${escapeHtml(fmtDate(sermon.date))})` : ""}?</p>
+        <p style="font-size:15.5px;line-height:1.55;margin:6px 0 10px;">Delete <strong>${escapeHtml(sermon.passage || "this sermon")}</strong>${sermon.title ? ` - “${escapeHtml(sermon.title)}”` : ""}${sermon.date ? ` (${escapeHtml(fmtDate(sermon.date))})` : ""}?</p>
         <p class="pf-helper" style="margin-bottom:4px;">This permanently removes the sermon with all of its phase notes, worksheets, outline, and debrief from Preach Flow. <strong>This cannot be undone.</strong>${hasDoc ? " The synced Google Doc itself stays safe in your Google Drive." : ""}</p>
         <div class="pf-modal-actions">
           <button class="pf-btn" data-action="close-confirm-delete">Cancel</button>
@@ -8680,6 +8960,7 @@ function closeOverlays() {
   ui.showImport = false;
   ui.pm.paste = false;
   ui.pm.bridge = false;
+  ui.libImport.show = false;
 }
 
 document.addEventListener("click", (event) => {
@@ -8695,14 +8976,20 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  // Clicking a Passage Map mark selects it in the Mark panel.
+  // Clicking a Passage Map mark selects it: ring it, float a remove x on
+  // the word, and bring the Selected Mark card into view.
   const pmMark = event.target.closest("[data-pm-passage] .pm-m");
   if (pmMark) {
     ui.pm.selected = pmMark.getAttribute("data-id") || "";
     ui.pm.tool = "mark";
     render();
+    requestAnimationFrame(() => {
+      pmShowRemoveChip();
+      document.querySelector(".pm-selected")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
     return;
   }
+  if (!event.target.closest("#pf-pm-chip")) pmHideRemoveChip();
 
   const target = event.target.closest("[data-action], [data-view], [data-sermon-card]");
   if (!target) return;
@@ -8776,7 +9063,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "mark-preached") {
     updateActive({ preached: true });
-    showBanner("Marked as preached — it's in your Library. Debrief when you're ready.");
+    showBanner("Marked as preached - it's in your Library. Debrief when you're ready.");
     render();
   }
   if (action === "toggle-complete") {
@@ -8853,7 +9140,7 @@ document.addEventListener("click", (event) => {
     ui.pm.pasteText = "";
     ui.pm.selected = "";
     pmSave();
-    showBanner("Passage loaded — pick a pen and start marking.");
+    showBanner("Passage loaded - pick a pen and start marking.");
     render();
   }
   if (action === "pm-scan-connectors") {
@@ -8861,7 +9148,7 @@ document.addEventListener("click", (event) => {
     PM_SCAN_CONNECTORS.forEach((word) => {
       count += pmMarkWord(word, "connector");
     });
-    showBanner(count ? `Marked ${count} connector${count === 1 ? "" : "s"} — click each one to label the relationship.` : "No unmarked connectors found.");
+    showBanner(count ? `Marked ${count} connector${count === 1 ? "" : "s"} - click each one to label the relationship.` : "No unmarked connectors found.");
     render();
   }
   if (action === "pm-mark-word") {
@@ -8923,7 +9210,7 @@ document.addEventListener("click", (event) => {
   if (action === "pm-outline-bridge" || action === "pm-outline-bridge-from-phase") {
     const map = pmActiveMap();
     if (!map || !pmOutlineMovements(map).length) {
-      showBanner("Give your sections titles first — the outline comes from them.");
+      showBanner("Give your sections titles first - the outline comes from them.");
       return;
     }
     if (action === "pm-outline-bridge-from-phase") state.view = "map";
@@ -8947,7 +9234,7 @@ document.addEventListener("click", (event) => {
     updateActive({ activePhase: "structure" });
     state.view = "workspace";
     saveState();
-    showBanner("Your passage movements are in the Outline Lab — shape the sermon from what the text is doing.");
+    showBanner("Your passage movements are in the Outline Lab - shape the sermon from what the text is doing.");
     render();
   }
   if (action === "pm-obs-add") {
@@ -8999,6 +9286,21 @@ document.addEventListener("click", (event) => {
     pmSave();
     render();
   }
+  if (action === "lib-import-open") {
+    ui.libImport = { show: true, queue: [] };
+    render();
+  }
+  if (action === "lib-import-close") {
+    ui.libImport = { show: false, queue: [] };
+    render();
+  }
+  if (action === "lib-import-remove") {
+    ui.libImport.queue = ui.libImport.queue.filter((item) => item.id !== target.dataset.id);
+    render();
+  }
+  if (action === "lib-import-apply") {
+    applyLibImport();
+  }
   if (action === "pm-guide") {
     runPmGuide(target.dataset.kind);
   }
@@ -9009,7 +9311,7 @@ document.addEventListener("click", (event) => {
   if (action === "pm-suggest-copy") {
     if (ui.pm.suggestion?.text) {
       navigator.clipboard?.writeText(ui.pm.suggestion.text).catch(() => {});
-      showBanner("Copied — weigh it against the text.");
+      showBanner("Copied - weigh it against the text.");
     }
   }
   if (action === "pm-suggest-note") {
@@ -9024,7 +9326,7 @@ document.addEventListener("click", (event) => {
     });
     ui.pm.suggestion = null;
     pmSave();
-    showBanner("Saved to your observation notes — yours to keep or cut.");
+    showBanner("Saved to your observation notes - yours to keep or cut.");
     render();
   }
   if (action === "toggle-check") {
@@ -9033,7 +9335,7 @@ document.addEventListener("click", (event) => {
     const phaseId = target.dataset.phase;
     const index = Number(target.dataset.index);
     if (autoChecked(active, phaseId, index)) {
-      showBanner(`Checked automatically — ${autoCheckFor(phaseId, index).why}.`);
+      showBanner(`Checked automatically - ${autoCheckFor(phaseId, index).why}.`);
       return;
     }
     const key = noteItemKey(phaseId, index);
@@ -9056,7 +9358,7 @@ document.addEventListener("click", (event) => {
     render();
   }
   if (action === "heading-menu") {
-    // Toggle the dropdown in place — no render(), so the editor selection survives.
+    // Toggle the dropdown in place - no render(), so the editor selection survives.
     const menu = target.parentElement?.querySelector("[data-tool-menu]");
     if (menu) menu.classList.toggle("open");
     return;
@@ -9126,8 +9428,8 @@ document.addEventListener("click", (event) => {
     const editor = document.querySelector('[data-action="slides-editor"]');
     const html = sanitizeRichHtml(editor ? editor.innerHTML : active.slidesDoc || generateSlidesDoc(active));
     const name = `${active.passage || "Sermon"} slides`;
-    if (action === "slides-export-pdf") exportPdf(name, `<h1>Slides — ${escapeHtml(active.passage || "Sermon")}</h1>${html}`);
-    else exportDoc(name, `<h1>Slides — ${escapeHtml(active.passage || "Sermon")}</h1>${html}`);
+    if (action === "slides-export-pdf") exportPdf(name, `<h1>Slides - ${escapeHtml(active.passage || "Sermon")}</h1>${html}`);
+    else exportDoc(name, `<h1>Slides - ${escapeHtml(active.passage || "Sermon")}</h1>${html}`);
   }
   if (action === "open-import") {
     ui.showImport = true;
@@ -9237,14 +9539,14 @@ document.addEventListener("click", (event) => {
   if (action === "scripture-insert") {
     const modal = ui.scripture;
     if (!modal.text.trim()) return;
-    const translation = state.bibleProvider.provider === "manual" ? (state.preachingProfile.translation || "—") : state.bibleProvider.translation;
+    const translation = state.bibleProvider.provider === "manual" ? (state.preachingProfile.translation || "-") : state.bibleProvider.translation;
     ui.scripture.show = false;
     insertIntoEditor(
       scriptureBlockHtml({
         reference: modal.ref.trim() || "Passage",
         translation,
         text: modal.text.trim(),
-        attribution: modal.attribution || (state.bibleProvider.provider === "manual" ? `${translation} — used with permission` : ""),
+        attribution: modal.attribution || (state.bibleProvider.provider === "manual" ? `${translation} - used with permission` : ""),
         slide: modal.slide,
         pulpit: modal.pulpit,
         production: modal.production,
@@ -9611,7 +9913,7 @@ document.addEventListener("click", (event) => {
       showBanner("Nothing to export yet.");
       return;
     }
-    const heading = `${resource.label} — ${active.passage || "Sermon"}`;
+    const heading = `${resource.label} - ${active.passage || "Sermon"}`;
     if (action === "delivery-copy") {
       copyText(text);
     } else if (target.dataset.format === "pdf") {
@@ -9657,7 +9959,7 @@ document.addEventListener("click", (event) => {
     const active = getActive();
     if (!active) return;
     revokeSharedView(active, target.dataset.kind).then(() => {
-      showBanner("Link revoked — it no longer resolves.");
+      showBanner("Link revoked - it no longer resolves.");
       render();
     });
   }
@@ -9906,6 +10208,10 @@ document.addEventListener("input", (event) => {
     state.reviewMeta[target.dataset.field] = target.value;
     saveState();
   }
+  if (action === "lib-import-field") {
+    const item = ui.libImport.queue.find((entry) => entry.id === target.dataset.id);
+    if (item) item[target.dataset.field] = target.value;
+  }
   if (action === "pm-paste-text") {
     ui.pm.pasteText = target.value;
   }
@@ -9946,6 +10252,9 @@ document.addEventListener("change", (event) => {
   }
   if (action === "import-file") {
     handleImportFile(target);
+  }
+  if (action === "lib-import-files") {
+    handleLibImportFiles(target);
   }
   if (action === "lens-toggle") {
     state.lens.enabled = target.checked;
@@ -10140,6 +10449,7 @@ document.addEventListener("mouseup", (event) => {
 });
 
 document.addEventListener("scroll", hideFindChip, true);
+document.addEventListener("scroll", () => { if (typeof pmHideRemoveChip === "function") pmHideRemoveChip(); }, true);
 
 document.addEventListener("keydown", (event) => {
   if (
@@ -10208,7 +10518,7 @@ if (window.location.hash === "#signin" && !ui.auth.user) {
 } else if (window.location.hash === "#ahead") {
   state.view = "ahead";
 } else {
-  // Every visit starts at Home — you choose where to go, the app doesn't
+  // Every visit starts at Home - you choose where to go, the app doesn't
   // drop you into a workspace.
   state.view = "home";
 }
@@ -10338,10 +10648,13 @@ function pulpitFullscreen() {
 function recordPracticeRun() {
   const active = getActive();
   if (!active || ui.practice.seconds < 60) return;
+  const practice = active.practice || {};
   active.practice = {
-    runs: (active.practice?.runs || 0) + 1,
+    ...practice,
+    runs: (practice.runs || 0) + 1,
     lastSeconds: ui.practice.seconds,
     lastAt: new Date().toISOString(),
+    history: [...(practice.history || []), { seconds: ui.practice.seconds, at: new Date().toISOString() }].slice(-10),
   };
   active.updatedAt = new Date().toISOString();
   saveState();
@@ -10357,7 +10670,53 @@ setInterval(() => {
   display.textContent = fmtClock(ui.practice.seconds);
   const target = Number(getActive()?.length) || 0;
   display.classList.toggle("over", Boolean(target && ui.practice.seconds > target * 60));
+  // Practice pace coach: compare elapsed time with where the target pace
+  // says you should be, given how far into the manuscript you are.
+  const pace = document.querySelector("[data-practice-pace]");
+  if (pace) {
+    const paceTarget = Number(pace.dataset.target) || 0;
+    const fraction = Number(pace.dataset.fraction) || 0;
+    if (paceTarget && fraction) {
+      const delta = ui.practice.seconds - paceTarget * fraction;
+      pace.textContent =
+        Math.abs(delta) < 25
+          ? "On pace for your target."
+          : delta > 0
+            ? `Running long: about ${fmtClock(Math.round(Math.abs(delta)))} behind target pace here.`
+            : `Moving quick: about ${fmtClock(Math.round(Math.abs(delta)))} ahead of target pace here.`;
+      pace.classList.toggle("over", delta >= 25);
+    }
+  }
 }, 1000);
+
+// Continuous-scroll mode: as the preacher scrolls, track which section is
+// on screen and keep the counter, progress bar, and pace fraction current
+// with direct DOM updates (no re-render, so scrolling stays smooth).
+document.addEventListener(
+  "scroll",
+  (event) => {
+    if (state.view !== "pulpit" || state.pulpitPrefs.focusMode) return;
+    const body = event.target instanceof Element && event.target.hasAttribute("data-pulpit-body") ? event.target : null;
+    if (!body) return;
+    const sections = [...body.querySelectorAll(".pf-pulpit-section")];
+    if (!sections.length) return;
+    const probe = body.getBoundingClientRect().top + 140;
+    let current = 0;
+    sections.forEach((el, index) => {
+      if (el.getBoundingClientRect().top <= probe) current = index;
+    });
+    if (current === ui.pulpit.section) return;
+    ui.pulpit.section = current;
+    sections.forEach((el, index) => el.classList.toggle("current", index === current));
+    const count = document.querySelector(".pf-pulpit-count");
+    if (count) count.textContent = `${current + 1} / ${sections.length}`;
+    const bar = document.querySelector(".pf-pulpit-progress i");
+    if (bar) bar.style.width = `${Math.round(((current + 1) / sections.length) * 100)}%`;
+    const pace = document.querySelector("[data-practice-pace]");
+    if (pace) pace.dataset.fraction = Math.min(1, (current + 0.5) / sections.length).toFixed(3);
+  },
+  true,
+);
 
 // Pulpit View quiet controls: chrome fades after a few idle seconds and
 // returns on any pointer or key activity.

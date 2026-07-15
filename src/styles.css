@@ -4010,3 +4010,142 @@ p {
   .pm-grid { grid-template-columns: 1fr; }
   .pm-passage { padding: 18px 18px; font-size: 16px; }
 }
+
+/* --- Passage Map: how-to, selected mark, remove chip, sticky tools --- */
+.pm-howto {
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-card);
+  margin-bottom: 16px;
+}
+.pm-howto > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 13px 18px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-brand);
+  user-select: none;
+}
+.pm-howto > summary::-webkit-details-marker { display: none; }
+.pm-howto > summary::before { content: "?"; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--brand-soft); margin-right: 10px; font-size: 12px; }
+.pm-howto-body { padding: 0 18px 16px; font-size: 14.5px; color: var(--text-secondary); }
+.pm-howto-body ol { margin: 10px 0; padding-left: 22px; }
+.pm-howto-body li { margin-bottom: 8px; }
+
+.pm-m[data-sel] {
+  outline: 2px solid var(--brand);
+  outline-offset: 1.5px;
+  border-radius: 3px;
+}
+#pf-pm-chip {
+  position: fixed;
+  z-index: 300;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--danger, #b23a36);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+#pf-pm-chip:hover { background: var(--danger, #b23a36); color: #fff; }
+
+@media (min-width: 1021px) {
+  .pm-tools {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+}
+
+/* --- Pulpit rehearsal coach --- */
+.pf-pulpit-pace {
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.pf-pulpit-pace.over {
+  border-color: rgba(178, 58, 54, 0.5);
+  color: #b23a36;
+}
+.pf-pulpit-runs {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.pf-pulpit-runs li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.pf-pulpit-runs li:last-child { border-bottom: 0; }
+.pf-pulpit-runs li span { color: var(--text-muted); }
+.pf-pulpit-runs li em { font-style: normal; margin-left: auto; color: var(--text-muted); }
+
+/* --- Library import queue + echo card --- */
+.pf-lib-drop {
+  display: block;
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pf-lib-drop:hover { border-color: var(--brand); background: var(--brand-soft); }
+.pf-lib-drop input[type="file"] { display: block; margin: 0 auto 8px; }
+.pf-lib-drop strong { display: block; font-family: var(--font-display); margin-bottom: 4px; }
+.pf-lib-drop span { display: block; font-size: 12.5px; color: var(--text-muted); }
+.pf-lib-qrow {
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.pf-lib-qrow.error { border-color: rgba(178, 58, 54, 0.5); }
+.pf-lib-qhead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pf-lib-qhead strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-lib-qhead .pf-chip-x { margin-left: auto; flex: none; }
+.pf-lib-qfields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.pf-lib-echo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.pf-lib-echo-row:hover { border-color: var(--brand); }
+.pf-lib-echo-row span { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-lib-echo-row em { font-style: normal; margin-left: auto; flex: none; font-size: 12px; color: var(--text-muted); }
