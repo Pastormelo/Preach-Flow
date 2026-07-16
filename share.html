@@ -68,8 +68,8 @@
           ${metaLine ? `<p class="meta">${esc(metaLine)}</p>` : ""}
           ${header.bigIdea ? `<p class="bigidea">${esc(header.bigIdea)}</p>` : ""}
           ${(payload.blocks || []).map((block) => `<h2>${esc(block.label)}</h2><p class="block">${esc(block.text)}</p>`).join("")}
-          <p class="updated">Last updated ${payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : "—"} · <a href="#" onclick="location.reload();return false;">Refresh</a></p>
-          <p class="foot">Read-only. Shared from PreachFlow — sermon prep that keeps the text in charge.</p>
+          <p class="updated">Last updated ${payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : "-"} · <a href="#" onclick="location.reload();return false;">Refresh</a></p>
+          <p class="foot">Read-only. Shared from PreachFlow - sermon prep that keeps the text in charge.</p>
         `;
         if (payload.kind === "production" && payload.follow && payload.currentSection) {
           liveBar.hidden = false;
