@@ -176,8 +176,12 @@ async function handleApi(req, res, pathname) {
       return;
     }
     const buffer = await readBuffer(req);
-    const text = await extractDocxText(buffer);
-    sendJson(res, 200, { text });
+    const { docxHelpers } = require("./api/extract-docx.js");
+    const documentXml = await docxHelpers.loadDocumentXml(buffer);
+    sendJson(res, 200, {
+      text: documentXml ? docxHelpers.xmlToText(documentXml) : "",
+      html: documentXml ? docxHelpers.xmlToHtml(documentXml) : "",
+    });
     return;
   }
 
@@ -266,28 +270,4 @@ function readBuffer(req) {
   });
 }
 
-async function extractDocxText(buffer) {
-  const zip = await JSZip.loadAsync(buffer);
-  const documentXml = await zip.file("word/document.xml")?.async("string");
-  if (!documentXml) return "";
-  return decodeXml(
-    documentXml
-      .replace(/<w:tab[^>]*\/>/g, "\t")
-      .replace(/<w:br[^>]*\/>/g, "\n")
-      .replace(/<\/w:p>/g, "\n")
-      .replace(/<[^>]+>/g, ""),
-  )
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
-function decodeXml(value) {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
-}

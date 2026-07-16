@@ -408,14 +408,14 @@ const PHASE_RESOURCES = {
     { view: "review", label: "Review", note: "Run the standalone completeness review on the full manuscript." },
   ],
   delivery: [
-    { view: "practice", label: "Practice mode", note: "Rehearse against the clock with the manuscript in front of you." },
+    { view: "pulpit", label: "Preach It", note: "Your manuscript, the clock, and nothing else - for the run-through and for Sunday." },
   ],
   heart: [
     { view: "impact", label: "Impact Plan", note: "Pray through this week's prayer focus with your team." },
   ],
 };
 
-// Speaking paces offered in Practice mode (used by state normalization,
+// Speaking paces offered in Preach It (used by state normalization,
 // so it must be initialized before loadState() runs below).
 const PRACTICE_WPM_CHOICES = [110, 130, 150];
 
@@ -423,6 +423,15 @@ const PRACTICE_WPM_CHOICES = [110, 130, 150];
 // Text-mapping study data per sermon. Verses are stored as sanitized HTML
 // carrying <mark> elements for the pastor's own category marks.
 const PM_SUMMARY_KEYS = ["doing", "movement", "tension", "god", "humanity", "response", "movements"];
+
+// The work under each outline movement: explain the text, illustrate it,
+// apply it, and write the transition word for word.
+const OUTLINE_PART_KINDS = [
+  ["explanation", "Explanation"],
+  ["illustration", "Illustration"],
+  ["application", "Application"],
+  ["transition", "Transition"],
+];
 
 function normalizePassageMap(map) {
   const source = map && typeof map === "object" ? map : {};
@@ -557,9 +566,7 @@ const DEFAULT_DRAFT = {
 
 const app = document.getElementById("app");
 let bannerTimer = null;
-let googleSyncTimer = null;
 let googleTokenClient = null;
-let googleSyncPaused = false;
 let cloudSyncTimer = null;
 let cloudSyncPaused = false;
 
@@ -569,7 +576,6 @@ const ui = {
   showCoach: false,
   showSwitcher: false,
   showDetails: false,
-  showGoogleDocs: false,
   showSlides: false,
   showImport: false,
   signinMode: "signin",
@@ -588,7 +594,6 @@ const ui = {
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "", coachCollapsed: null },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   refine: null,
-  preparingAll: false,
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, suggestion: null },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
@@ -596,7 +601,9 @@ const ui = {
   drafting: "",
   dietRange: "12",
   audience: "Believer",
+  showAudienceAdd: false,
   importText: "",
+  importHtml: "",
   importStatusNote: "",
   journalEditingId: "",
   journalDraft: {
@@ -716,7 +723,6 @@ function saveState() {
     STORE_KEY,
     JSON.stringify(snapshot),
   );
-  if (!googleSyncPaused) scheduleGoogleSync();
   if (!cloudSyncPaused) scheduleCloudSync();
 }
 
@@ -794,8 +800,22 @@ function normalizeSermon(sermon) {
     checklist: sermon.checklist && typeof sermon.checklist === "object" ? sermon.checklist : {},
     worksheet: sermon.worksheet && typeof sermon.worksheet === "object" ? sermon.worksheet : {},
     outline: Array.isArray(sermon.outline)
-      ? sermon.outline.map((movement) => ({ title: movement?.title || "", sub: movement?.sub || "" }))
+      ? sermon.outline.map((movement) => ({
+          title: movement?.title || "",
+          sub: movement?.sub || "",
+          parts: Array.isArray(movement?.parts)
+            ? movement.parts
+                .filter(Boolean)
+                .map((part) => ({
+                  id: part.id || genId(),
+                  kind: OUTLINE_PART_KINDS.some(([key]) => key === part.kind) ? part.kind : "explanation",
+                  text: typeof part.text === "string" ? part.text : "",
+                }))
+            : [],
+        }))
       : [],
+    customAudiences: Array.isArray(sermon.customAudiences) ? sermon.customAudiences.filter(Boolean).map(String).slice(0, 12) : [],
+    debriefStatus: ["done", "skipped"].includes(sermon.debriefStatus) ? sermon.debriefStatus : "",
     tags: Array.isArray(sermon.tags) ? sermon.tags.filter(Boolean).map(String) : [],
     slidesDoc: typeof sermon.slidesDoc === "string" ? sermon.slidesDoc : "",
     slideDeck:
@@ -1219,7 +1239,6 @@ function render() {
     ${ui.showOpenAIKey ? renderOpenAIKeyPanel() : ""}
     ${ui.showSwitcher ? renderSwitcherModal(active) : ""}
     ${ui.showDetails && active ? renderDetailsModal(active) : ""}
-    ${ui.showGoogleDocs && active ? renderGoogleDocsModal(active) : ""}
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.libImport.show ? renderLibImportModal() : ""}
@@ -1412,7 +1431,9 @@ function renderNavGroup([label, items]) {
 
 function accountInitial() {
   const email = ui.auth.user?.email || "";
-  return email ? email.trim().charAt(0).toUpperCase() : "M";
+  // Signed out shows a neutral person glyph, never a letter that could be
+  // mistaken for a signed-in initial.
+  return email ? email.trim().charAt(0).toUpperCase() : "";
 }
 
 function renderTopbar(active) {
@@ -1438,7 +1459,7 @@ function renderTopbar(active) {
               : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`
           }
         </button>
-        <button class="pf-avatar" data-action="open-account" aria-label="Your account" title="Your account">${escapeHtml(accountInitial())}<i class="pf-avatar-dot ${avatarKey}"></i></button>
+        <button class="pf-avatar" data-action="open-account" aria-label="Your account" title="${ui.auth.user ? `Signed in: ${attr(ui.auth.user.email || "account")}` : "Not signed in on this device"}">${accountInitial() ? escapeHtml(accountInitial()) : `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>`}<i class="pf-avatar-dot ${avatarKey}"></i></button>
       </div>
     </header>
   `;
@@ -1886,9 +1907,17 @@ function renderProfileAccountTab(active) {
       <div class="pf-account-row">
         <div style="flex:1;">
           <div class="pf-account-label">Cloud sync</div>
-          <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
+          <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.user ? ui.auth.status : "Sign in to turn on cloud sync.")}</div>
         </div>
-        <button class="pf-btn pf-btn-primary" data-action="cloud-sync-now" ${ui.auth.loading ? "disabled" : ""}>Sync now</button>
+        ${
+          !ui.auth.user
+            ? ""
+            : ui.auth.statusKey === "ready"
+              ? `<button class="pf-btn" disabled>Synced ✓</button>`
+              : ui.auth.statusKey === "syncing" || ui.auth.loading
+                ? `<button class="pf-btn" disabled>Syncing…</button>`
+                : `<button class="pf-btn pf-btn-primary" data-action="cloud-sync-now">Sync now</button>`
+        }
       </div>
       <div class="pf-account-row">
         <div style="flex:1;">
@@ -1896,13 +1925,6 @@ function renderProfileAccountTab(active) {
           <div class="pf-account-meta">${state.lens?.enabled ? "On - shaping application to your church" : "Off"}</div>
         </div>
         <button class="pf-btn" data-action="open-lens">Open</button>
-      </div>
-      <div class="pf-account-row">
-        <div style="flex:1;">
-          <div class="pf-account-label">Google Docs</div>
-          <div class="pf-account-meta">${ui.google.connected ? "Connected" : ui.google.configured ? "Not connected" : "Not configured"}</div>
-        </div>
-        ${active ? `<button class="pf-btn" data-action="open-google-docs">Manage</button>` : ""}
       </div>
       <div class="pf-account-row">
         <div style="flex:1;">
@@ -2549,7 +2571,6 @@ function renderEditorPage(active) {
   const words = manuscriptWordCount(active);
   const est = estPreachMinutes(words);
   const target = Number(active.length) || 0;
-  const sync = syncIndicator(active);
   return `
     <div class="pf-page pf-page-wide pf-fade">
       <div class="pf-editor-topline">
@@ -2558,9 +2579,8 @@ function renderEditorPage(active) {
           <p class="pf-helper" style="margin-top:4px;">Same manuscript as the Workspace's Manuscript phase - write here or there, it's one document.</p>
         </div>
         <div class="pf-editor-actions">
-          <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync"><span class="pf-sync-dot"></span>${escapeHtml(sync.text)}</button>
-          <button class="pf-btn" data-view="practice">Practice ▸</button>
-          <button class="pf-btn" data-view="pulpit">Pulpit View ▸</button>
+          ${ui.google.configured ? `<button class="pf-btn pf-btn-ghost" data-action="editor-gdoc-export" ${ui.google.loading ? "disabled" : ""}>${ui.google.loading ? "Sending…" : "Send to Google Docs"}</button>` : ""}
+          <button class="pf-btn" data-view="pulpit">Preach It ▸</button>
           <button class="pf-btn pf-btn-ghost" data-view="slides">Slides</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-doc">Word</button>
@@ -2610,7 +2630,7 @@ function manuscriptDocHtml(sermon) {
   `;
 }
 
-// ---- Practice mode (rehearse against the clock) ----
+// ---- Preach It timer (run-throughs and Sunday) ----
 const PRACTICE_FONT_SIZES = [15, 17, 19, 22, 26, 31];
 
 function practiceFontPx() {
@@ -2627,17 +2647,11 @@ function fmtClock(totalSeconds) {
 }
 
 // ---- Pulpit View ----
-// A focused preaching interface: Practice mode to rehearse against the
+// A focused preaching interface for the run-through and for Sunday: the
 // clock, Live mode to take to the pulpit. Read-only by design - Sermon
 // Guide never interrupts live preaching.
 const PULPIT_FONT_SIZES = [18, 20, 23, 27, 32, 38];
 const PULPIT_LINE_HEIGHTS = { compact: 1.55, comfortable: 1.75, spacious: 2.0 };
-const PULPIT_MARKS = [
-  ["strong", "Strong"],
-  ["rushed", "Rushed"],
-  ["unclear", "Unclear"],
-  ["long", "Too long"],
-];
 
 // Split the manuscript into preachable sections at headings; fall back to
 // the outline, then to a single section.
@@ -2672,7 +2686,12 @@ function pulpitSections(sermon) {
   if (movements.length) {
     return movements.map((movement) => ({
       title: movement.title,
-      html: movement.sub ? `<p>${escapeHtml(movement.sub)}</p>` : "",
+      html: [
+        movement.sub ? `<p>${escapeHtml(movement.sub)}</p>` : "",
+        ...(movement.parts || [])
+          .filter((part) => part.text.trim())
+          .map((part) => `<p><strong>${escapeHtml(OUTLINE_PART_KINDS.find(([key]) => key === part.kind)?.[1] || part.kind)}:</strong> ${escapeHtml(part.text)}</p>`),
+      ].join(""),
     }));
   }
   return [];
@@ -2716,7 +2735,6 @@ function renderPulpitView(active) {
   }
 
   const prefs = state.pulpitPrefs;
-  const mode = ui.pulpit.mode === "practice" ? "practice" : "live";
   const index = Math.min(Math.max(0, ui.pulpit.section), sections.length - 1);
   const section = sections[index];
   const next = sections[index + 1] || null;
@@ -2724,16 +2742,12 @@ function renderPulpitView(active) {
   const words = manuscriptWordCount(active);
   const over = target && ui.practice.seconds > target * 60;
   const bodyStyle = `font-size:${pulpitFontPx()}px;line-height:${PULPIT_LINE_HEIGHTS[prefs.lineHeight]};`;
-  const mark = active.practice.marks?.[index] || "";
 
   return `
     <div class="pf-pulpit theme-${attr(prefs.theme)} ${prefs.width === "narrow" ? "narrow" : "wide"} ${prefs.showNotes ? "" : "hide-notes"} ${prefs.showCues ? "" : "hide-cues"} ${prefs.showRefs ? "" : "hide-refs"} controls-on" data-pulpit>
       <header class="pf-pulpit-bar pf-pulpit-controls">
         <button class="pf-pulpit-btn" data-action="pulpit-exit" aria-label="Leave Pulpit View">&larr; Exit</button>
-        <div class="pf-pulpit-modes" role="tablist" aria-label="Pulpit mode">
-          <button class="pf-pulpit-chip ${mode === "practice" ? "active" : ""}" data-action="pulpit-mode" data-mode="practice" title="Rehearse: pace coach, run history, section marks, and debrief notes">Practice</button>
-          <button class="pf-pulpit-chip ${mode === "live" ? "active" : ""}" data-action="pulpit-mode" data-mode="live" title="Preach: a clean screen with your notes, the timer, and the clock">Live</button>
-        </div>
+        <span class="pf-pulpit-modes pf-pulpit-brandtag">Preach It</span>
         <span class="pf-pulpit-id">${escapeHtml(active.passage)}${active.title ? ` - ${escapeHtml(active.title)}` : ""}</span>
         <div class="pf-pulpit-tools">
           <button class="pf-pulpit-btn" data-action="pulpit-font" data-delta="-1" ${prefs.fontStep <= -2 ? "disabled" : ""} aria-label="Smaller text">A−</button>
@@ -2788,24 +2802,17 @@ function renderPulpitView(active) {
           prefs.showTimer
             ? `
           <div class="pf-pulpit-timing">
-            <button class="pf-pulpit-btn pf-pulpit-start ${ui.practice.running ? "" : "go"}" data-action="practice-toggle" title="Shortcut: T">${ui.practice.running ? "Pause" : mode === "live" ? "▶ Preach" : "▶ Start run"}</button>
+            <button class="pf-pulpit-btn pf-pulpit-start ${ui.practice.running ? "" : "go"}" data-action="practice-toggle" title="Shortcut: T">${ui.practice.running ? "Pause" : "▶ Preach"}</button>
             <button class="pf-pulpit-timer ${over ? "over" : ""}" data-action="practice-toggle" data-practice-timer title="${ui.practice.running ? "Pause" : "Start"} (T)">${fmtClock(ui.practice.seconds)}</button>
             <span class="pf-pulpit-meta"><span data-pulpit-clock>${fmtWallClock(new Date())}</span>${target ? ` · target ${target} min${pulpitTargetEnd(active) ? ` · ends ${pulpitTargetEnd(active)}` : ""}` : ""}</span>
             <button class="pf-pulpit-btn" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"} aria-label="Reset timer">↺</button>
           </div>`
             : ""
         }
-        ${
-          mode === "practice"
-            ? `
-          <div class="pf-pulpit-marks" role="group" aria-label="Mark this section">
-            ${PULPIT_MARKS.map(([key, label]) => `<button class="pf-pulpit-chip ${mark === key ? "active" : ""}" data-action="pulpit-mark" data-mark="${key}">${label}</button>`).join("")}
-          </div>`
-            : `<span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "-"} min</span>`
-        }
+        <span class="pf-pulpit-meta">${words.toLocaleString()} words · ≈ ${estPreachMinutes(words) || "-"} min</span>
       </footer>
 
-      ${mode === "practice" ? renderPulpitPracticePanel(active, sections, index) : ""}
+
     </div>
   `;
 }
@@ -2853,55 +2860,6 @@ function renderPulpitSettings(prefs) {
         <button class="pf-pulpit-chip" data-action="pulpit-unlock-edit">Unlock quick edit</button>
       </div>
     </div>
-  `;
-}
-
-// Rehearsal coach, only in practice mode: live pace vs target, run history
-// with deltas, section marks, and debrief notes. Live mode stays clean.
-function pmRunDelta(seconds, target) {
-  if (!target) return "";
-  const delta = seconds - target * 60;
-  if (Math.abs(delta) < 30) return "on target";
-  const clock = fmtClock(Math.abs(delta));
-  return delta > 0 ? `${clock} over` : `${clock} under`;
-}
-
-function renderPulpitPracticePanel(active, sections, index) {
-  const practice = active.practice;
-  // On phones the coach starts as a slim collapsed bar so it never blocks
-  // the manuscript; one tap opens it, one tap tucks it away again.
-  if (ui.pulpit.coachCollapsed === null) {
-    ui.pulpit.coachCollapsed = window.matchMedia("(max-width: 760px)").matches;
-  }
-  const collapsed = ui.pulpit.coachCollapsed;
-  const target = Number(active.length) || 0;
-  const fraction = sections.length ? Math.min(1, (index + 0.5) / sections.length) : 0;
-  const history = (practice.history || []).slice(-4).reverse();
-  return `
-    <aside class="pf-pulpit-practice pf-pulpit-controls ${collapsed ? "collapsed" : ""}">
-      <div class="pf-pulpit-practice-head">
-        <strong>Rehearsal coach</strong>
-        <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} so far` : "Start the timer and preach it through"}</span>
-        <button class="pf-pulpit-btn pf-coach-toggle" data-action="pulpit-coach-toggle" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Open" : "Hide"}</button>
-      </div>
-      ${collapsed ? "" : `
-      ${
-        target
-          ? `<div class="pf-pulpit-pace" data-practice-pace data-target="${target * 60}" data-fraction="${fraction.toFixed(3)}">${ui.practice.running ? "Checking your pace…" : `Target ${target} min. Pace feedback appears while the timer runs.`}</div>`
-          : `<div class="pf-pulpit-pace">Set a target length in the sermon details to get pace feedback.</div>`
-      }
-      ${
-        history.length
-          ? `<ul class="pf-pulpit-runs">${history
-              .map((run, runIndex) => {
-                const runNumber = (practice.history || []).length - runIndex;
-                return `<li><span>Run ${runNumber}</span><strong>${fmtClock(run.seconds)}</strong><em>${target ? pmRunDelta(run.seconds, target) : ""}</em></li>`;
-              })
-              .join("")}</ul>`
-          : ""
-      }
-      <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>`}
-    </aside>
   `;
 }
 
@@ -3011,7 +2969,7 @@ function renderLibraryCard(sermon) {
       <div class="pf-lib-meta">${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date"}${sermon.series ? ` · ${escapeHtml(sermon.series)}` : ""}</div>
       ${(sermon.tags || []).length ? `<div class="pf-lib-tags">${sermon.tags.map((tag) => `<span>#${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
       <div class="pf-lib-badges">
-        <span class="pf-lib-badge ${debriefFilled(sermon) ? "done" : ""}">${debriefFilled(sermon) ? "Debriefed ✓" : "No debrief yet"}</span>
+        <span class="pf-lib-badge ${sermon.debriefStatus === "done" ? "done" : ""}">${sermon.debriefStatus === "done" ? "Debriefed ✓" : sermon.debriefStatus === "skipped" ? "No debrief" : debriefFilled(sermon) ? "Debrief in progress" : "No debrief yet"}</span>
         ${sermon.timeSpent ? `<span class="pf-lib-badge" title="Total time spent preparing this sermon">Prep ${escapeHtml(fmtDuration(sermon.timeSpent))}</span>` : ""}
         ${words ? `<span class="pf-lib-badge">${words.toLocaleString()} words</span>` : ""}
       </div>
@@ -3257,7 +3215,7 @@ const AUTO_CHECKS = {
   "gospel:1": { test: (s) => Boolean(worksheetValue(s, "gospel", "grace").trim()), why: "the grace-empowered response is filled in the worksheet" },
   "structure:0": { test: (s) => (s.outline || []).filter((m) => m.title.trim()).length >= 2, why: "the outline has two or more movements" },
   "application:0": {
-    test: (s) => APPLICATION_AUDIENCES.filter((a) => worksheetValue(s, "application", a).trim()).length >= 2,
+    test: (s) => sermonAudiences(s).filter((a) => worksheetValue(s, "application", a).trim()).length >= 2,
     why: "counsel is written for two or more audiences",
   },
   "invitation:1": { test: (s) => phaseTextLength(s, "invitation") >= 60, why: "the invitation is written in this phase" },
@@ -3265,7 +3223,7 @@ const AUTO_CHECKS = {
   "introtitle:2": { test: (s) => Boolean(s.title.trim()), why: "the sermon has a title" },
   "manuscript:0": { test: (s) => manuscriptWordCount(s) >= 500, why: "the manuscript has real length (500+ words)" },
   "readiness:0": { test: (s) => (s.thread || []).some((m) => m.phaseId === "readiness"), why: "the completeness check ran with Sermon Guide" },
-  "delivery:2": { test: (s) => (s.practice?.runs || 0) > 0, why: "you timed a run-through in Practice mode" },
+  "delivery:2": { test: (s) => (s.practice?.runs || 0) > 0, why: "you timed a run-through in Preach It" },
 };
 
 function phaseTextLength(sermon, phaseId) {
@@ -3415,6 +3373,10 @@ const WORKSHEETS = {
 
 const APPLICATION_AUDIENCES = ["Believer", "Unbeliever", "Weary Christian", "Proud Christian", "Nominal Christian", "Church Body"];
 
+function sermonAudiences(sermon) {
+  return [...APPLICATION_AUDIENCES, ...(sermon.customAudiences || [])];
+}
+
 function worksheetValue(sermon, phaseId, key) {
   return sermon?.worksheet?.[`${phaseId}.${key}`] || "";
 }
@@ -3443,20 +3405,38 @@ function renderWorksheetCard(active, phase) {
 
 function renderApplicationCard(active, phase) {
   if (phase.id !== "application") return "";
-  const audience = APPLICATION_AUDIENCES.includes(ui.audience) ? ui.audience : APPLICATION_AUDIENCES[0];
+  const audiences = sermonAudiences(active);
+  const audience = audiences.includes(ui.audience) ? ui.audience : audiences[0];
+  const filled = audiences.filter((a) => worksheetValue(active, "application", a).trim()).length;
+  const isCustom = (active.customAudiences || []).includes(audience);
   return `
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head">
         <span class="pf-eyebrow">Application engine</span>
-        <span class="pf-checklist-count">${APPLICATION_AUDIENCES.filter((a) => worksheetValue(active, "application", a).trim()).length} / ${APPLICATION_AUDIENCES.length} audiences</span>
+        <span class="pf-checklist-count">${filled} of ${audiences.length} audiences</span>
       </div>
+      <p class="pf-section-hint">Write specific counsel for the people who will actually hear this. Two audiences make the phase complete; every extra one sharpens the sermon. Add your own audience for a person or group only you know is in the room.</p>
       <div class="pf-filter-chips" style="margin-bottom:14px;">
-        ${APPLICATION_AUDIENCES.map(
-          (a) => `<button class="pf-chip ${a === audience ? "active" : ""}" data-action="set-audience" data-audience="${attr(a)}">${escapeHtml(a)}${worksheetValue(active, "application", a).trim() ? " ·" : ""}</button>`,
-        ).join("")}
+        ${audiences
+          .map(
+            (a) => `<button class="pf-chip ${a === audience ? "active" : ""}" data-action="set-audience" data-audience="${attr(a)}">${escapeHtml(a)}${worksheetValue(active, "application", a).trim() ? " ·" : ""}</button>`,
+          )
+          .join("")}
+        <button class="pf-chip" data-action="audience-add">+ Add audience</button>
       </div>
+      ${
+        ui.showAudienceAdd
+          ? `<div class="pf-resource-add" style="margin-bottom:12px;">
+              <input class="pf-input" data-audience-name placeholder="Who is this for? (New parents, First responders, Doubting teens…)" />
+              <button class="pf-btn pf-btn-ghost" data-action="audience-save">Add</button>
+              <button class="pf-btn pf-btn-ghost" data-action="audience-cancel">Cancel</button>
+            </div>`
+          : ""
+      }
       <div class="pf-ws-field">
-        <label class="pf-label">For the ${escapeHtml(audience.toLowerCase())}</label>
+        <label class="pf-label" style="display:flex;gap:10px;align-items:baseline;">For ${escapeHtml(audience.toLowerCase().startsWith("the ") ? audience.toLowerCase() : `the ${audience.toLowerCase()}`)}
+          ${isCustom ? `<button class="pf-inline-link" data-action="audience-remove" data-audience="${attr(audience)}" style="font-size:12px;">remove this audience</button>` : ""}
+        </label>
         <textarea class="pf-ws-input" data-action="worksheet-field" data-note-key="${attr(`application.${audience}`)}" data-phase="application" data-key="${attr(audience)}" rows="3" placeholder="Specific, concrete counsel - something for Monday.">${escapeHtml(worksheetValue(active, "application", audience))}</textarea>
       </div>
     </section>
@@ -3482,7 +3462,23 @@ function renderOutlineCard(active, phase) {
               </div>
               <div style="flex:1;min-width:0;">
                 <input class="pf-ws-input pf-outline-title" data-action="outline-title" data-note-key="ol-t-${index}" data-index="${index}" value="${attr(movement.title)}" placeholder="Movement ${index + 1} - point title" />
-                <input class="pf-ws-input pf-outline-sub" data-action="outline-sub" data-note-key="ol-s-${index}" data-index="${index}" value="${attr(movement.sub)}" placeholder="Verses · transition · notes" />
+                <input class="pf-ws-input pf-outline-sub" data-action="outline-sub" data-note-key="ol-s-${index}" data-index="${index}" value="${attr(movement.sub)}" placeholder="Verse range (vv. 1-3)" />
+                ${(movement.parts || [])
+                  .map(
+                    (part) => `
+                      <div class="pf-outline-part kind-${attr(part.kind)}">
+                        <div class="pf-outline-part-head">
+                          <span class="pf-outline-part-label">${escapeHtml(OUTLINE_PART_KINDS.find(([key]) => key === part.kind)?.[1] || part.kind)}</span>
+                          <button class="pf-chip-x" data-action="outline-part-remove" data-index="${index}" data-part="${attr(part.id)}" aria-label="Remove this ${attr(part.kind)}">✕</button>
+                        </div>
+                        <textarea class="pf-ws-input" rows="3" data-action="outline-part-text" data-note-key="olp-${attr(part.id)}" data-index="${index}" data-part="${attr(part.id)}" placeholder="${part.kind === "transition" ? "Write the transition word for word - exactly what you'll say to move here." : `Write the ${attr(part.kind)} in full - this is the work, not a note about it.`}">${escapeHtml(part.text)}</textarea>
+                      </div>
+                    `,
+                  )
+                  .join("")}
+                <div class="pf-outline-part-adds">
+                  ${OUTLINE_PART_KINDS.map(([key, label]) => `<button class="pf-chip" data-action="outline-part-add" data-index="${index}" data-kind="${key}">+ ${label}</button>`).join("")}
+                </div>
               </div>
               <button class="pf-outline-btn" data-action="outline-remove" data-index="${index}" title="Remove">✕</button>
             </div>
@@ -3490,6 +3486,7 @@ function renderOutlineCard(active, phase) {
         )
         .join("")}
       <button class="pf-ghost-add" data-action="outline-add">+ Add movement</button>
+      <p class="pf-helper" style="margin-top:10px;">Under each movement, write the explanation, illustration, and application in full, and the transition word for word. The outline IS the work here - there's no separate notes box to maintain.</p>
     </section>
   `;
 }
@@ -3511,7 +3508,7 @@ function renderCanvas(active, phase) {
       ${renderWorksheetCard(active, phase)}
       ${renderOutlineCard(active, phase)}
       ${renderApplicationCard(active, phase)}
-      ${renderWriterCard(active, phase)}
+      ${(phase.id === "structure" || phase.id === "application") && !phaseNoteText(active, phase).trim() ? "" : renderWriterCard(active, phase)}
       ${renderResourcesCard(active, phase)}
       <div class="pf-complete-row">
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
@@ -3650,17 +3647,6 @@ function renderChecklistCard(active, phase) {
   `;
 }
 
-function syncIndicator(active) {
-  const doc = active.googleDoc;
-  if (doc?.id) {
-    const key = ui.google.statusKey === "syncing" ? "syncing" : ui.google.statusKey === "missing" ? "missing" : "synced";
-    const text = ui.google.status || (doc.syncedAt ? `Synced ${formatTime(doc.syncedAt)}` : "Synced to Google Docs");
-    return { key, text };
-  }
-  if (ui.google.configured) return { key: "missing", text: "Connect Google Docs" };
-  return { key: "", text: "Saved on this device" };
-}
-
 // The rich-text toolbar, shared by the phase writer card and the full-page
 // Sermon Editor. `full` adds more heading levels and a font-size menu.
 function renderFormatToolbar(options = {}) {
@@ -3722,23 +3708,17 @@ function renderFormatToolbar(options = {}) {
       <button class="pf-tool-btn" data-action="format-doc" data-format="ul" title="Bulleted list"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
       <button class="pf-tool-btn" data-action="format-doc" data-format="ol" title="Numbered list"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
       <span class="pf-tool-div"></span>
-      <button class="pf-tool-quote" data-action="format-doc" data-format="quote" title="Scripture block"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Scripture</button>
+      <button class="pf-tool-quote" data-action="format-doc" data-format="quote" title="Quote block"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Quote</button>
     </div>
   `;
 }
 
 function renderWriterCard(active, phase) {
-  const sync = syncIndicator(active);
   return `
     <section class="pf-card-box pf-writer-card">
       <div class="pf-writer-head">
         <span class="pf-writer-eyebrow">Your work</span>
-        <span style="display:inline-flex;align-items:center;gap:10px;">
-          ${phase.id === "manuscript" ? `<button class="pf-btn pf-btn-ghost" data-view="editor" style="padding:5px 12px;font-size:12.5px;">Open full editor →</button>` : ""}
-          <button class="pf-sync-status ${sync.key}" data-action="open-google-docs" title="Google Docs sync">
-            <span class="pf-sync-dot"></span>${escapeHtml(sync.text)}
-          </button>
-        </span>
+        ${phase.id === "manuscript" ? `<button class="pf-btn pf-btn-ghost" data-view="editor" style="padding:5px 12px;font-size:12.5px;">Open full editor →</button>` : ""}
       </div>
       ${renderFormatToolbar()}
       <div
@@ -4923,10 +4903,8 @@ function renderSlideBuilder(active) {
         </div>
         <span style="flex:1;"></span>
         <button class="pf-btn" data-action="deck-export-pdf">PDF deck</button>
-        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Production doc</button>
-        <button class="pf-btn pf-btn-ghost" data-action="deck-export-md">Markdown</button>
-        <button class="pf-btn pf-btn-ghost" data-action="deck-export-txt">Slide list (.txt)</button>
-        <button class="pf-btn pf-btn-ghost" data-action="deck-copy">Copy all text</button>
+        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Send to production</button>
+        <button class="pf-btn pf-btn-ghost" data-action="deck-copy">Copy list of slides</button>
       </div>
       <p class="pf-helper" style="margin-bottom:18px;">The slide list exports production-ready text for your presentation software. ${deck.builtAt ? `Deck built ${escapeHtml(fmtDate(deck.builtAt.slice(0, 10)))}.` : ""}</p>
 
@@ -5061,7 +5039,7 @@ async function extractPdfFileText(file) {
   return pages.join("\n\n");
 }
 
-async function extractSermonFileText(file) {
+async function extractSermonFileContent(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".docx")) {
     const response = await fetch("./api/extract-docx", {
@@ -5071,20 +5049,27 @@ async function extractSermonFileText(file) {
     });
     const data = await response.json();
     if (!data.text) throw new Error(data.error || "No text found in that document.");
-    return data.text;
+    return { text: data.text, html: data.html ? importedHtmlToRich(data.html) : "" };
   }
-  if (name.endsWith(".pdf")) return extractPdfFileText(file);
-  return file.text();
+  if (name.endsWith(".pdf")) return { text: await extractPdfFileText(file), html: "" };
+  if (name.endsWith(".md") || name.endsWith(".markdown")) {
+    const raw = await file.text();
+    return { text: raw, html: markdownToRich(raw) };
+  }
+  return { text: await file.text(), html: "" };
 }
 
 async function handleImportFile(input) {
   const file = input.files?.[0];
   if (!file) return;
   ui.importText = "";
+  ui.importHtml = "";
   ui.importStatusNote = "Reading file…";
   render();
   try {
-    ui.importText = await extractSermonFileText(file);
+    const content = await extractSermonFileContent(file);
+    ui.importText = content.text;
+    ui.importHtml = content.html;
     const words = ui.importText.trim().split(/\s+/).filter(Boolean).length;
     ui.importStatusNote = `Ready - ${words.toLocaleString()} words extracted from ${file.name}.`;
   } catch (error) {
@@ -5169,11 +5154,13 @@ async function handleLibImportFiles(input) {
   const files = [...(input.files || [])];
   if (!files.length) return;
   for (const file of files) {
-    const item = { id: genId(), fileName: file.name, text: "", status: "reading", note: "Reading…", series: "", tags: "", ...guessImportMeta(file.name) };
+    const item = { id: genId(), fileName: file.name, text: "", html: "", status: "reading", note: "Reading…", series: "", tags: "", ...guessImportMeta(file.name) };
     ui.libImport.queue.push(item);
     render();
     try {
-      item.text = await extractSermonFileText(file);
+      const content = await extractSermonFileContent(file);
+      item.text = content.text;
+      item.html = content.html;
       const words = item.text.trim().split(/\s+/).filter(Boolean).length;
       if (!words) throw new Error("No text found in this file.");
       fillGuessFromContent(item);
@@ -5188,13 +5175,17 @@ async function handleLibImportFiles(input) {
 }
 
 // Browse the user's Google Docs and queue the checked ones for import.
-async function googleExportText(fileId) {
+async function googleExportContent(fileId) {
   const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/plain`,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/html`,
     { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
   );
   if (!response.ok) throw new Error(`Google returned ${response.status}`);
-  return response.text();
+  const raw = await response.text();
+  const html = importedHtmlToRich(raw);
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  return { html, text: template.content.textContent || "" };
 }
 
 async function loadGDocsList() {
@@ -5235,12 +5226,14 @@ async function importPickedGDocs() {
     return;
   }
   for (const file of picked) {
-    const item = { id: genId(), fileName: file.name, text: "", status: "reading", note: "Fetching from Google…", series: "", tags: "", ...guessImportMeta(file.name) };
+    const item = { id: genId(), fileName: file.name, text: "", html: "", status: "reading", note: "Fetching from Google…", series: "", tags: "", ...guessImportMeta(file.name) };
     ui.libImport.queue.push(item);
     delete gdocs.picked[file.id];
     render();
     try {
-      item.text = await googleExportText(file.id);
+      const content = await googleExportContent(file.id);
+      item.text = content.text;
+      item.html = content.html;
       const words = item.text.trim().split(/\s+/).filter(Boolean).length;
       if (!words) throw new Error("No text found in this doc.");
       fillGuessFromContent(item);
@@ -5272,7 +5265,7 @@ function applyLibImport() {
       tags: item.tags.split(",").map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean),
       activePhase: "heart",
       completed: PHASES.map((phase) => phase.id),
-      notes: { manuscript: textToRichHtml(item.text) },
+      notes: { manuscript: item.html || textToRichHtml(item.text) },
     });
     state.sermons.push(sermon);
   }
@@ -5373,6 +5366,92 @@ function renderLibImportModal() {
   `;
 }
 
+// Fold imported HTML (Google Docs export, DOCX conversion) into the
+// editor's own vocabulary: headings, bold/italic/underline, lists,
+// paragraphs. Inline styles become real tags; everything else unwraps.
+function importedHtmlToRich(rawHtml) {
+  const template = document.createElement("template");
+  template.innerHTML = String(rawHtml || "");
+  template.content.querySelectorAll("style, script, meta, title, link, img").forEach((node) => node.remove());
+  for (const node of [...template.content.querySelectorAll("*")]) {
+    const tag = node.tagName;
+    const style = node.getAttribute("style") || "";
+    const bold = /font-weight\s*:\s*(bold|[6-9]00)/i.test(style);
+    const italic = /font-style\s*:\s*italic/i.test(style);
+    const underline = /text-decoration[^;]*underline/i.test(style);
+    let next = null;
+    if (tag === "H1" || tag === "H2") next = "h2";
+    else if (tag === "H3") next = "h3";
+    else if (/^H[4-6]$/.test(tag)) next = "h4";
+    else if (tag === "P") next = "p";
+    else if (["UL", "OL", "LI", "BR", "BLOCKQUOTE", "STRONG", "B", "EM", "I", "U"].includes(tag)) next = tag.toLowerCase();
+    else if (tag === "DIV") next = "p";
+    else if (tag === "SPAN") next = bold ? "strong" : italic ? "em" : underline ? "u" : "";
+    if (next === null || next === "") {
+      if (next === "") node.replaceWith(...node.childNodes);
+      else node.replaceWith(...node.childNodes);
+      continue;
+    }
+    if (node.tagName.toLowerCase() !== next) {
+      const replacement = document.createElement(next);
+      replacement.append(...node.childNodes);
+      node.replaceWith(replacement);
+    } else {
+      for (const attrNode of [...node.attributes]) node.removeAttribute(attrNode.name);
+    }
+  }
+  return sanitizeRichHtml(template.innerHTML);
+}
+
+// A small markdown reader for .md sermon files: headings, bold, italics,
+// bullet and numbered lists, paragraphs.
+function markdownToRich(markdown) {
+  const inline = (text) =>
+    escapeHtml(text)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/_([^_]+)_/g, "<em>$1</em>");
+  const out = [];
+  let list = "";
+  const closeList = () => {
+    if (list) {
+      out.push(`</${list}>`);
+      list = "";
+    }
+  };
+  for (const line of String(markdown || "").replace(/\r/g, "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeList();
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      out.push(`<h${level === 1 ? 2 : level === 2 ? 3 : 4}>${inline(heading[2])}</h${level === 1 ? 2 : level === 2 ? 3 : 4}>`);
+      continue;
+    }
+    const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+    const numbered = trimmed.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet || numbered) {
+      const kind = bullet ? "ul" : "ol";
+      if (list !== kind) {
+        closeList();
+        out.push(`<${kind}>`);
+        list = kind;
+      }
+      out.push(`<li>${inline((bullet || numbered)[1])}</li>`);
+      continue;
+    }
+    closeList();
+    out.push(`<p>${inline(trimmed)}</p>`);
+  }
+  closeList();
+  return sanitizeRichHtml(out.join(""));
+}
+
 function textToRichHtml(text) {
   return String(text || "")
     .split(/\n{2,}/)
@@ -5399,13 +5478,14 @@ function importSermon(form) {
     date: data.date || "",
     activePhase: preached ? "heart" : "manuscript",
     completed: preached ? PHASES.map((phase) => phase.id) : [],
-    notes: { manuscript: textToRichHtml(ui.importText) },
+    notes: { manuscript: ui.importHtml || textToRichHtml(ui.importText) },
   });
   state.sermons.push(sermon);
   state.activeId = sermon.id;
   state.view = preached ? "library" : "workspace";
   ui.showImport = false;
   ui.importText = "";
+  ui.importHtml = "";
   ui.importStatusNote = "";
   saveState();
   showBanner(preached ? "Imported as a preached sermon." : "Imported - picked up at the Manuscript phase.");
@@ -5433,12 +5513,6 @@ const IMPACT_CARDS = [
     title: "Prayer Team Prompts",
     desc: "Specific prayer burdens connected to the passage, the big idea, and expected responses.",
     fields: ["Prayer burdens", "Repentance prayers", "Encouragement prayers", "Evangelistic prayers", "Church-wide prayer focus"],
-  },
-  {
-    key: "comms",
-    title: "Communications",
-    desc: "A sermon summary, weekly email blurb, social caption, and next-step invitation.",
-    fields: ["Sermon summary", "Weekly email blurb", "Social caption", "Quote options", "Next-step invitation"],
   },
   {
     key: "worship",
@@ -5588,13 +5662,6 @@ PACK_CARDS.forEach((card) => {
   DRAFT_SPECS[`pack.${card.key}`] = { store: "pack", ...card };
 });
 DRAFT_SPECS["series-outputs.outputs"] = { store: "series-outputs", ...SERIES_OUTPUT_CARD };
-DRAFT_SPECS["pack.recap"] = {
-  store: "pack",
-  key: "recap",
-  title: "Public Sermon Recap",
-  desc: "A clean public-facing recap: what was preached, why it matters, and a next step.",
-  fields: ["Short recap", "Reflection questions", "Next step invitation"],
-};
 DRAFT_SPECS["pack.devotional"].instructions =
   "For each day include: a Scripture reference, a two-to-three sentence reflection, a one-line prayer, and one concrete practice.";
 DRAFT_SPECS["shepherd.sevenday"].instructions =
@@ -5692,6 +5759,14 @@ async function draftWithGuide(specKey) {
     : active
       ? sermonDraftContext(active)
       : "";
+  // A finished sermon is the source of truth; an in-progress one may need
+  // starting points. Tell the Guide which situation it is in.
+  const sermonComplete = active && (isPreachedSermon(active) || active.preached || progressPct(active) >= 100);
+  const grounding = spec.store.startsWith("series")
+    ? ""
+    : sermonComplete
+      ? "\nThis sermon is COMPLETE. Build every field strictly from the sermon material provided: summarize, excerpt, and adapt the preacher's own words, points, and applications. Do not invent new ideas, illustrations, or applications that are not in the material."
+      : "\nThis sermon is still in progress. Ground everything in the passage and the material provided; where material is thin you may draft modest starting points that follow the preacher's direction, clearly marked as suggestions to refine.";
 
   ui.drafting = specKey;
   render();
@@ -5701,7 +5776,7 @@ async function draftWithGuide(specKey) {
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
         context,
-        prompt: `Draft the "${spec.title}" resource. ${spec.instructions || ""}\nUse exactly these labeled fields, in this order, filling each with brief, concrete, pastorally useful content drawn from the sermon material provided:\n${spec.fields.map((field) => `${field}:`).join("\n")}\nReturn only the labeled fields.`,
+        prompt: `Draft the "${spec.title}" resource. ${spec.instructions || ""}${grounding}\nUse exactly these labeled fields, in this order, filling each with brief, concrete, pastorally useful content drawn from the sermon material provided:\n${spec.fields.map((field) => `${field}:`).join("\n")}\nReturn only the labeled fields.`,
       }),
     });
     const data = await response.json();
@@ -5864,28 +5939,34 @@ function renderMinistryWizard(card, wizard) {
   `;
 }
 
+// Each guide is a big, bold expandable section: scan the titles, open the
+// one you're working on, and everything else stays out of the way.
 function renderMinistryCard(store, card, storeObj) {
   const wizard = ministryWizardFor(store, card.key);
-  if (wizard) return renderMinistryWizard(card, wizard);
   const filled = ministryFilled(storeObj, card.key, card.fields);
-  if (!filled) {
-    return `
-      <section class="pf-card-box pf-checklist-card">
-        <div class="pf-checklist-head" style="align-items:flex-start;">
-          <div style="min-width:0;">
-            <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
-            <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
-          </div>
-        </div>
-        <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} questions, one at a time: ${escapeHtml(card.fields[0])}${card.fields[1] ? `, then ${escapeHtml(card.fields[1].toLowerCase())}` : ""}, and so on. When you finish, the whole section appears here, ready to edit.</p>
+  const body = wizard
+    ? renderMinistryWizard(card, wizard)
+    : filled
+      ? renderMinistryCardFilled(store, card, storeObj)
+      : `
+      <section class="pf-card-box pf-checklist-card" style="margin-top:10px;">
+        <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} questions, one at a time: ${escapeHtml(card.fields[0])}${card.fields[1] ? `, then ${escapeHtml(card.fields[1].toLowerCase())}` : ""}, and so on. When you finish, the whole section appears here, ready to edit. Or let Sermon Guide draft a starting point from your sermon.</p>
         <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
           <button class="pf-btn pf-btn-primary" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}">Start the questions</button>
-          <button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === `${store}.${card.key}` ? "Drafting…" : "Draft with Sermon Guide"}</button>
+          <button class="pf-btn" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === `${store}.${card.key}` ? "Drafting…" : "Draft with Sermon Guide"}</button>
         </div>
       </section>
     `;
-  }
-  return renderMinistryCardFilled(store, card, storeObj);
+  return `
+    <details class="pf-ministry-acc" ${wizard ? "open" : ""}>
+      <summary>
+        <span class="pf-ministry-acc-title">${escapeHtml(card.title)}</span>
+        <span class="pf-ministry-acc-desc">${escapeHtml(card.desc)}</span>
+        <span class="pf-lib-badge ${filled ? "done" : ""}">${filled ? "Drafted ✓" : "Not started"}</span>
+      </summary>
+      ${body}
+    </details>
+  `;
 }
 
 function renderMinistryCardFilled(store, card, storeObj) {
@@ -6100,10 +6181,16 @@ function debriefFilled(sermon) {
 }
 
 // Preached (or past-date) sermons, most recent first - the debrief candidates.
-function debriefTargets() {
+function debriefCandidates() {
   return state.sermons
     .filter((sermon) => debriefAvailable(sermon))
     .sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt.localeCompare(a.createdAt));
+}
+
+// Only sermons still needing review appear in the picker; completed and
+// skipped debriefs live with their sermon in the Notes section.
+function debriefTargets() {
+  return debriefCandidates().filter((sermon) => !sermon.debriefStatus);
 }
 
 function debriefSearchText(sermon) {
@@ -6120,6 +6207,19 @@ function pendingDebriefSermon() {
   return debriefTargets().find((sermon) => !debriefFilled(sermon)) || null;
 }
 
+function closeDebrief(sermon, status) {
+  sermon.debriefStatus = status;
+  sermon.updatedAt = new Date().toISOString();
+  saveState();
+  ui.debriefSermonId = "";
+  showBanner(
+    status === "done"
+      ? `Debrief complete - it's filed with ${sermon.passage || "the sermon"} in Notes.`
+      : `Marked as no debrief needed - noted with ${sermon.passage || "the sermon"} in Notes.`,
+  );
+  render();
+}
+
 // ---- Resource Delivery + Sharing and Delivery Center ----
 // Finished ministry resources with a status, plus secure read-only share
 // links. Share links never carry the Preaching Profile, Congregational
@@ -6131,13 +6231,11 @@ const DELIVERY_RESOURCES = [
   { key: "prayer", label: "Prayer Team Prompts", store: "impact", field: "prayer" },
   { key: "shepherd", label: "Shepherding Follow-Up", store: "shepherd", field: "care" },
   { key: "family", label: "Parent & Family Discipleship", store: "pack", field: "family" },
-  { key: "comms", label: "Communications", store: "impact", field: "comms" },
   { key: "worship", label: "Worship & Service Planning", store: "impact", field: "worship" },
   { key: "personal", label: "Personal Reflection Guide", store: "pack", field: "personal" },
   { key: "devotional", label: "Seven-Day Devotional", store: "pack", field: "devotional" },
   { key: "memory", label: "Memory Verse Card", store: "pack", field: "memory" },
   { key: "nextsteps", label: "Weekly Next Steps", store: "pack", field: "nextsteps" },
-  { key: "recap", label: "Public Sermon Recap", store: "pack", field: "recap" },
 ];
 
 const DELIVERY_STATUSES = [
@@ -6163,29 +6261,6 @@ function deliveryStatusLabel(status) {
   return { none: "Not started", drafted: "Drafted", reviewed: "Reviewed", ready: "Ready", shared: "Shared" }[status] || "Not started";
 }
 
-// Draft every missing resource with Sermon Guide - existing drafts are
-// never overwritten.
-async function prepareAllResources() {
-  const active = getActive();
-  if (!active || ui.preparingAll) return;
-  if (!requireOpenAIKey()) return;
-  const missing = DELIVERY_RESOURCES.filter(
-    (resource) => !deliveryText(active, resource).trim() && DRAFT_SPECS[`${resource.store}.${resource.field}`],
-  );
-  if (!missing.length) {
-    showBanner("Every resource already has a draft - nothing was overwritten.");
-    return;
-  }
-  ui.preparingAll = true;
-  render();
-  for (const resource of missing) {
-    showBanner(`Preparing ${resource.label}…`);
-    await draftWithGuide(`${resource.store}.${resource.field}`);
-  }
-  ui.preparingAll = false;
-  showBanner("Resources prepared - review and adapt each one before it goes out.");
-  render();
-}
 
 // ---- share links ----
 const SHARE_KINDS = [
@@ -6243,16 +6318,6 @@ const SHARE_KINDS = [
       ["followup", "Follow-up needs", true],
       ["prayer", "Prayer burden", true],
       ["nextsteps", "Church-wide next steps", true],
-    ],
-  },
-  {
-    key: "recap",
-    label: "Public Recap Link",
-    desc: "A clean public-facing sermon recap.",
-    sections: [
-      ["recap", "Short recap", true],
-      ["reflection", "Reflection questions", true],
-      ["invitation", "Next step invitation", true],
     ],
   },
 ];
@@ -6343,11 +6408,6 @@ function buildSharePayload(sermon, kind) {
     if (on("followup")) add("Follow-up needs", sermon.shepherd?.care);
     if (on("prayer")) add("Prayer burden", sermon.impact?.prayer);
     if (on("nextsteps")) add("Church-wide next steps", sermon.pack?.nextsteps);
-  }
-  if (kind === "recap") {
-    if (on("recap")) add("Recap", sermon.pack?.recap);
-    if (on("reflection")) add("Reflect this week", sermon.pack?.personal);
-    if (on("invitation")) add("Your next step", sermon.pack?.nextsteps);
   }
 
   return {
@@ -6451,27 +6511,12 @@ function renderSharingCenter(active) {
     <div class="pf-page pf-page-wide pf-fade">
       <div class="pf-page-head" style="display:block;margin-bottom:18px;">
         <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Sharing and Delivery Center</span>
-        <h1 class="pf-h1">Share the right sermon resources with the right people</h1>
-        <p class="pf-page-sub">Create secure, read-only links for preaching notes, production cues, group guides, discipleship resources, and ministry follow-up outputs - and get every resource ready to use the moment Sunday ends.</p>
+        <h1 class="pf-h1">When you need to hand something to someone, it's here</h1>
+        <p class="pf-page-sub">Two things live on this page, and neither is required. <strong>Resource delivery</strong> turns the work you've already done into hand-off documents (a group guide, a staff brief, a devotional) you can copy or export. <strong>Share links</strong> are secure, read-only web links for your team. Come here when you want one; skip it when you don't.</p>
       </div>
 
-      <section class="pf-card-box pf-checklist-card">
-        <div class="pf-checklist-head"><span class="pf-eyebrow">This week's ministry package</span></div>
-        <div class="pf-impact-summary">
-          <div><span class="pf-label">Passage</span><p>${escapeHtml(active.passage || "-")}</p></div>
-          <div><span class="pf-label">Title</span><p>${escapeHtml(active.title || "-")}</p></div>
-          <div><span class="pf-label">Big idea</span><p>${bigIdea ? escapeHtml(bigIdea) : "-"}</p></div>
-          <div><span class="pf-label">Primary response</span><p>${purpose ? escapeHtml(purpose) : "-"}</p></div>
-          <div><span class="pf-label">Resources</span><p>${draftedCount}/${DELIVERY_RESOURCES.length} drafted · ${readyCount} ready · ${sharedCount} shared</p></div>
-        </div>
-        <p class="pf-section-hint" style="margin:12px 0 0;">Next: ${escapeHtml(nextStep)}</p>
-        <div class="pf-modal-actions" style="margin-top:12px;">
-          <button class="pf-btn pf-btn-primary" data-action="prepare-all" ${ui.preparingAll || ui.drafting ? "disabled" : ""}>${ui.preparingAll ? "Preparing…" : "Prepare all resources"}</button>
-          <span class="pf-helper" style="align-self:center;">Drafts only what's missing - your existing work is never overwritten. Review everything before it goes out.</span>
-        </div>
-      </section>
-
       <h2 class="pf-lib-group-head">Resource delivery <span>${DELIVERY_RESOURCES.length}</span></h2>
+      <p class="pf-helper" style="margin:2px 0 14px;">Each resource is built from your Impact Plan, Shepherding, and Discipleship Pack work. Pick the one you actually need this week; "Draft with Sermon Guide" gives it a starting point from your sermon.</p>
       <div class="pf-delivery-grid">
         ${DELIVERY_RESOURCES.map((resource) => {
           const status = deliveryStatus(active, resource);
@@ -6483,7 +6528,7 @@ function renderSharingCenter(active) {
                 <span class="pf-lib-badge ${status === "ready" || status === "shared" ? "done" : ""}">${deliveryStatusLabel(status)}</span>
               </div>
               <div class="pf-delivery-actions">
-                ${status === "none" && DRAFT_SPECS[specKey] ? `<button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === specKey ? "Drafting…" : "Draft with Sermon Guide"}</button>` : ""}
+                ${status === "none" && DRAFT_SPECS[specKey] ? `<button class="pf-btn pf-btn-primary" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === specKey ? "Drafting…" : "Draft with Sermon Guide"}</button>` : ""}
                 <button class="pf-btn pf-btn-ghost" data-action="delivery-edit" data-store="${attr(resource.store)}">Edit</button>
                 ${status !== "none" ? `
                   <button class="pf-btn pf-btn-ghost" data-action="delivery-copy" data-key="${attr(resource.key)}">Copy</button>
@@ -6500,10 +6545,11 @@ function renderSharingCenter(active) {
       </div>
 
       <h2 class="pf-lib-group-head" style="margin-top:34px;">Share links <span>${SHARE_KINDS.length}</span></h2>
+      <p class="pf-helper" style="margin:2px 0 14px;">Read-only web pages for specific people: your own backup device, the production team, group leaders, or staff. Create a link only when someone needs one; each is unguessable, revocable, and controlled below.</p>
       ${
         shareReady()
           ? ""
-          : `<div class="pf-empty" style="margin-bottom:16px;">Sign in and sync this sermon to create live share links. Local previews below still work.</div>`
+          : `<div class="pf-empty" style="margin-bottom:16px;">Live share links need an account so they can be served from the cloud. ${ui.auth.user ? "Reconnecting to your account…" : `<button class="pf-inline-link" data-action="go-signin">Sign in</button> to enable them.`}</div>`
       }
       <div class="pf-share-grid">
         ${SHARE_KINDS.map((def) => renderShareCard(active, def)).join("")}
@@ -6523,18 +6569,21 @@ function renderShareCard(active, def) {
         <span class="pf-lib-badge ${link.token && !link.revoked ? "done" : ""}">${status}</span>
       </div>
       <p class="pf-tool-card-desc" style="margin:4px 0 10px;">${escapeHtml(def.desc)}</p>
-      <div class="pf-share-sections">
-        ${def.sections
-          .map(
-            ([key, label]) => `
-              <label class="pf-toggle-row" style="margin-top:0;">
-                <input type="checkbox" data-action="share-section" data-kind="${attr(def.key)}" data-key="${attr(key)}" ${link.sections[key] !== false ? "checked" : ""} />
-                <span>${escapeHtml(label)}</span>
-              </label>
-            `,
-          )
-          .join("")}
-      </div>
+      <details class="pf-share-fold">
+        <summary>What this link includes</summary>
+        <div class="pf-share-sections">
+          ${def.sections
+            .map(
+              ([key, label]) => `
+                <label class="pf-toggle-row" style="margin-top:0;">
+                  <input type="checkbox" data-action="share-section" data-kind="${attr(def.key)}" data-key="${attr(key)}" ${link.sections[key] !== false ? "checked" : ""} />
+                  <span>${escapeHtml(label)}</span>
+                </label>
+              `,
+            )
+            .join("")}
+        </div>
+      </details>
       <div class="pf-share-meta">
         <label class="pf-label" style="display:flex;align-items:center;gap:8px;">Expires
           <input class="pf-input" type="date" style="width:auto;padding:6px 10px;" data-action="share-expires" data-kind="${attr(def.key)}" value="${attr((link.expiresAt || "").slice(0, 10))}" />
@@ -6559,6 +6608,18 @@ function renderShareCard(active, def) {
 
 function renderDebriefPage() {
   const targets = debriefTargets();
+  if (!targets.length && debriefCandidates().length) {
+    return `
+      <div class="pf-page pf-page-read pf-fade">
+        <div class="pf-page-head" style="display:block;margin-bottom:20px;">
+          <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Debrief</span>
+          <h1 class="pf-h1">All caught up</h1>
+          <p class="pf-page-sub">Every preached sermon has been debriefed (or marked as not needing one). Completed debriefs are filed with their sermons in <button class="pf-inline-link" data-view="journal">Notes</button>.</p>
+        </div>
+        <div class="pf-empty">The next sermon you preach will show up here for review.</div>
+      </div>
+    `;
+  }
   if (!targets.length) {
     return `
       <div class="pf-page pf-page-read pf-fade">
@@ -6573,9 +6634,10 @@ function renderDebriefPage() {
   }
 
   const query = ui.debriefQuery.trim().toLowerCase();
-  const matches = query ? targets.filter((sermon) => debriefSearchText(sermon).includes(query)) : [];
-  let selected = targets.find((sermon) => sermon.id === ui.debriefSermonId);
-  if (!selected) selected = pendingDebriefSermon() || targets[0];
+  const everything = debriefCandidates();
+  const matches = query ? everything.filter((sermon) => debriefSearchText(sermon).includes(query)) : [];
+  let selected = everything.find((sermon) => sermon.id === ui.debriefSermonId);
+  if (!selected || (selected.debriefStatus && !ui.debriefSermonId)) selected = pendingDebriefSermon() || targets[0];
 
   return `
     <div class="pf-page pf-page-read pf-fade">
@@ -6588,7 +6650,9 @@ function renderDebriefPage() {
       <section class="pf-card-box pf-checklist-card">
         <div class="pf-form-grid">
           <div class="pf-field" style="margin-bottom:0;">
-            <label class="pf-label">Sermon to debrief</label>
+            <label class="pf-label" style="display:flex;gap:12px;align-items:baseline;">Sermon to debrief
+              ${selected && !selected.debriefStatus ? `<button class="pf-inline-link" data-action="debrief-skip" data-sermon="${attr(selected.id)}" style="font-size:12px;" title="Missed the window? Close this one out without a review.">No debrief necessary</button>` : ""}
+            </label>
             <select class="pf-select" data-action="debrief-pick">
               ${targets
                 .map(
@@ -6671,6 +6735,20 @@ function renderDebriefForm(sermon) {
         <textarea class="pf-ws-input pf-ministry-area" rows="${card.fields.length + 2}" data-action="ministry-field" data-store="debrief" data-sermon="${attr(sid)}" data-key="${attr(card.key)}">${escapeHtml(ministryValue(sermon.debrief, card.key, card.fields))}</textarea>
       </section>
     `).join("")}
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">${sermon.debriefStatus === "done" ? "Debrief completed ✓" : "Finish the debrief"}</span></div>
+      ${
+        sermon.debriefStatus === "done"
+          ? `<p class="pf-ministry-desc" style="margin-bottom:12px;">This debrief is filed with the sermon in Notes. You can still edit it here.</p>
+             <div class="pf-modal-actions" style="margin-top:0;">
+               <button class="pf-btn" data-action="debrief-reopen" data-sermon="${attr(sid)}">Reopen for review</button>
+             </div>`
+          : `<p class="pf-ministry-desc" style="margin-bottom:12px;">When you're done reflecting, complete the debrief. It closes out here and files with the sermon as a debrief note.</p>
+             <div class="pf-modal-actions" style="margin-top:0;">
+               <button class="pf-btn pf-btn-primary" data-action="debrief-complete" data-sermon="${attr(sid)}">Complete debrief</button>
+             </div>`
+      }
+    </section>
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head"><span class="pf-eyebrow">Carry forward</span></div>
       <p class="pf-ministry-desc" style="margin-bottom:12px;">This debrief stays attached to the sermon and searchable above. Carry the insights into what comes next:</p>
@@ -7159,44 +7237,6 @@ async function reviewPreachingDiet() {
   }
 }
 
-function renderGoogleDocsModal(active) {
-  const doc = active.googleDoc;
-  const configured = ui.google.configured;
-  const connected = ui.google.connected;
-  const autoSync = state.google?.autoSync !== false;
-  const status = doc?.id
-    ? ui.google.status || (doc.syncedAt ? `Last synced ${formatTime(doc.syncedAt)}` : "Ready to sync")
-    : configured
-      ? connected
-        ? "Connect a Google Doc to this sermon"
-        : "Connect Google to create a Doc"
-      : "Add GOOGLE_CLIENT_ID in Vercel";
-
-  return `
-    <div class="pf-overlay" data-action="close-google-docs" data-overlay>
-      <div class="pf-modal" data-stop>
-        <div class="pf-modal-head">
-          <span class="pf-eyebrow">Google Docs</span>
-          <h2 class="pf-modal-title">${doc?.id ? "Document sync" : "Live sermon doc"}</h2>
-        </div>
-        <p class="pf-modal-text" data-google-status>${escapeHtml(status)}</p>
-        <label class="pf-toggle-row">
-          <input type="checkbox" data-action="google-autosync" ${autoSync ? "checked" : ""} ${doc?.id ? "" : "disabled"} />
-          <span>Auto-sync after edits</span>
-        </label>
-        <div class="pf-modal-actions">
-          ${doc?.url ? `<a class="pf-btn" href="${attr(doc.url)}" target="_blank" rel="noopener">Open Doc</a>` : ""}
-          ${configured && !connected ? `<button class="pf-btn" data-action="google-connect" ${ui.google.loading ? "disabled" : ""}>Connect Google</button>` : ""}
-          ${configured && connected && !doc?.id ? `<button class="pf-btn pf-btn-primary" data-action="google-create-doc" ${ui.google.loading ? "disabled" : ""}>Create Doc</button>` : ""}
-          ${doc?.id ? `<button class="pf-btn pf-btn-primary" data-action="google-sync-now" ${ui.google.loading ? "disabled" : ""}>Sync now</button>` : ""}
-          <button class="pf-btn pf-btn-ghost" data-action="close-google-docs">Close</button>
-        </div>
-        ${configured ? "" : `<p class="pf-helper">Set <code>GOOGLE_CLIENT_ID</code> in Vercel to enable Google Docs sync.</p>`}
-      </div>
-    </div>
-  `;
-}
-
 function phaseNoteKind(phase) {
   if (phase.devotional) return "prayer";
   if (phase.id === "immersion") return "question";
@@ -7204,13 +7244,16 @@ function phaseNoteKind(phase) {
 }
 
 function kindLabel(kind) {
-  return { coach: "Sermon Guide", question: "Question", prayer: "Prayer", note: "Note" }[kind] || "Note";
+  return { coach: "Sermon Guide", question: "Question", prayer: "Prayer", note: "Note", debrief: "Debrief" }[kind] || "Note";
 }
 
 function collectActiveNoteGroups(active) {
   if (!active) return [];
   const groups = [];
   for (const phase of PHASES) {
+    // The manuscript is a document, not a note: it lives in the Editor and
+    // the Library, so the Notes view keeps to actual working notes.
+    if (phase.id === "manuscript") continue;
     const entries = [];
     if (phaseNoteText(active, phase).trim()) {
       entries.push({ kind: phaseNoteKind(phase), html: phaseNoteHtml(active, phase), phaseId: phase.id, editable: true });
@@ -7222,6 +7265,26 @@ function collectActiveNoteGroups(active) {
       entries.reverse();
       groups.push({ phase: phase.name, when: BLOCKS[phase.block].when, entries });
     }
+  }
+  // Completed (or skipped) debriefs file with the sermon here.
+  if (active.debriefStatus === "skipped") {
+    groups.push({ phase: "Debrief", when: "after preaching", entries: [{ kind: "debrief", text: "No debrief was needed for this sermon." }] });
+  } else if (active.debriefStatus === "done" || debriefFilled(active)) {
+    const entries = [];
+    DEBRIEF_FIELDS.forEach(([key, label]) => {
+      const value = active.debrief?.[key];
+      if (typeof value === "string" && value.trim()) entries.push({ kind: "debrief", text: `${label}\n${value.trim()}` });
+    });
+    if (Array.isArray(active.debrief?.responses) && active.debrief.responses.length) {
+      entries.push({ kind: "debrief", text: `Responses that surfaced: ${active.debrief.responses.join(", ")}` });
+    }
+    DEBRIEF_CARDS.forEach((card) => {
+      const value = active.debrief?.[card.key];
+      if (typeof value === "string" && value.trim() && ministryFilled(active.debrief, card.key, card.fields)) {
+        entries.push({ kind: "debrief", text: `${card.title}\n${value.trim()}` });
+      }
+    });
+    if (entries.length) groups.push({ phase: `Debrief${active.debriefStatus === "done" ? " ✓" : " (in progress)"}`, when: "after preaching", entries });
   }
   const orphanCoach = active.thread.filter((message) => message.role === "assistant" && !message.phaseId);
   if (orphanCoach.length) {
@@ -7802,7 +7865,7 @@ function worksheetSummaryLines(sermon) {
     movements.forEach((m, i) => lines.push(`${i + 1}. ${m.title}${m.sub ? ` - ${m.sub}` : ""}`));
     lines.push("");
   }
-  const applications = APPLICATION_AUDIENCES.map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
+  const applications = sermonAudiences(sermon).map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
     ([, value]) => value,
   );
   if (applications.length) {
@@ -8171,13 +8234,19 @@ function worksheetSectionsHtml(sermon) {
       html += `<h3>${escapeHtml(label)}</h3><div class="note"><p>${escapeHtml(value)}</p></div>`;
     });
   }
-  const movements = (sermon.outline || []).filter((m) => m.title.trim() || m.sub.trim());
+  const movements = (sermon.outline || []).filter((m) => m.title.trim() || m.sub.trim() || (m.parts || []).some((part) => part.text.trim()));
   if (movements.length) {
     html += `<h2>Outline</h2><div class="note"><ol>${movements
-      .map((m) => `<li>${escapeHtml(m.title)}${m.sub ? ` - ${escapeHtml(m.sub)}` : ""}</li>`)
+      .map(
+        (m) =>
+          `<li>${escapeHtml(m.title)}${m.sub ? ` - ${escapeHtml(m.sub)}` : ""}${(m.parts || [])
+            .filter((part) => part.text.trim())
+            .map((part) => `<p><strong>${escapeHtml(OUTLINE_PART_KINDS.find(([key]) => key === part.kind)?.[1] || part.kind)}:</strong> ${escapeHtml(part.text)}</p>`)
+            .join("")}</li>`,
+      )
       .join("")}</ol></div>`;
   }
-  const applications = APPLICATION_AUDIENCES.map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
+  const applications = sermonAudiences(sermon).map((a) => [a, worksheetValue(sermon, "application", a).trim()]).filter(
     ([, value]) => value,
   );
   if (applications.length) {
@@ -8872,191 +8941,50 @@ async function googleFetch(url, options = {}) {
   return data;
 }
 
-async function createGoogleDoc() {
-  const active = getActive();
-  if (!active || ui.google.loading) return;
-  const connected = await ensureGoogleToken();
-  if (!connected) return;
-
-  ui.google.loading = true;
-  setGoogleStatus("Creating Google Doc...", "syncing");
-  render();
-
-  try {
-    const title = googleDocTitle(active);
-    const doc = await googleFetch("https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink", {
-      method: "POST",
-      body: JSON.stringify({
-        name: title,
-        mimeType: "application/vnd.google-apps.document",
-      }),
-    });
-
-    googleSyncPaused = true;
-    updateActive({
-      googleDoc: {
-        id: doc.id,
-        url: doc.webViewLink || `https://docs.google.com/document/d/${doc.id}/edit`,
-        title: doc.name || title,
-        syncedAt: "",
-      },
-    });
-    googleSyncPaused = false;
-
-    await syncGoogleDoc(state.activeId, { force: true, announce: true });
-  } catch (error) {
-    setGoogleStatus(error.message || "Google Doc creation failed", "missing");
-    showBanner("Google Doc creation failed.");
-  } finally {
-    ui.google.loading = false;
-    render();
-  }
-}
-
 function googleDocTitle(sermon) {
   const passage = sermon?.passage || "Untitled sermon";
   const title = sermon?.title ? ` - ${sermon.title}` : "";
   return `Preach Flow | ${passage}${title}`;
 }
 
-function buildGoogleDocText(sermon) {
-  const updated = new Date().toLocaleString();
-  const status = sermonStatus(sermon);
-  const lines = [
-    googleDocTitle(sermon),
-    "",
-    `Synced from Preach Flow: ${updated}`,
-    "This document is organized from the notes inside the Preach Flow app.",
-    "Edits made directly in Google Docs may be replaced on the next sync.",
-    "",
-    "SERMON OVERVIEW",
-    "",
-    `Passage: ${sermon.passage || "-"}`,
-    `Title: ${sermon.title || "-"}`,
-    `Series: ${sermon.series || "-"}`,
-    `Date: ${sermon.date ? fmtDate(sermon.date) : "-"}`,
-    `Length: ${sermon.length || "-"} minutes`,
-    `Deliverable: ${sermon.format || "-"}`,
-    `Status: ${status.label}`,
-    `Progress: ${sermon.completed.length}/${PHASES.length} phases`,
-    ...(sermon.timeSpent ? [`Time in preparation: ${fmtDuration(sermon.timeSpent)}`] : []),
-    "",
-    ...worksheetSummaryLines(sermon),
-    "PREPARATION NOTES",
-    "",
-  ];
-
-  for (const [blockIndex, block] of BLOCKS.entries()) {
-    lines.push(block.label.toUpperCase());
-    lines.push(`Target window: ${block.when}`);
-    lines.push("");
-
-	    for (const phase of PHASES.filter((item) => item.block === blockIndex)) {
-	      const done = sermon.completed.includes(phase.id);
-	      const note = getPhaseFocusNotesText(sermon, phase, true).trim();
-	      lines.push(`${done ? "[x]" : "[ ]"} ${phase.name}`);
-	      lines.push(`Focus: ${phase.focus}`);
-	      lines.push("Notes:");
-	      lines.push(note || "(No notes yet.)");
-      lines.push("");
-    }
-  }
-
-  lines.push(...ministrySummaryLines(sermon));
-
-  if (sermon.thread.length) {
-    lines.push("SERMON GUIDE THREAD");
-    lines.push("");
-    for (const message of sermon.thread) {
-      if (message.role === "meta") {
-        lines.push(message.content.toUpperCase(), "");
-      }
-      if (message.role === "user") {
-        lines.push("You:", message.content, "");
-      }
-      if (message.role === "assistant") {
-        lines.push("Sermon Guide:", message.content, "");
-      }
-    }
-  }
-
-  lines.push("END OF PREACH FLOW SYNC");
-  return lines.join("\n").replace(/\n{4,}/g, "\n\n\n");
-}
-
-async function replaceGoogleDocText(docId, text) {
-  const doc = await googleFetch(
-    `https://docs.googleapis.com/v1/documents/${encodeURIComponent(docId)}?fields=body(content(endIndex))`,
-  );
-  const endIndex = Math.max(1, ...(doc.body?.content || []).map((item) => item.endIndex || 1));
-  const requests = [];
-  if (endIndex > 2) {
-    requests.push({
-      deleteContentRange: {
-        range: {
-          startIndex: 1,
-          endIndex: endIndex - 1,
-        },
-      },
-    });
-  }
-  requests.push({
-    insertText: {
-      location: { index: 1 },
-      text: text.endsWith("\n") ? text : `${text}\n`,
-    },
-  });
-
-  await googleFetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(docId)}:batchUpdate`, {
-    method: "POST",
-    body: JSON.stringify({ requests }),
-  });
-}
-
-function scheduleGoogleSync() {
-  clearTimeout(googleSyncTimer);
+// One-time export: the manuscript becomes a new Google Doc (headings,
+// bold, and lists preserved) and opens in a new tab. No ongoing sync -
+// after export, the Doc is its own copy.
+async function exportManuscriptToGoogleDocs() {
   const active = getActive();
-  if (!active?.googleDoc?.id || state.google?.autoSync === false || !ui.google.accessToken) return;
-
-  const sermonId = active.id;
-  googleSyncTimer = setTimeout(() => {
-    syncGoogleDoc(sermonId, { background: true });
-  }, 2500);
-}
-
-async function syncGoogleDoc(sermonId = state.activeId, options = {}) {
-  const sermon = state.sermons.find((item) => item.id === sermonId);
-  if (!sermon?.googleDoc?.id) return;
-
-  if (!ui.google.accessToken) {
-    setGoogleStatus("Reconnect Google to sync", "missing");
+  if (!active || ui.google.loading) return;
+  const manuscript = sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()));
+  if (!richHtmlToText(manuscript).trim()) {
+    showBanner("Write the manuscript first - there's nothing to send yet.");
     return;
   }
-
-  setGoogleStatus("Syncing to Google Docs...", "syncing");
+  const connected = await ensureGoogleToken();
+  if (!connected) return;
+  ui.google.loading = true;
+  render();
   try {
-    await replaceGoogleDocText(sermon.googleDoc.id, buildGoogleDocText(sermon));
-    const syncedAt = new Date().toISOString();
-    googleSyncPaused = true;
-    state.sermons = state.sermons.map((item) =>
-      item.id === sermonId
-        ? {
-            ...item,
-            googleDoc: {
-              ...item.googleDoc,
-              syncedAt,
-            },
-          }
-        : item,
-    );
-    saveState();
-    googleSyncPaused = false;
-    setGoogleStatus(`Last synced ${formatTime(syncedAt)}`, "ready");
-    if (options.announce) showBanner("Synced to Google Docs.");
+    const boundary = `pf${Date.now()}`;
+    const metadata = { name: googleDocTitle(active), mimeType: "application/vnd.google-apps.document" };
+    const html = `<html><head><meta charset="utf-8"></head><body><h1>${escapeHtml(active.passage || "Sermon")}${active.title ? ` - ${escapeHtml(active.title)}` : ""}</h1>${manuscript}</body></html>`;
+    const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n${html}\r\n--${boundary}--`;
+    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ui.google.accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || `Google returned ${response.status}`);
+    const url = data.webViewLink || `https://docs.google.com/document/d/${data.id}/edit`;
+    showBanner("Manuscript sent to Google Docs - opening it now.");
+    window.open(url, "_blank", "noopener");
   } catch (error) {
-    setGoogleStatus(error.message || "Google Docs sync failed", "missing");
-    if (!options.background) showBanner("Google Docs sync failed.");
+    showBanner(`Could not send to Google Docs (${error.message || "connection failed"}).`);
   }
+  ui.google.loading = false;
+  render();
 }
 
 function setGoogleStatus(message, key = "neutral") {
@@ -9284,7 +9212,6 @@ function closeOverlays() {
   ui.showOpenAIKey = false;
   ui.showSwitcher = false;
   ui.showDetails = false;
-  ui.showGoogleDocs = false;
   ui.showSlides = false;
   ui.showImport = false;
   ui.pm.paste = false;
@@ -9327,7 +9254,6 @@ document.addEventListener("click", (event) => {
     state.view = target.dataset.view;
     if (state.view === "practice") {
       state.view = "pulpit";
-      ui.pulpit.mode = "practice";
       ui.pulpit.section = 0;
       requestPracticeWakeLock();
     } else if (state.view === "pulpit") {
@@ -9410,10 +9336,83 @@ document.addEventListener("click", (event) => {
     ui.audience = target.dataset.audience;
     render();
   }
+  if (action === "debrief-complete" || action === "debrief-skip") {
+    const sermon = state.sermons.find((item) => item.id === target.dataset.sermon);
+    if (sermon) closeDebrief(sermon, action === "debrief-complete" ? "done" : "skipped");
+  }
+  if (action === "debrief-reopen") {
+    const sermon = state.sermons.find((item) => item.id === target.dataset.sermon);
+    if (!sermon) return;
+    sermon.debriefStatus = "";
+    ui.debriefSermonId = sermon.id;
+    saveState();
+    render();
+  }
+  if (action === "audience-add") {
+    ui.showAudienceAdd = true;
+    render();
+    requestAnimationFrame(() => document.querySelector("[data-audience-name]")?.focus());
+  }
+  if (action === "audience-cancel") {
+    ui.showAudienceAdd = false;
+    render();
+  }
+  if (action === "audience-save") {
+    const active = getActive();
+    const name = document.querySelector("[data-audience-name]")?.value.trim() || "";
+    if (!active) return;
+    if (!name) {
+      showBanner("Name the audience first.");
+      return;
+    }
+    if (sermonAudiences(active).includes(name)) {
+      showBanner("That audience already exists.");
+      return;
+    }
+    active.customAudiences = [...(active.customAudiences || []), name];
+    ui.audience = name;
+    ui.showAudienceAdd = false;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
+  if (action === "audience-remove") {
+    const active = getActive();
+    if (!active) return;
+    const name = target.dataset.audience;
+    active.customAudiences = (active.customAudiences || []).filter((entry) => entry !== name);
+    delete active.worksheet[`application.${name}`];
+    if (ui.audience === name) ui.audience = APPLICATION_AUDIENCES[0];
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
   if (action === "outline-add") {
     const active = getActive();
     if (!active) return;
-    active.outline.push({ title: "", sub: "" });
+    active.outline.push({ title: "", sub: "", parts: [] });
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
+  if (action === "outline-part-add") {
+    const active = getActive();
+    const movement = active?.outline[Number(target.dataset.index)];
+    if (!movement) return;
+    movement.parts = [...(movement.parts || []), { id: genId(), kind: target.dataset.kind, text: "" }];
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    render();
+    requestAnimationFrame(() => {
+      const rows = document.querySelectorAll(`[data-action="outline-part-text"][data-index="${target.dataset.index}"]`);
+      rows[rows.length - 1]?.focus();
+    });
+  }
+  if (action === "outline-part-remove") {
+    const active = getActive();
+    const movement = active?.outline[Number(target.dataset.index)];
+    if (!movement) return;
+    movement.parts = (movement.parts || []).filter((part) => part.id !== target.dataset.part);
     active.updatedAt = new Date().toISOString();
     saveState();
     render();
@@ -9777,14 +9776,6 @@ document.addEventListener("click", (event) => {
     ui.showDetails = false;
     render();
   }
-  if (action === "open-google-docs") {
-    ui.showGoogleDocs = true;
-    render();
-  }
-  if (action === "close-google-docs") {
-    ui.showGoogleDocs = false;
-    render();
-  }
   if (action === "open-slides") {
     ui.showSlides = true;
     render();
@@ -9850,11 +9841,6 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
-  if (action === "pulpit-mode") {
-    ui.pulpit.mode = target.dataset.mode === "practice" ? "practice" : "live";
-    ui.pulpit.showSettings = false;
-    render();
-  }
   if (action === "pulpit-next") {
     pulpitStep(1);
   }
@@ -9890,10 +9876,6 @@ document.addEventListener("click", (event) => {
   }
   if (action === "pulpit-fullscreen") {
     pulpitFullscreen();
-  }
-  if (action === "pulpit-coach-toggle") {
-    ui.pulpit.coachCollapsed = !ui.pulpit.coachCollapsed;
-    render();
   }
   if (action === "pulpit-settings") {
     ui.pulpit.showSettings = !ui.pulpit.showSettings;
@@ -9982,14 +9964,6 @@ document.addEventListener("click", (event) => {
     const active = getActive();
     if (active) exportPdf(`${active.passage || "Sermon"} slides`, deckPrintHtml(active));
   }
-  if (action === "deck-export-md") {
-    const active = getActive();
-    if (active) downloadText(`${slug(active.passage)}-slides.md`, deckMarkdown(active));
-  }
-  if (action === "deck-export-txt") {
-    const active = getActive();
-    if (active) downloadText(`${slug(active.passage)}-slides.txt`, deckPlainText(active));
-  }
   if (action === "deck-copy") {
     const active = getActive();
     if (active) copyText(deckPlainText(active));
@@ -10015,15 +9989,6 @@ document.addEventListener("click", (event) => {
     saveEditorRange();
     closeToolMenus();
     insertIntoEditor(editorBlockHtml(target.dataset.kind));
-    render();
-  }
-  if (action === "pulpit-mark") {
-    const active = getActive();
-    if (!active) return;
-    const current = active.practice.marks[ui.pulpit.section];
-    active.practice.marks = { ...active.practice.marks, [ui.pulpit.section]: current === target.dataset.mark ? "" : target.dataset.mark };
-    active.updatedAt = new Date().toISOString();
-    saveState();
     render();
   }
   if (action === "practice-reset") {
@@ -10147,16 +10112,8 @@ document.addEventListener("click", (event) => {
   if (action === "cloud-sync-now") {
     saveCloudState({ announce: true });
   }
-  if (action === "google-connect") {
-    ensureGoogleToken();
-  }
-  if (action === "google-create-doc") {
-    createGoogleDoc();
-  }
-  if (action === "google-sync-now") {
-    ensureGoogleToken().then((connected) => {
-      if (connected) syncGoogleDoc(state.activeId, { announce: true });
-    });
+  if (action === "editor-gdoc-export") {
+    exportManuscriptToGoogleDocs();
   }
   if (action === "pipeline-filter") {
     state.filter = target.dataset.filter;
@@ -10280,9 +10237,6 @@ document.addEventListener("click", (event) => {
   }
   if (action === "guide-draft") {
     draftWithGuide(target.dataset.spec);
-  }
-  if (action === "prepare-all") {
-    prepareAllResources();
   }
   if (action === "delivery-edit") {
     const store = target.dataset.store;
@@ -10568,6 +10522,15 @@ document.addEventListener("input", (event) => {
     active.updatedAt = new Date().toISOString();
     saveState();
   }
+  if (action === "outline-part-text") {
+    const active = getActive();
+    const movement = active?.outline[Number(target.dataset.index)];
+    const part = movement?.parts?.find((entry) => entry.id === target.dataset.part);
+    if (!part) return;
+    part.text = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+  }
   if (action === "outline-title" || action === "outline-sub") {
     const active = getActive();
     if (!active) return;
@@ -10778,11 +10741,6 @@ document.addEventListener("change", (event) => {
   if (action === "library-sort") {
     ui.librarySort = target.value;
     render();
-  }
-  if (action === "google-autosync") {
-    state.google = { ...(state.google || {}), autoSync: target.checked };
-    saveState();
-    setGoogleStatus(target.checked ? "Auto-sync enabled" : "Auto-sync paused", target.checked ? "ready" : "neutral");
   }
 });
 
