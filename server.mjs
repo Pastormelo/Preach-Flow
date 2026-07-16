@@ -205,7 +205,7 @@ async function serveStatic(req, res, pathname) {
     return;
   }
 
-  const filePath = safeFilePath(pathname === "/" ? "/index.html" : pathname === "/app" ? "/app.html" : pathname);
+  const filePath = safeFilePath(pathname === "/" ? "/index.html" : pathname === "/app" ? "/app.html" : pathname === "/philosophy" ? "/philosophy.html" : pathname);
   if (!filePath) {
     sendText(res, 403, "Forbidden", "text/plain; charset=utf-8");
     return;

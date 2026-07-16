@@ -5,6 +5,9 @@ const SUPABASE_SCRIPT = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/documents",
+  // Read-only Drive access powers the Library's "browse your Google Docs"
+  // import. PreachFlow only reads the documents the user checks.
+  "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
 const BLOCKS = [
@@ -581,12 +584,13 @@ const ui = {
   debriefQuery: "",
   confirmDeleteId: "",
   practice: { running: false, seconds: 0 },
-  pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "" },
+  pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "", coachCollapsed: null },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   refine: null,
   preparingAll: false,
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, suggestion: null },
-  libImport: { show: false, queue: [] },
+  libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
+  ministryWizard: null,
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -1374,10 +1378,12 @@ function renderSermonStrip(active) {
         <span class="pf-strip-sub">${escapeHtml(active.title || "Untitled")}${active.series ? ` · ${escapeHtml(active.series)}` : ""}</span>
       </button>
       <nav class="pf-strip-tabs" aria-label="Sermon sections">
-        ${SERMON_TABS.map(
-          ([view, label]) =>
-            `<button class="pf-strip-tab ${state.view === view ? "active" : ""}" data-view="${view}">${label}</button>`,
-        ).join("")}
+        ${SERMON_TABS.filter(([view]) => !(active.imported && (view === "workspace" || view === "map")))
+          .map(
+            ([view, label]) =>
+              `<button class="pf-strip-tab ${state.view === view ? "active" : ""}" data-view="${view}">${label}</button>`,
+          )
+          .join("")}
       </nav>
       <span class="pf-strip-meta">${escapeHtml(daysLabel)} · ${progressPct(active)}% ready</span>
     </div>
@@ -1431,7 +1437,7 @@ function renderTopbar(active) {
               : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`
           }
         </button>
-        <button class="pf-avatar" data-action="go-signin" aria-label="Account">${escapeHtml(accountInitial())}<i class="pf-avatar-dot ${avatarKey}"></i></button>
+        <button class="pf-avatar" data-action="open-account" aria-label="Your account" title="Your account">${escapeHtml(accountInitial())}<i class="pf-avatar-dot ${avatarKey}"></i></button>
       </div>
     </header>
   `;
@@ -1687,6 +1693,31 @@ function renderOnboarding() {
           <button class="pf-btn pf-btn-ghost" data-action="onboard-skip">Use basic defaults</button>
         </div>
       </div>
+    </div>
+  `;
+}
+
+// The avatar's landing page when no one is signed in: account context and
+// a door to sign-in, without dropping the person out of the app chrome.
+function renderAccountSignedOut() {
+  return `
+    <div class="pf-page pf-page-read pf-fade">
+      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Your account</span>
+        <h1 class="pf-h1">Working on this device</h1>
+        <p class="pf-page-sub">Everything you write saves on this device automatically. Sign in to sync your sermons across devices, keep them backed up, and use Sermon Guide with zero setup.</p>
+      </div>
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Sign in or create an account</span></div>
+        <p class="pf-section-hint">Your work on this device stays put and links to your account the first time you sign in.</p>
+        <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
+          <button class="pf-btn pf-btn-primary" data-action="go-signin">Sign in / create account</button>
+        </div>
+      </section>
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">App settings that live here</span></div>
+        <p class="pf-ministry-desc">Once you're signed in, this page holds your account details, Preaching Profile, Sermon Guide settings, defaults, and privacy controls.</p>
+      </section>
     </div>
   `;
 }
@@ -1956,8 +1987,8 @@ function renderHome(active) {
             <p class="pf-helper" style="margin-top:4px;">${escapeHtml([phase ? `In ${phase.name}` : "", daysLine, `${progressPct(active)}% ready`].filter(Boolean).join(" · "))}</p>
           </div>
           <div class="pf-home-continue-actions">
-            <button class="pf-btn pf-btn-primary" data-view="workspace">Open Workspace</button>
-            <button class="pf-btn" data-view="editor">Editor</button>
+            ${active.imported ? `<button class="pf-btn pf-btn-primary" data-view="editor">Open Editor</button>` : `<button class="pf-btn pf-btn-primary" data-view="workspace">Open Workspace</button>
+            <button class="pf-btn" data-view="editor">Editor</button>`}
             <button class="pf-btn" data-view="pulpit">Pulpit</button>
             <button class="pf-btn pf-btn-ghost" data-action="open-switcher">Switch sermon</button>
           </div>
@@ -2010,6 +2041,7 @@ function renderHome(active) {
 
 function renderMain(active) {
   if (ui.showNew) return renderNewSermon();
+  if (state.view === "profile") return ui.auth.user ? renderProfile(active) : renderAccountSignedOut();
   if (state.view === "home") return renderHome(active);
   if (state.view === "pipeline") return renderPipeline();
   if (state.view === "journal") return renderJournal(active);
@@ -2020,6 +2052,11 @@ function renderMain(active) {
   if (state.view === "series") return renderSeriesPage();
   if (state.view === "diet") return renderDietPage();
   if (state.view === "editor") return renderEditorPage(active);
+  if ((state.view === "workspace" || state.view === "map") && active?.imported) {
+    // Imported sermons weren't prepared here: the prep workspace and map
+    // don't apply. They live in the Editor, Pulpit, and Library.
+    state.view = "editor";
+  }
   if (state.view === "map") return renderPassageMap(active);
   if (state.view === "slides") return renderSlideBuilder(active);
   if (state.view === "sharing") return renderSharingCenter(active);
@@ -2768,6 +2805,7 @@ function renderPulpitView(active) {
           prefs.showTimer
             ? `
           <div class="pf-pulpit-timing">
+            <button class="pf-pulpit-btn pf-pulpit-start ${ui.practice.running ? "" : "go"}" data-action="practice-toggle" title="Shortcut: T">${ui.practice.running ? "Pause" : mode === "live" ? "▶ Preach" : "▶ Start run"}</button>
             <button class="pf-pulpit-timer ${over ? "over" : ""}" data-action="practice-toggle" data-practice-timer title="${ui.practice.running ? "Pause" : "Start"} (T)">${fmtClock(ui.practice.seconds)}</button>
             <span class="pf-pulpit-meta"><span data-pulpit-clock>${fmtWallClock(new Date())}</span>${target ? ` · target ${target} min${pulpitTargetEnd(active) ? ` · ends ${pulpitTargetEnd(active)}` : ""}` : ""}</span>
             <button class="pf-pulpit-btn" data-action="practice-reset" ${ui.practice.seconds ? "" : "disabled"} aria-label="Reset timer">↺</button>
@@ -2847,15 +2885,23 @@ function pmRunDelta(seconds, target) {
 
 function renderPulpitPracticePanel(active, sections, index) {
   const practice = active.practice;
+  // On phones the coach starts as a slim collapsed bar so it never blocks
+  // the manuscript; one tap opens it, one tap tucks it away again.
+  if (ui.pulpit.coachCollapsed === null) {
+    ui.pulpit.coachCollapsed = window.matchMedia("(max-width: 760px)").matches;
+  }
+  const collapsed = ui.pulpit.coachCollapsed;
   const target = Number(active.length) || 0;
   const fraction = sections.length ? Math.min(1, (index + 0.5) / sections.length) : 0;
   const history = (practice.history || []).slice(-4).reverse();
   return `
-    <aside class="pf-pulpit-practice pf-pulpit-controls">
+    <aside class="pf-pulpit-practice pf-pulpit-controls ${collapsed ? "collapsed" : ""}">
       <div class="pf-pulpit-practice-head">
         <strong>Rehearsal coach</strong>
         <span>${practice.runs ? `${practice.runs} run${practice.runs === 1 ? "" : "s"} so far` : "Start the timer and preach it through"}</span>
+        <button class="pf-pulpit-btn pf-coach-toggle" data-action="pulpit-coach-toggle" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Open" : "Hide"}</button>
       </div>
+      ${collapsed ? "" : `
       ${
         target
           ? `<div class="pf-pulpit-pace" data-practice-pace data-target="${target * 60}" data-fraction="${fraction.toFixed(3)}">${ui.practice.running ? "Checking your pace…" : `Target ${target} min. Pace feedback appears while the timer runs.`}</div>`
@@ -2871,7 +2917,7 @@ function renderPulpitPracticePanel(active, sections, index) {
               .join("")}</ul>`
           : ""
       }
-      <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>
+      <textarea class="pf-ws-input" rows="3" data-action="pulpit-notes" placeholder="After the run-through: What felt unclear? What ran long? What needs to be cut? Which transition needs work? What needs prayerful attention?">${escapeHtml(practice.notes || "")}</textarea>`}
     </aside>
   `;
 }
@@ -2987,7 +3033,7 @@ function renderLibraryCard(sermon) {
         ${words ? `<span class="pf-lib-badge">${words.toLocaleString()} words</span>` : ""}
       </div>
       <div class="pf-lib-actions">
-        <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="workspace" data-sermon="${attr(sermon.id)}">Open</button>
+        ${sermon.imported ? "" : `<button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="workspace" data-sermon="${attr(sermon.id)}">Open</button>`}
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="editor" data-sermon="${attr(sermon.id)}">Editor</button>
         <button class="pf-btn pf-btn-ghost" data-action="lib-open" data-mode="pulpit" data-sermon="${attr(sermon.id)}">Pulpit</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief</button>
@@ -3052,7 +3098,11 @@ function renderPipeline() {
 
 function renderPipelineSermons() {
   const query = state.query.trim().toLowerCase();
+  const libraryCount = state.sermons.filter((sermon) => sermon.preached || sermon.imported).length;
   const sermons = state.sermons
+    // The pipeline is about what's late, on track, and ahead. Preached and
+    // imported sermons live in the Library, not here.
+    .filter((sermon) => !sermon.preached && !sermon.imported)
     .filter((sermon) => {
       const haystack = [sermon.passage, sermon.title, sermon.series].join(" ").toLowerCase();
       return !query || haystack.includes(query);
@@ -3080,6 +3130,7 @@ function renderPipelineSermons() {
           New sermon
         </button>
       </div>
+      ${libraryCount ? `<p class="pf-helper" style="margin:-6px 0 14px;">Preached and imported sermons are filed in the <button class="pf-inline-link" data-view="library">Sermon Library</button> (${libraryCount}).</p>` : ""}
       <div class="pf-tools">
         <div class="pf-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -5032,8 +5083,50 @@ function guessImportMeta(fileName) {
     const inline = base.match(/((?:[1-3]\s)?[A-Z][a-z]+(?:\s[A-Za-z]+)?)\s\d{1,3}(?::\d{1,3}(?:\s*-\s*\d{1,3})?)?/);
     if (inline && parseBibleRef(inline[0])) passage = parseBibleRef(inline[0]).reference;
   }
-  const title = segments.filter((segment) => !parseBibleRef(segment)).join(" - ").trim();
+  // Working-file noise ("sermon-final-v3", "message draft 2") is not a
+  // title; dropping it lets the document's first page supply the real one.
+  const junk = /^(sermon|final|draft|copy|notes?|manuscript|message|msg|doc|document|version|rev|edit(ed)?|v?\d+)$/i;
+  const title = segments
+    .filter((segment) => !parseBibleRef(segment))
+    .filter((segment) => !segment.split(/\s+/).every((word) => junk.test(word)))
+    .join(" - ")
+    .trim();
   return { passage, title, date };
+}
+
+// When the file name gives nothing, the document itself usually does: the
+// first lines carry the title, and the passage appears near the top.
+function guessMetaFromText(text) {
+  const head = String(text || "").slice(0, 800);
+  const lines = head.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  let passage = "";
+  let title = "";
+  for (const line of lines.slice(0, 6)) {
+    const clean = line.replace(/^#+\s*/, "").replace(/[""\u201c\u201d]/g, "").trim();
+    const parsed = parseBibleRef(clean);
+    if (!passage && parsed) {
+      passage = parsed.reference;
+      continue;
+    }
+    if (!title && clean.length >= 4 && clean.length <= 90 && !/^page\s\d/i.test(clean)) title = clean;
+  }
+  if (!passage) {
+    for (const match of head.matchAll(/((?:[1-3]\s?)?[A-Z][a-z]+(?:\s[A-Za-z]+)?\s\d{1,3}(?::\d{1,3}(?:\s*-\s*\d{1,3})?)?)/g)) {
+      const parsed = parseBibleRef(match[1]);
+      if (parsed) {
+        passage = parsed.reference;
+        break;
+      }
+    }
+  }
+  return { passage, title };
+}
+
+function fillGuessFromContent(item) {
+  if (item.passage && item.title) return;
+  const guessed = guessMetaFromText(item.text);
+  if (!item.passage && guessed.passage) item.passage = guessed.passage;
+  if (!item.title && guessed.title) item.title = guessed.title;
 }
 
 // Read each chosen file into the Library import queue.
@@ -5048,11 +5141,79 @@ async function handleLibImportFiles(input) {
       item.text = await extractSermonFileText(file);
       const words = item.text.trim().split(/\s+/).filter(Boolean).length;
       if (!words) throw new Error("No text found in this file.");
+      fillGuessFromContent(item);
       item.status = "ready";
       item.note = `${words.toLocaleString()} words`;
     } catch (error) {
       item.status = "error";
       item.note = error.message || "Could not read this file.";
+    }
+    render();
+  }
+}
+
+// Browse the user's Google Docs and queue the checked ones for import.
+async function googleExportText(fileId) {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/plain`,
+    { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
+  );
+  if (!response.ok) throw new Error(`Google returned ${response.status}`);
+  return response.text();
+}
+
+async function loadGDocsList() {
+  const gdocs = ui.libImport.gdocs;
+  gdocs.open = true;
+  gdocs.loading = true;
+  render();
+  const connected = await ensureGoogleToken();
+  if (!connected) {
+    gdocs.open = false;
+    gdocs.loading = false;
+    render();
+    return;
+  }
+  try {
+    const nameFilter = gdocs.query.trim() ? ` and name contains '${gdocs.query.trim().replace(/'/g, "\\'")}'` : "";
+    const params = new URLSearchParams({
+      q: `mimeType='application/vnd.google-apps.document' and trashed=false${nameFilter}`,
+      orderBy: "modifiedTime desc",
+      pageSize: "25",
+      fields: "files(id,name,modifiedTime)",
+    });
+    const data = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
+    gdocs.files = data.files || [];
+  } catch (error) {
+    gdocs.files = [];
+    showBanner(`Could not list your Google Docs (${error.message || "connection failed"}).`);
+  }
+  gdocs.loading = false;
+  render();
+}
+
+async function importPickedGDocs() {
+  const gdocs = ui.libImport.gdocs;
+  const picked = gdocs.files.filter((file) => gdocs.picked[file.id]);
+  if (!picked.length) {
+    showBanner("Check at least one Google Doc first.");
+    return;
+  }
+  for (const file of picked) {
+    const item = { id: genId(), fileName: file.name, text: "", status: "reading", note: "Fetching from Google…", series: "", tags: "", ...guessImportMeta(file.name) };
+    ui.libImport.queue.push(item);
+    delete gdocs.picked[file.id];
+    render();
+    try {
+      item.text = await googleExportText(file.id);
+      const words = item.text.trim().split(/\s+/).filter(Boolean).length;
+      if (!words) throw new Error("No text found in this doc.");
+      fillGuessFromContent(item);
+      item.status = "ready";
+      item.note = `${words.toLocaleString()} words from Google Docs`;
+    } catch (error) {
+      item.status = "error";
+      item.note = error.message || "Could not fetch this doc.";
     }
     render();
   }
@@ -5080,11 +5241,50 @@ function applyLibImport() {
     });
     state.sermons.push(sermon);
   }
-  ui.libImport = { show: false, queue: [] };
+  ui.libImport = { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
   state.view = "library";
   saveState();
   showBanner(`${ready.length} sermon${ready.length === 1 ? "" : "s"} filed in your Library - searchable, sortable, and ready to revisit.`);
   render();
+}
+
+function renderGDocsBrowser() {
+  const gdocs = ui.libImport.gdocs;
+  if (!gdocs.open) {
+    return `
+      <div class="pf-gdocs">
+        <button class="pf-btn pf-btn-ghost" data-action="lib-gdocs-open">Browse your Google Docs instead</button>
+        <span class="pf-helper" style="margin-left:8px;">Check the docs you want; PreachFlow reads only what you check.</span>
+      </div>
+    `;
+  }
+  const checkedCount = Object.values(gdocs.picked).filter(Boolean).length;
+  return `
+    <div class="pf-gdocs open">
+      <div class="pf-checklist-head" style="margin-bottom:8px;">
+        <span class="pf-eyebrow">Your Google Docs</span>
+        ${gdocs.loading ? `<span class="pf-helper">Loading…</span>` : `<span class="pf-checklist-count">${gdocs.files.length} shown</span>`}
+      </div>
+      <div class="pf-lib-search" style="margin-bottom:8px;">
+        <input class="pf-input" data-action="lib-gdocs-query" placeholder="Search your Docs by name" value="${attr(gdocs.query)}" />
+        <button class="pf-btn pf-btn-ghost" data-action="lib-gdocs-search">Search</button>
+      </div>
+      <div class="pf-gdoc-list">
+        ${gdocs.files
+          .map(
+            (file) => `
+              <label class="pf-gdoc-row">
+                <input type="checkbox" data-action="lib-gdocs-check" data-id="${attr(file.id)}" ${gdocs.picked[file.id] ? "checked" : ""} />
+                <strong>${escapeHtml(file.name)}</strong>
+                <span>${file.modifiedTime ? escapeHtml(fmtDate(file.modifiedTime.slice(0, 10))) : ""}</span>
+              </label>
+            `,
+          )
+          .join("") || (gdocs.loading ? "" : `<p class="pf-helper">No Google Docs found${gdocs.query ? " for that search" : ""}.</p>`)}
+      </div>
+      ${gdocs.files.length ? `<button class="pf-btn" data-action="lib-gdocs-import" style="margin-top:8px;" ${checkedCount ? "" : "disabled"}>${checkedCount ? `Fetch ${checkedCount} checked doc${checkedCount === 1 ? "" : "s"}` : "Check docs to fetch"}</button>` : ""}
+    </div>
+  `;
 }
 
 function renderLibImportModal() {
@@ -5102,8 +5302,9 @@ function renderLibImportModal() {
         <label class="pf-lib-drop">
           <input type="file" multiple accept=".docx,.txt,.md,.markdown,.pdf" data-action="lib-import-files" />
           <strong>Choose sermon files</strong>
-          <span>Dates and passages in file names (like "2023-06-11 Psalm 32 - Coming Clean.docx") fill in automatically.</span>
+          <span>Dates and passages in file names (like "2023-06-11 Psalm 32 - Coming Clean.docx") fill in automatically; when the name gives nothing, the first page usually does.</span>
         </label>
+        ${renderGDocsBrowser()}
         ${queue
           .map(
             (item) => `
@@ -5167,7 +5368,7 @@ function importSermon(form) {
   });
   state.sermons.push(sermon);
   state.activeId = sermon.id;
-  state.view = preached ? "pipeline" : "workspace";
+  state.view = preached ? "library" : "workspace";
   ui.showImport = false;
   ui.importText = "";
   ui.importStatusNote = "";
@@ -5560,7 +5761,99 @@ function renderChipGroup(store, field, options, selected, sermonId = "") {
   `;
 }
 
+// Pull per-question answers back out of a card's labeled text blob, so the
+// wizard can revisit a section that already has writing in it.
+function parseMinistryAnswers(value, fields) {
+  const text = typeof value === "string" ? value : "";
+  const answers = {};
+  fields.forEach((field) => {
+    const start = text.indexOf(`${field}:`);
+    if (start === -1) {
+      answers[field] = "";
+      return;
+    }
+    let end = text.length;
+    for (const other of fields) {
+      if (other === field) continue;
+      const position = text.indexOf(`${other}:`, start + field.length + 1);
+      if (position !== -1 && position < end) end = position;
+    }
+    answers[field] = text.slice(start + field.length + 1, end).trim();
+  });
+  return answers;
+}
+
+function composeMinistryAnswers(fields, answers) {
+  return fields.map((field) => `${field}:\n${(answers[field] || "").trim()}`).join("\n\n");
+}
+
+function ministryWizardFor(store, key) {
+  const wizard = ui.ministryWizard;
+  return wizard && wizard.store === store && wizard.key === key ? wizard : null;
+}
+
+function finishMinistryWizard() {
+  const wizard = ui.ministryWizard;
+  if (!wizard) return;
+  const storeObj = ministryStore(wizard.store);
+  const hasContent = wizard.fields.some((field) => (wizard.answers[field] || "").trim());
+  if (storeObj) {
+    storeObj[wizard.key] = hasContent ? composeMinistryAnswers(wizard.fields, wizard.answers) : "";
+    touchMinistryStore(wizard.store);
+  }
+  ui.ministryWizard = null;
+  if (hasContent) showBanner("Section complete - every answer is below, ready to edit.");
+  render();
+}
+
+// One question at a time: the question large, one answer box, Back / Next.
+function renderMinistryWizard(card, wizard) {
+  const field = wizard.fields[wizard.step];
+  const last = wizard.step === wizard.fields.length - 1;
+  return `
+    <section class="pf-card-box pf-checklist-card pf-wizard-card">
+      <div class="pf-checklist-head">
+        <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
+        <span class="pf-checklist-count">Question ${wizard.step + 1} of ${wizard.fields.length}</span>
+      </div>
+      <div class="pf-wizard-progress" aria-hidden="true"><i style="width:${Math.round(((wizard.step + 1) / wizard.fields.length) * 100)}%"></i></div>
+      <label class="pf-wizard-question">${escapeHtml(field)}</label>
+      <textarea class="pf-ws-input" rows="4" data-action="ministry-wizard-answer" data-note-key="mw-${attr(wizard.store)}-${attr(wizard.key)}-${wizard.step}" placeholder="Write it plainly. You can refine it on the completed screen.">${escapeHtml(wizard.answers[field] || "")}</textarea>
+      <div class="pf-modal-actions" style="margin-top:12px;">
+        <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-cancel">Save and exit</button>
+        <span style="flex:1;"></span>
+        <button class="pf-btn" data-action="ministry-wizard-back" ${wizard.step === 0 ? "disabled" : ""}>Back</button>
+        <button class="pf-btn pf-btn-primary" data-action="ministry-wizard-next">${last ? "Finish" : "Next"}</button>
+      </div>
+    </section>
+  `;
+}
+
 function renderMinistryCard(store, card, storeObj) {
+  const wizard = ministryWizardFor(store, card.key);
+  if (wizard) return renderMinistryWizard(card, wizard);
+  const filled = ministryFilled(storeObj, card.key, card.fields);
+  if (!filled) {
+    return `
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head" style="align-items:flex-start;">
+          <div style="min-width:0;">
+            <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
+            <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
+          </div>
+        </div>
+        <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} questions, one at a time: ${escapeHtml(card.fields[0])}${card.fields[1] ? `, then ${escapeHtml(card.fields[1].toLowerCase())}` : ""}, and so on. When you finish, the whole section appears here, ready to edit.</p>
+        <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
+          <button class="pf-btn pf-btn-primary" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}">Start the questions</button>
+          <button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === `${store}.${card.key}` ? "Drafting…" : "Draft with Sermon Guide"}</button>
+        </div>
+      </section>
+    `;
+  }
+  return renderMinistryCardFilled(store, card, storeObj);
+}
+
+function renderMinistryCardFilled(store, card, storeObj) {
   const specKey = `${store}.${card.key}`;
   const drafting = ui.drafting === specKey;
   return `
@@ -5571,6 +5864,7 @@ function renderMinistryCard(store, card, storeObj) {
           <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
         </div>
         <div class="pf-ministry-actions">
+          <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Walk the questions again, one at a time">Revisit questions</button>
           <button class="pf-btn pf-btn-ghost" data-action="ministry-copy" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Copy this card's content">Copy</button>
           <button class="pf-btn" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${drafting ? "Drafting…" : "Draft with Sermon Guide"}</button>
         </div>
@@ -7058,7 +7352,7 @@ function renderJournal(active) {
             : groups.length
               ? `
                 <p class="pf-helper" style="margin-bottom:12px;">${totalNotes} note${totalNotes === 1 ? "" : "s"} across ${groups.length} phase${groups.length === 1 ? "" : "s"} for <strong>${escapeHtml(selected.passage || "this sermon")}</strong> - tap a phase to open it.</p>
-                <div class="pf-notes-list">${groups.map((group, index) => renderNoteGroup(group, selected, index === 0)).join("")}</div>`
+                <div class="pf-notes-list">${groups.map((group) => renderNoteGroup(group, selected)).join("")}</div>`
               : `<div class="pf-empty">No notes on <strong>${escapeHtml(selected.passage || "this sermon")}</strong> yet. Write in any phase of its Workspace and it lands here.</div>`
       }
     </div>
@@ -9015,7 +9309,8 @@ document.addEventListener("click", (event) => {
 
   if (target.dataset.sermonCard) {
     state.activeId = target.dataset.sermonCard;
-    state.view = "workspace";
+    const opened = state.sermons.find((sermon) => sermon.id === target.dataset.sermonCard);
+    state.view = opened?.imported ? "editor" : "workspace";
     saveState();
     render();
     return;
@@ -9023,6 +9318,13 @@ document.addEventListener("click", (event) => {
 
   const action = target.dataset.action;
   if (action === "toggle-theme") setTheme(state.theme === "dark" ? "light" : "dark");
+  if (action === "open-account") {
+    if (state.view !== "profile" && state.view !== "signin") ui.lastView = state.view;
+    if (ui.auth.user) ui.profileTab = "account";
+    state.view = "profile";
+    closeOverlays();
+    render();
+  }
   if (action === "go-signin") {
     if (state.view !== "signin") ui.lastView = state.view;
     state.view = "signin";
@@ -9030,7 +9332,7 @@ document.addEventListener("click", (event) => {
     render();
   }
   if (action === "close-signin") {
-    state.view = ui.lastView && ui.lastView !== "signin" ? ui.lastView : "workspace";
+    state.view = ui.lastView && ui.lastView !== "signin" && ui.lastView !== "profile" ? ui.lastView : "home";
     render();
   }
   if (action === "new-sermon") {
@@ -9286,12 +9588,46 @@ document.addEventListener("click", (event) => {
     pmSave();
     render();
   }
+  if (action === "ministry-wizard-start") {
+    const cards = { impact: IMPACT_CARDS, shepherd: SHEPHERD_CARDS, pack: PACK_CARDS }[target.dataset.store] || [];
+    const card = cards.find((entry) => entry.key === target.dataset.key);
+    const storeObj = ministryStore(target.dataset.store);
+    if (!card || !storeObj) return;
+    const existing = ministryFilled(storeObj, card.key, card.fields) ? storeObj[card.key] : "";
+    ui.ministryWizard = {
+      store: target.dataset.store,
+      key: card.key,
+      fields: card.fields,
+      step: 0,
+      answers: parseMinistryAnswers(existing, card.fields),
+    };
+    render();
+  }
+  if (action === "ministry-wizard-back") {
+    if (ui.ministryWizard && ui.ministryWizard.step > 0) {
+      ui.ministryWizard.step -= 1;
+      render();
+    }
+  }
+  if (action === "ministry-wizard-next") {
+    const wizard = ui.ministryWizard;
+    if (!wizard) return;
+    if (wizard.step >= wizard.fields.length - 1) {
+      finishMinistryWizard();
+    } else {
+      wizard.step += 1;
+      render();
+    }
+  }
+  if (action === "ministry-wizard-cancel") {
+    finishMinistryWizard();
+  }
   if (action === "lib-import-open") {
-    ui.libImport = { show: true, queue: [] };
+    ui.libImport = { show: true, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
     render();
   }
   if (action === "lib-import-close") {
-    ui.libImport = { show: false, queue: [] };
+    ui.libImport = { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
     render();
   }
   if (action === "lib-import-remove") {
@@ -9300,6 +9636,12 @@ document.addEventListener("click", (event) => {
   }
   if (action === "lib-import-apply") {
     applyLibImport();
+  }
+  if (action === "lib-gdocs-open" || action === "lib-gdocs-search") {
+    loadGDocsList();
+  }
+  if (action === "lib-gdocs-import") {
+    importPickedGDocs();
   }
   if (action === "pm-guide") {
     runPmGuide(target.dataset.kind);
@@ -9514,6 +9856,10 @@ document.addEventListener("click", (event) => {
   if (action === "pulpit-fullscreen") {
     pulpitFullscreen();
   }
+  if (action === "pulpit-coach-toggle") {
+    ui.pulpit.coachCollapsed = !ui.pulpit.coachCollapsed;
+    render();
+  }
   if (action === "pulpit-settings") {
     ui.pulpit.showSettings = !ui.pulpit.showSettings;
     render();
@@ -9658,7 +10004,8 @@ document.addEventListener("click", (event) => {
   }
   if (action === "lib-open") {
     state.activeId = target.dataset.sermon;
-    state.view = target.dataset.mode === "editor" ? "editor" : target.dataset.mode === "pulpit" ? "pulpit" : "workspace";
+    const opened = state.sermons.find((sermon) => sermon.id === target.dataset.sermon);
+    state.view = target.dataset.mode === "editor" ? "editor" : target.dataset.mode === "pulpit" ? "pulpit" : opened?.imported ? "editor" : "workspace";
     if (state.view === "pulpit") {
       ui.pulpit.section = 0;
       requestPracticeWakeLock();
@@ -10130,6 +10477,10 @@ document.addEventListener("input", (event) => {
     persistPhaseEditor(target);
     updateEditorStats();
   }
+  if (action === "ministry-wizard-answer") {
+    const wizard = ui.ministryWizard;
+    if (wizard) wizard.answers[wizard.fields[wizard.step]] = target.value;
+  }
   if (action === "ministry-field") {
     const store = ministryStore(target.dataset.store, target.dataset.sermon);
     if (!store) return;
@@ -10208,6 +10559,9 @@ document.addEventListener("input", (event) => {
     state.reviewMeta[target.dataset.field] = target.value;
     saveState();
   }
+  if (action === "lib-gdocs-query") {
+    ui.libImport.gdocs.query = target.value;
+  }
   if (action === "lib-import-field") {
     const item = ui.libImport.queue.find((entry) => entry.id === target.dataset.id);
     if (item) item[target.dataset.field] = target.value;
@@ -10255,6 +10609,10 @@ document.addEventListener("change", (event) => {
   }
   if (action === "lib-import-files") {
     handleLibImportFiles(target);
+  }
+  if (action === "lib-gdocs-check") {
+    ui.libImport.gdocs.picked[target.dataset.id] = target.checked;
+    render();
   }
   if (action === "lens-toggle") {
     state.lens.enabled = target.checked;
