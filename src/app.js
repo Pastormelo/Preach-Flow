@@ -580,6 +580,7 @@ const ui = {
   profileTab: "profile",
   libraryQuery: "",
   librarySort: "date",
+  libraryFilter: { book: "", series: "", topic: "" },
   debriefSermonId: "",
   debriefQuery: "",
   confirmDeleteId: "",
@@ -1697,31 +1698,6 @@ function renderOnboarding() {
   `;
 }
 
-// The avatar's landing page when no one is signed in: account context and
-// a door to sign-in, without dropping the person out of the app chrome.
-function renderAccountSignedOut() {
-  return `
-    <div class="pf-page pf-page-read pf-fade">
-      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
-        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Your account</span>
-        <h1 class="pf-h1">Working on this device</h1>
-        <p class="pf-page-sub">Everything you write saves on this device automatically. Sign in to sync your sermons across devices, keep them backed up, and use Sermon Guide with zero setup.</p>
-      </div>
-      <section class="pf-card-box pf-checklist-card">
-        <div class="pf-checklist-head"><span class="pf-eyebrow">Sign in or create an account</span></div>
-        <p class="pf-section-hint">Your work on this device stays put and links to your account the first time you sign in.</p>
-        <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
-          <button class="pf-btn pf-btn-primary" data-action="go-signin">Sign in / create account</button>
-        </div>
-      </section>
-      <section class="pf-card-box pf-checklist-card">
-        <div class="pf-checklist-head"><span class="pf-eyebrow">App settings that live here</span></div>
-        <p class="pf-ministry-desc">Once you're signed in, this page holds your account details, Preaching Profile, Sermon Guide settings, defaults, and privacy controls.</p>
-      </section>
-    </div>
-  `;
-}
-
 function renderProfile(active) {
   const tab = PROFILE_TABS.some(([key]) => key === ui.profileTab) ? ui.profileTab : "profile";
   const headings = {
@@ -1736,7 +1712,7 @@ function renderProfile(active) {
     <div class="pf-page pf-page-read pf-fade">
       <div class="pf-page-head" style="display:block;margin-bottom:18px;">
         <div style="margin-bottom:12px;"><button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to app</button></div>
-        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">${escapeHtml(ui.auth.user?.email || "Profile")}</span>
+        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">${escapeHtml(ui.auth.user?.email || "Your account and settings")}</span>
         <h1 class="pf-h1">${escapeHtml(heading)}</h1>
         <p class="pf-page-sub">${escapeHtml(sub)}</p>
       </div>
@@ -1902,6 +1878,13 @@ function renderProfileAccountTab(active) {
     ${profileSection("Account", "Identity, sign-in, security, integrations, and settings live here - your Preaching Profile is about your workflow.", `
       <div class="pf-account-row">
         <div style="flex:1;">
+          <div class="pf-account-label">${ui.auth.user ? "Signed in" : "Working on this device"}</div>
+          <div class="pf-account-meta">${ui.auth.user ? escapeHtml(ui.auth.user.email || "") : "Everything saves here automatically. Sign in to sync across devices, keep backups, and use Sermon Guide with zero setup."}</div>
+        </div>
+        ${ui.auth.user ? "" : `<button class="pf-btn pf-btn-primary" data-action="go-signin">Sign in / create account</button>`}
+      </div>
+      <div class="pf-account-row">
+        <div style="flex:1;">
           <div class="pf-account-label">Cloud sync</div>
           <div class="pf-account-meta" data-auth-panel-status>${escapeHtml(ui.auth.status)}</div>
         </div>
@@ -1928,9 +1911,9 @@ function renderProfileAccountTab(active) {
         </div>
         <button class="pf-btn" data-action="toggle-theme">Toggle</button>
       </div>
-      <div class="pf-account-actions">
+      ${ui.auth.user ? `<div class="pf-account-actions">
         <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
-      </div>
+      </div>` : ""}
     `)}
   `;
 }
@@ -2041,7 +2024,7 @@ function renderHome(active) {
 
 function renderMain(active) {
   if (ui.showNew) return renderNewSermon();
-  if (state.view === "profile") return ui.auth.user ? renderProfile(active) : renderAccountSignedOut();
+  if (state.view === "profile") return renderProfile(active);
   if (state.view === "home") return renderHome(active);
   if (state.view === "pipeline") return renderPipeline();
   if (state.view === "journal") return renderJournal(active);
@@ -3043,10 +3026,42 @@ function renderLibraryCard(sermon) {
   `;
 }
 
+// Distinct browse options with counts, drawn from the library itself.
+function libraryBrowseOptions(sermons) {
+  const books = new Map();
+  const series = new Map();
+  const topics = new Map();
+  for (const sermon of sermons) {
+    const book = passageBook(sermon.passage)?.name;
+    if (book) books.set(book, (books.get(book) || 0) + 1);
+    const name = sermon.series.trim();
+    if (name) series.set(name, (series.get(name) || 0) + 1);
+    for (const tag of sermon.tags || []) {
+      if (tag) topics.set(tag, (topics.get(tag) || 0) + 1);
+    }
+  }
+  return {
+    books: [...books.entries()].sort((a, b) => bookIndex(a[0]) - bookIndex(b[0])),
+    series: [...series.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    topics: [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  };
+}
+
+function libraryFilterActive() {
+  const filter = ui.libraryFilter;
+  return Boolean(filter.book || filter.series || filter.topic);
+}
+
 function renderLibrary() {
   const all = librarySermons();
   const query = ui.libraryQuery.trim().toLowerCase();
-  const filtered = query ? all.filter((sermon) => librarySearchText(sermon).includes(query)) : all;
+  const filter = ui.libraryFilter;
+  const filtered = all
+    .filter((sermon) => !query || librarySearchText(sermon).includes(query))
+    .filter((sermon) => !filter.book || passageBook(sermon.passage)?.name === filter.book)
+    .filter((sermon) => !filter.series || sermon.series.trim() === filter.series)
+    .filter((sermon) => !filter.topic || (sermon.tags || []).includes(filter.topic));
+  const options = libraryBrowseOptions(all);
   const groups = libraryGroups(filtered);
   return `
     <div class="pf-page pf-page-wide pf-fade">
@@ -3068,13 +3083,33 @@ function renderLibrary() {
       </div>
 
       ${
+        all.length
+          ? `<div class="pf-lib-browse">
+              <select class="pf-select" data-action="library-browse" data-kind="book" title="Browse by passage">
+                <option value="">- Browse Passages -</option>
+                ${options.books.map(([name, count]) => `<option value="${attr(name)}" ${filter.book === name ? "selected" : ""}>${escapeHtml(name)} (${count})</option>`).join("")}
+              </select>
+              <select class="pf-select" data-action="library-browse" data-kind="series" title="Browse by series">
+                <option value="">- Browse Series -</option>
+                ${options.series.map(([name, count]) => `<option value="${attr(name)}" ${filter.series === name ? "selected" : ""}>${escapeHtml(name)} (${count})</option>`).join("")}
+              </select>
+              <select class="pf-select" data-action="library-browse" data-kind="topic" title="Browse by topic">
+                <option value="">- Browse Topics -</option>
+                ${options.topics.map(([name, count]) => `<option value="${attr(name)}" ${filter.topic === name ? "selected" : ""}>${escapeHtml(name)} (${count})</option>`).join("")}
+              </select>
+              ${libraryFilterActive() ? `<button class="pf-btn pf-btn-ghost" data-action="library-browse-clear">Clear filters</button>` : ""}
+            </div>`
+          : ""
+      }
+
+      ${
         !all.length
           ? `<div class="pf-empty">Your library fills as you preach, and it can hold everything you preached before PreachFlow too.
               <div style="margin-top:14px;"><button class="pf-btn pf-btn-primary" data-action="lib-import-open">Import your past sermons</button></div>
               <p class="pf-helper" style="margin-top:10px;">Word, PDF, and text files all work. Bring several at once from Google Docs, Word, or Notes exports.</p>
             </div>`
           : !filtered.length
-            ? `<div class="pf-empty">Nothing matches “${escapeHtml(ui.libraryQuery)}”. <button class="pf-inline-link" data-action="library-clear">Clear the search</button> to see all ${all.length} sermon${all.length === 1 ? "" : "s"}.</div>`
+            ? `<div class="pf-empty">Nothing matches${query ? ` “${escapeHtml(ui.libraryQuery)}”` : " those filters"}. <button class="pf-inline-link" data-action="library-clear">${libraryFilterActive() ? "Clear the search and filters" : "Clear the search"}</button> to see all ${all.length} sermon${all.length === 1 ? "" : "s"}.</div>`
             : groups
                 .map(
                   ([label, sermons]) => `
@@ -9320,7 +9355,7 @@ document.addEventListener("click", (event) => {
   if (action === "toggle-theme") setTheme(state.theme === "dark" ? "light" : "dark");
   if (action === "open-account") {
     if (state.view !== "profile" && state.view !== "signin") ui.lastView = state.view;
-    if (ui.auth.user) ui.profileTab = "account";
+    ui.profileTab = "account";
     state.view = "profile";
     closeOverlays();
     render();
@@ -10015,6 +10050,11 @@ document.addEventListener("click", (event) => {
   }
   if (action === "library-clear") {
     ui.libraryQuery = "";
+    ui.libraryFilter = { book: "", series: "", topic: "" };
+    render();
+  }
+  if (action === "library-browse-clear") {
+    ui.libraryFilter = { book: "", series: "", topic: "" };
     render();
   }
   if (action === "resource-add") {
@@ -10625,6 +10665,10 @@ document.addEventListener("change", (event) => {
   }
   if (action === "notes-sermon") {
     ui.notesSermonId = target.value;
+    render();
+  }
+  if (action === "library-browse") {
+    ui.libraryFilter[target.dataset.kind] = target.value;
     render();
   }
   if (action === "profile-field") {
