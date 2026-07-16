@@ -94,6 +94,29 @@ async function callEngine(req, { system, messages, maxTokens = 1000 }) {
   return callOpenAI(args);
 }
 
+
+// Provider errors reach real pastors mid-prep; translate the common ones
+// into plain language with the actual fix.
+function friendlyEngineError(status, message) {
+  const detail = String(message || "request failed");
+  if (status === 429 && /quota|billing|insufficient/i.test(detail)) {
+    return (
+      "The AI provider account behind this deployment is out of credit. " +
+      "If you run this site: add billing credit at platform.openai.com (Settings -> Billing), " +
+      "or switch providers by setting AI_PROVIDER (gemini offers a free tier at aistudio.google.com) and redeploying. " +
+      "If you added your own key in the app, check that key's billing instead. " +
+      `(Provider said: ${detail})`
+    );
+  }
+  if (status === 429) {
+    return `The AI provider is rate-limiting requests right now. Wait a moment and try again. (Provider said: ${detail})`;
+  }
+  if (status === 401 || status === 403) {
+    return `The AI key was rejected (${status}). Check AI_API_KEY in the hosting environment, or your own key in the app. (Provider said: ${detail})`;
+  }
+  return `The engine returned ${status}: ${detail}`;
+}
+
 async function callOpenAI({ key, model, system, messages, maxTokens }) {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -107,7 +130,7 @@ async function callOpenAI({ key, model, system, messages, maxTokens }) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    return { configured: true, text: `The engine returned ${response.status}: ${data.error?.message || "request failed"}` };
+    return { configured: true, text: friendlyEngineError(response.status, data.error?.message) };
   }
   const text =
     typeof data.output_text === "string"
@@ -133,7 +156,7 @@ async function callGroq({ key, model, system, messages, maxTokens }) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    return { configured: true, text: `The engine returned ${response.status}: ${data.error?.message || "request failed"}` };
+    return { configured: true, text: friendlyEngineError(response.status, data.error?.message) };
   }
   return { configured: true, text: (data.choices?.[0]?.message?.content || "").trim() || "No text response came back." };
 }
@@ -150,7 +173,7 @@ async function callAnthropic({ key, model, system, messages, maxTokens }) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    return { configured: true, text: `The engine returned ${response.status}: ${data.error?.message || "request failed"}` };
+    return { configured: true, text: friendlyEngineError(response.status, data.error?.message) };
   }
   const text = (data.content || [])
     .filter((block) => block.type === "text")
@@ -178,7 +201,7 @@ async function callGemini({ key, model, system, messages, maxTokens }) {
   );
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    return { configured: true, text: `The engine returned ${response.status}: ${data.error?.message || "request failed"}` };
+    return { configured: true, text: friendlyEngineError(response.status, data.error?.message) };
   }
   const text = (data.candidates?.[0]?.content?.parts || [])
     .map((part) => part.text || "")

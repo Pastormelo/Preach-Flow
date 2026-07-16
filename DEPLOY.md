@@ -85,7 +85,7 @@ Notes:
 
 Share links need the updated Supabase schema: run `supabase/schema.sql` in the Supabase SQL editor (it now also creates `preach_flow_shared_views` and the token-gated `preach_flow_get_shared_view` function). Links are unguessable tokens, read-only, revocable, and served by `share.html`.
 
-Preach Flow creates one Google Doc per sermon and writes a fresh sermon snapshot into it after edits. Edits made directly in Google Docs may be replaced by the next Preach Flow sync.
+Google is used two ways, both user-initiated: the Sermon Editor's "Send to Google Docs" button creates a one-time copy of the manuscript as a new Google Doc (no ongoing sync), and the Library's import can read documents the user checks.
 
 Your GitHub repo should include these top-level items:
 

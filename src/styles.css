@@ -4230,3 +4230,83 @@ p {
   margin: 12px 0 20px;
 }
 .pf-lib-browse .pf-select { background: var(--surface-card); }
+
+.pf-pulpit-brandtag {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+/* --- Outline Lab movement parts --- */
+.pf-outline-part {
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 8px 8px 0;
+  background: var(--surface-sunken);
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.pf-outline-part.kind-explanation { border-left-color: #3b82f6; }
+.pf-outline-part.kind-illustration { border-left-color: #eab308; }
+.pf-outline-part.kind-application { border-left-color: #16a34a; }
+.pf-outline-part.kind-transition { border-left-color: #a855f7; }
+.pf-outline-part-head { display: flex; align-items: center; margin-bottom: 4px; }
+.pf-outline-part-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pf-outline-part-head .pf-chip-x { margin-left: auto; }
+.pf-outline-part-adds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pf-outline-part-adds .pf-chip { font-size: 12px; padding: 4px 10px; }
+
+/* --- Ministry guide accordions --- */
+.pf-ministry-acc {
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: var(--surface-card);
+  margin-bottom: 14px;
+  padding: 0;
+}
+.pf-ministry-acc > summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 18px 22px;
+  user-select: none;
+}
+.pf-ministry-acc > summary::-webkit-details-marker { display: none; }
+.pf-ministry-acc-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.pf-ministry-acc-desc {
+  grid-column: 1;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.pf-ministry-acc > summary .pf-lib-badge { grid-row: 1 / span 2; }
+.pf-ministry-acc > summary:hover .pf-ministry-acc-title { color: var(--text-brand); }
+.pf-ministry-acc[open] { border-color: var(--brand); }
+.pf-ministry-acc > *:not(summary) { margin: 0 16px 16px; }
+
+/* --- Share link cards: tuck the toggles away --- */
+.pf-share-fold { margin: 4px 0 10px; }
+.pf-share-fold > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-brand);
+  user-select: none;
+}
