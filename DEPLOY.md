@@ -57,6 +57,8 @@ https://your-site.vercel.app
 
 Then add the Client ID to Vercel under Project Settings -> Environment Variables and redeploy. This is not a secret, but it must match the deployed origin.
 
+The Library's "browse your Google Docs" import asks users for read-only Drive access (`drive.readonly`) alongside the Docs-sync scopes. If your Google Cloud OAuth consent screen restricts scopes, add `https://www.googleapis.com/auth/drive.readonly` there. PreachFlow only reads the documents a user explicitly checks.
+
 ### Sermon Guide engine (make AI "just work")
 
 Add **one** environment variable in Vercel (Project Settings → Environment Variables) and every signed-in user's Sermon Guide works with zero setup:

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node server.mjs",
-    "build": "rm -rf dist && mkdir -p dist/src && cp index.html app.html share.html dist/ && cp -R assets dist/ && cp src/app.js src/styles.css dist/src/",
+    "build": "rm -rf dist && mkdir -p dist/src && cp index.html app.html share.html philosophy.html dist/ && cp -R assets dist/ && cp src/app.js src/styles.css dist/src/",
     "test": "node --test"
   },
   "dependencies": {

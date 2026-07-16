@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Why PreachFlow Will Never Write Your Sermon - A Philosophy of Preaching and AI</title>
+    <meta
+      name="description"
+      content="A theological statement on the importance of preaching, the history of the pulpit, what AI is good for, where it becomes dangerous, and why PreachFlow is an instrument and never a replacement."
+    />
+    <link rel="icon" type="image/svg+xml" href="./assets/preach-flow-mark.svg?v=ofc-4" />
+    <meta name="theme-color" content="#FF953E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Mulish:wght@400;500;600;700&display=swap"
+    />
+    <style>
+      :root {
+        --surface-page: #f4fbfe;
+        --surface-card: #ffffff;
+        --surface-sunken: #f7f9fb;
+        --surface-inverse: #20242a;
+        --text-primary: #20242a;
+        --text-secondary: #39424c;
+        --text-muted: #5e6c7a;
+        --text-inverse: #f4fbfe;
+        --text-brand: #dc6a12;
+        --border-subtle: #eef1f5;
+        --border-default: #e0e5eb;
+        --brand: #ff953e;
+        --brand-soft: #fff1e4;
+        --font-display: "Montserrat", sans-serif;
+        --font-body: "Mulish", -apple-system, sans-serif;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body {
+        font-family: var(--font-body);
+        background: var(--surface-page);
+        color: var(--text-primary);
+        line-height: 1.75;
+        font-size: 17.5px;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 0 22px; }
+      .nav {
+        position: sticky; top: 0; z-index: 40;
+        background: rgba(244, 251, 254, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .nav-inner {
+        max-width: 1080px; margin: 0 auto; padding: 14px 22px;
+        display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      }
+      .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+      .brand-mark {
+        width: 38px; height: 38px; border-radius: 11px;
+        background: var(--surface-inverse);
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .brand-name { font-family: var(--font-display); font-weight: 800; font-size: 19px; color: var(--text-primary); letter-spacing: -0.02em; }
+      .brand-name span { color: var(--brand); }
+      .nav-links { display: flex; align-items: center; gap: 18px; }
+      .nav-links a { text-decoration: none; color: var(--text-secondary); font-weight: 600; font-size: 15px; }
+      .nav-links a:hover { color: var(--text-brand); }
+      .nav-cta {
+        background: var(--brand); color: #fff !important;
+        padding: 9px 18px; border-radius: 999px; font-weight: 700;
+      }
+      header.hero {
+        background: var(--surface-inverse); color: var(--text-inverse);
+        padding: 84px 0 72px; text-align: center; position: relative; overflow: hidden;
+      }
+      .hero .flame { color: rgba(255, 149, 62, 0.14); position: absolute; width: 340px; right: -70px; top: -40px; transform: rotate(12deg); }
+      .hero .eyebrow { color: var(--brand); }
+      .hero h1 {
+        font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+        font-size: clamp(30px, 5vw, 46px); line-height: 1.14; max-width: 780px; margin: 14px auto 18px;
+      }
+      .hero p { max-width: 640px; margin: 0 auto; color: rgba(244, 251, 254, 0.82); font-size: 18.5px; }
+      .eyebrow {
+        font-family: var(--font-display); font-weight: 700; font-size: 12.5px;
+        letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-brand);
+        display: block;
+      }
+      main { padding: 26px 0 30px; }
+      section.block { padding: 44px 0 10px; }
+      h2 {
+        font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+        font-size: clamp(24px, 3.4vw, 32px); line-height: 1.2; margin: 10px 0 18px;
+      }
+      h3 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 26px 0 10px; }
+      p { margin-bottom: 16px; color: var(--text-secondary); }
+      ul, ol { margin: 0 0 16px 24px; color: var(--text-secondary); }
+      li { margin-bottom: 9px; }
+      strong { color: var(--text-primary); }
+      blockquote.verse {
+        border-left: 4px solid var(--brand);
+        background: var(--surface-card);
+        border-radius: 0 12px 12px 0;
+        padding: 16px 20px;
+        margin: 22px 0;
+        font-size: 17px;
+      }
+      blockquote.verse p { margin-bottom: 6px; font-style: italic; color: var(--text-primary); }
+      blockquote.verse cite { font-style: normal; font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--text-brand); }
+      .callout {
+        background: var(--surface-card);
+        border: 1px solid var(--border-default);
+        border-radius: 16px;
+        padding: 24px 26px;
+        margin: 26px 0;
+      }
+      .callout.warm { background: var(--brand-soft); border-color: #ffd2a8; }
+      .creed {
+        background: var(--surface-inverse); color: var(--text-inverse);
+        border-radius: 18px; padding: 34px 30px; text-align: center; margin: 34px 0;
+      }
+      .creed p { color: var(--text-inverse); font-family: var(--font-display); font-weight: 700; font-size: 20px; margin-bottom: 8px; }
+      .creed p strong { color: var(--brand); }
+      .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 26px 0 10px; }
+      .btn {
+        display: inline-block; text-decoration: none; font-family: var(--font-display);
+        font-weight: 700; font-size: 15.5px; padding: 13px 26px; border-radius: 999px;
+      }
+      .btn-primary { background: var(--brand); color: #fff; }
+      .btn-outline { border: 2px solid var(--border-default); color: var(--text-primary); }
+      footer { border-top: 1px solid var(--border-default); padding: 26px 0; margin-top: 40px; }
+      footer .wrap { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; color: var(--text-muted); font-size: 14px; }
+      footer a { color: var(--text-muted); }
+      @media (max-width: 640px) {
+        .nav-links a:not(.nav-cta) { display: none; }
+        body { font-size: 16.5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <div class="nav-inner">
+        <a class="brand" href="./">
+          <span class="brand-mark">
+            <svg width="22" height="22" viewBox="0 0 128 128" fill="none" aria-hidden="true"><path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z" fill="#FF953E"/><path d="M64 42C65 49 72 52 74 60C76 68 71 76 64 76C57 76 52 68 54 60C55 54 60 51 61 46C62 49 63 48 64 42Z" fill="#23272e"/><path d="M16 78C35 72 52 76 64 88C76 76 93 72 112 78L112 92C93 86 76 90 64 101C52 90 35 86 16 92Z" fill="#FFF4EA"/><path d="M64 88L64 101" stroke="#20242A" stroke-width="3.6" stroke-linecap="round"/></svg>
+          </span>
+          <span class="brand-name">Preach<span>Flow</span></span>
+        </a>
+        <div class="nav-links">
+          <a href="./">Home</a>
+          <a href="./#workflow">How It Works</a>
+          <a class="nav-cta" href="./app">Start Preparing</a>
+        </div>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <svg class="flame" viewBox="0 0 128 128" fill="currentColor" aria-hidden="true"><path d="M67 8C66 18 74 24 80 32C87 41 90 49 90 58C90 74 79 84 64 84C49 84 38 74 38 58C38 45 47 37 51 24C53 32 58 36 59 30C60 25 58 18 62 12C63 10 65 9 67 8Z"/></svg>
+      <div class="wrap">
+        <span class="eyebrow">Our philosophy</span>
+        <h1>Why PreachFlow will never write your sermon.</h1>
+        <p>A statement on the weight of preaching, the history of the pulpit, what AI is genuinely good for, where it becomes spiritually dangerous, and why this app exists to be an instrument in the preacher's hand and never a replacement for the preacher.</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="block">
+        <div class="wrap">
+          <span class="eyebrow">1. The weight of preaching</span>
+          <h2>Preaching is God's chosen instrument.</h2>
+          <p>Preaching is not one communication strategy among many. It is the means God has appointed to create and sustain faith in His people. Paul does not say that faith comes by content. He says it comes by hearing, and hearing through the word of Christ, carried by a person who is sent to proclaim it.</p>
+          <blockquote class="verse">
+            <p>"How then will they call on him in whom they have not believed? And how are they to believe in him of whom they have never heard? And how are they to hear without someone preaching? ... So faith comes from hearing, and hearing through the word of Christ."</p>
+            <cite>Romans 10:14, 17</cite>
+          </blockquote>
+          <p>Notice what that requires: a someone. A voice. A life. God has always joined His Word to a witness, and "it pleased God through the folly of what we preach to save those who believe" (1 Corinthians 1:21). The Word itself is living and active, sharper than any two-edged sword (Hebrews 4:12), and it never returns empty (Isaiah 55:10-11). But the Word is heralded through preachers whom God shapes in the study, on their knees, and in the furnace of pastoral life.</p>
+          <p>That is why the charge given to Timothy is so heavy and so personal:</p>
+          <blockquote class="verse">
+            <p>"I charge you in the presence of God and of Christ Jesus, who is to judge the living and the dead ... preach the word; be ready in season and out of season; reprove, rebuke, and exhort, with complete patience and teaching."</p>
+            <cite>2 Timothy 4:1-2</cite>
+          </blockquote>
+          <p>No one can carry that charge for you. Not a staff member, not a commentary, and certainly not a machine.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="wrap">
+          <span class="eyebrow">2. A long line of heralds</span>
+          <h2>The pulpit has a history, and you stand in it.</h2>
+          <p>When Israel returned from exile, Ezra and the Levites "read from the book, from the Law of God, clearly, and they gave the sense, so that the people understood the reading" (Nehemiah 8:8). Reading the text, explaining the text, and pressing it on the hearts of the people: that is the oldest job description of the preacher, and it has not changed.</p>
+          <p>Jesus stood in the synagogue at Nazareth, opened the scroll of Isaiah, read it, and preached it: "Today this Scripture has been fulfilled in your hearing" (Luke 4:16-21). At Pentecost, Peter stood and raised his voice, and God cut three thousand hearts through a sermon (Acts 2). When the church's workload grew, the apostles refused to let anything crowd out their calling: "We will devote ourselves to prayer and to the ministry of the word" (Acts 6:4).</p>
+          <p>From there the line runs long: Chrysostom, the golden-mouthed, preaching verse by verse through books of the Bible in the fourth century. Augustine feeding a North African congregation for decades. The Reformation, which was at its heart a recovery of preaching: Luther insisting the church lives by the Word, Calvin working patiently through Scripture in Geneva day after day. The Puritans, who called preaching "the chariot on which Christ rides into the hearts of men." Whitefield in the fields, Spurgeon before thousands, and countless faithful, unknown pastors in small rooms who studied all week and stood up on Sunday with a word from God.</p>
+          <p>Every one of them was formed by the labor. The hours in the text did not merely produce their sermons. They produced the preachers. That is the inheritance this app is built to protect.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="wrap">
+          <span class="eyebrow">3. An honest word about AI</span>
+          <h2>What AI is genuinely good for.</h2>
+          <p>We are not afraid of technology, and we will not pretend AI is useless. Pastors have always used instruments: concordances, lexicons, commentaries, printed Bibles that were themselves once a disruptive technology. Used rightly, AI can serve the preacher the way a good library or a sharp friend serves the preacher:</p>
+          <ul>
+            <li><strong>It organizes the work.</strong> Study notes, observations, outlines, and drafts stay in order, so the pastor's energy goes to the text instead of the mess.</li>
+            <li><strong>It asks useful questions.</strong> A good question at the right moment ("Where does the passage itself make that turn?") sends you back into the text rather than away from it.</li>
+            <li><strong>It pressure-tests clarity.</strong> It can tell you a sentence is muddy, an argument skips a step, or a claim is not actually in the passage you are preaching.</li>
+            <li><strong>It challenges drift.</strong> It can notice when the application is generic, when the gospel is missing, or when you are avoiding the hard verse in the middle of the paragraph.</li>
+            <li><strong>It relieves administrative weight.</strong> Group questions, planning documents, slide preparation, and follow-up resources built from work you already did: this is the donkey work AI should carry so the pastor can pray and study.</li>
+          </ul>
+          <p>In all of this, AI functions as an instrument. The judgment, the conviction, the theology, and the words that get preached remain the pastor's own.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="wrap">
+          <span class="eyebrow">4. The danger</span>
+          <h2>Where AI becomes spiritually dangerous.</h2>
+          <p>The same tool becomes destructive the moment it moves from instrument to author. Scripture has a category for preachers who deliver words they did not receive from God through their own labor and communion with Him:</p>
+          <blockquote class="verse">
+            <p>"Behold, I am against the prophets, declares the LORD, who steal my words from one another ... who use their tongues and declare, 'declares the LORD.'"</p>
+            <cite>Jeremiah 23:30-31</cite>
+          </blockquote>
+          <p>A generated sermon is borrowed authority. The congregation believes they are hearing the overflow of their shepherd's time with God, and they are not. Name the dangers plainly:</p>
+          <ul>
+            <li><strong>Outsourced conviction.</strong> A sermon is a burden before it is a document (Jeremiah 20:9). If a machine wrote it, there is no fire in the bones behind it, and people can tell.</li>
+            <li><strong>The loss of the preacher's formation.</strong> "Do your best to present yourself to God as one approved, a worker who has no need to be ashamed, rightly handling the word of truth" (2 Timothy 2:15). The study is where God forms the man. Skip the labor and you skip the formation. "Practice these things, immerse yourself in them ... for by so doing you will save both yourself and your hearers" (1 Timothy 4:15-16).</li>
+            <li><strong>Dependence on cleverness instead of the Spirit.</strong> Paul deliberately refused to rest his preaching on impressive technique, "that your faith might not rest in the wisdom of men but in the power of God" (1 Corinthians 2:1-5). "Not by might, nor by power, but by my Spirit, says the LORD of hosts" (Zechariah 4:6). No model, however capable, can do the Spirit's work.</li>
+            <li><strong>Flattery and itching ears.</strong> Systems tuned to please will tell a preacher what he wants to hear, and congregations already face teachers "to suit their own passions" (2 Timothy 4:3). A faithful tool must be willing to say the hard thing (Galatians 1:10).</li>
+            <li><strong>Generic bread for a specific flock.</strong> A shepherd knows his sheep by name (John 10:3-4, 14). Content generated apart from that knowledge may be true in the abstract and useless in the pew.</li>
+            <li><strong>Quiet integrity erosion.</strong> Preaching words as your own that are not your own is a lie told from the holiest desk in the church. Little compromises here corrode a ministry.</li>
+          </ul>
+          <div class="callout warm">
+            <p style="margin-bottom:0;"><strong>The heart of the matter:</strong> preaching cannot be delegated to a machine, because preaching is not the transfer of information. It is truth through personality, a witness testifying to what he has seen in the text and known of God. The Spirit works through the preacher's own prayer, study, obedience, and love for the flock. There is no API for that.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="wrap">
+          <span class="eyebrow">5. Why PreachFlow exists</span>
+          <h2>An instrument in the preacher's hand. Never a replacement.</h2>
+          <p>PreachFlow was built by a pastor, for pastors, on one conviction: the Word leads, the pastor studies, and the tools serve the process. So the app is opinionated in ways most software is not:</p>
+          <ul>
+            <li><strong>It will not write your sermon.</strong> Not from a prompt, not from an outline, not "just this once," and not if you bring your own AI key. The guardrail lives in the app itself, not in your willpower.</li>
+            <li><strong>It keeps the text in charge.</strong> The workflow starts with immersion in the passage and a Passage Map you mark with your own hands, so the sermon's structure comes from the text's structure.</li>
+            <li><strong>Sermon Guide reacts to your work.</strong> It asks questions, points at what you may have missed, challenges claims the passage does not support, and hands the pen back. Suggestions are always yours to test, edit, or reject.</li>
+            <li><strong>It refuses to flatter.</strong> When the work is thin, it says so. When a preacher is avoiding the labor, it points back to the text and to the Scriptures about the work itself.</li>
+            <li><strong>It carries the donkey work.</strong> Slides, group guides, discipleship resources, planning documents, and delivery tools are all built from the sermon you actually wrote, so the saved hours go back into study, prayer, and people.</li>
+          </ul>
+          <div class="creed">
+            <p>The <strong>Word</strong> still leads.</p>
+            <p>The <strong>pastor</strong> still studies.</p>
+            <p>The <strong>Spirit</strong> still empowers.</p>
+            <p>The church still needs a <strong>shepherd</strong>, not a machine.</p>
+          </div>
+          <p>If you want an app that writes sermons, there are plenty. This is not one of them, and it never will be. If you want to study more deeply, think more clearly, stay weeks ahead instead of hours behind, and step into the pulpit with a message God worked into you first, PreachFlow was built for you.</p>
+          <blockquote class="verse">
+            <p>"Preach the word; be ready in season and out of season."</p>
+            <cite>2 Timothy 4:2</cite>
+          </blockquote>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="./app">Start Preparing</a>
+            <a class="btn btn-outline" href="./#workflow">See How It Works</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>PreachFlow - sermon prep that keeps the text in charge.</span>
+        <span><a href="./">Home</a> · <a href="./app">Open the app</a></span>
+      </div>
+    </footer>
+  </body>
+</html>
