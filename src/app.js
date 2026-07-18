@@ -597,6 +597,8 @@ const ui = {
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, suggestion: null },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
+  ministryEdit: null,
+  ministryOpen: null,
   activeSeriesId: "",
   drafting: "",
   dietRange: "12",
@@ -5804,7 +5806,7 @@ async function draftWithGuide(specKey) {
       headers: { "Content-Type": "application/json", ...openAIHeaders() },
       body: JSON.stringify({
         context,
-        prompt: `Draft the "${spec.title}" resource. ${spec.instructions || ""}${grounding}\nUse exactly these labeled fields, in this order, filling each with brief, concrete, pastorally useful content drawn from the sermon material provided:\n${spec.fields.map((field) => `${field}:`).join("\n")}\nReturn only the labeled fields.`,
+        prompt: `Draft the "${spec.title}" resource. ${spec.instructions || ""}${grounding}\nUse exactly these labeled fields, in this order, filling each with concrete, pastorally useful content drawn from the sermon material provided:\n${spec.fields.map((field) => `${field}:`).join("\n")}\nFormatting rules: write complete, polished sentences ready to hand to someone. Under a field, put each distinct item on its own line starting with "- " (a hyphen and a space); use plain paragraphs for single thoughts. Never use markdown headers, asterisks, or bold markers. Return only the labeled fields.`,
       }),
     });
     const data = await response.json();
@@ -5899,6 +5901,199 @@ function renderChipGroup(store, field, options, selected, sermonId = "") {
   `;
 }
 
+// ---- Ministry guidance: real questions and sermon-drawn starters ----
+// Every guide field is a real question, and each question offers starter
+// content assembled from the sermon itself (passage, big idea, purpose,
+// outline, applications) - no AI involved. The leader taps a starter to
+// insert it, then makes it their own.
+const MINISTRY_QUESTIONS = {
+  "impact.staff": {
+    "Staff focus": "What is the one thing every staff member should keep in front of them this week?",
+    "Key reminder": "What must the staff not forget while serving people this week?",
+    "Prayer burden": "What should the staff be praying for together this week?",
+    "Follow-up needs": "Who or what will need follow-up after this sermon (categories, not names)?",
+    "Ministry emphasis": "Which ministries does this sermon touch, and what should each emphasize?",
+  },
+  "impact.prayer": {
+    "Prayer burdens": "What is this sermon asking God to do in people? Ask Him for exactly that.",
+    "Repentance prayers": "What will people need to confess and turn from after this text?",
+    "Encouragement prayers": "Who will need comfort or courage because of this message?",
+    "Evangelistic prayers": "How should we pray for people far from God who will hear this?",
+    "Church-wide prayer focus": "If the whole church prayed one prayer this week, what should it be?",
+  },
+  "impact.worship": {
+    "Service theme": "In one line, what should the whole service say?",
+    "Scripture reading": "Which passage should be read aloud, and why this one?",
+    "Confession prompt": "What should we lead the church to confess before this message?",
+    "Assurance of pardon": "What gospel assurance answers that confession?",
+    "Communion reflection": "How does this passage point to the table?",
+    "Song / theme direction": "What should the songs help people feel and declare?",
+  },
+  "shepherd.care": {
+    "Conversations this sermon may open": "What conversations is this sermon likely to open up in the lobby, in texts, in offices?",
+    "Pastoral care concerns": "Who might this message land hard on, and what care will they need (categories, not names)?",
+    "Follow-up Scriptures": "Which passages should we have ready for people this stirs?",
+    "Shepherding questions": "What questions will help a shepherd draw out what God is doing in someone?",
+  },
+  "shepherd.pathways": {
+    "Invite to prayer": "How will we invite a stirred person to be prayed for this week?",
+    "Recommend a resource": "What one resource fits someone this sermon moved?",
+    "Encourage confession": "How will we make confession a safe, clear next step?",
+    "Connect to a group": "How do we move a responder into real community?",
+    "Meet with pastor / elder": "How does someone get a conversation with a pastor or elder?",
+    "Encourage baptism / membership / service": "What is the on-ramp for a bigger step of obedience?",
+    "Follow-up email": "What would a short follow-up note to a responder say?",
+  },
+  "shepherd.sevenday": {
+    "Day 1 - Remember the big idea": "What one-line reminder of the big idea could you text someone on Monday?",
+    "Day 2 - Return to the passage": "How would you invite them back into the passage on Tuesday?",
+    "Day 3 - Confess and repent": "What gentle nudge toward confession fits midweek?",
+    "Day 4 - Believe the gospel promise": "Which promise from this text should they cling to on Thursday?",
+    "Day 5 - Practice obedience": "What single act of obedience could they attempt on Friday?",
+    "Day 6 - Pray with others": "How could they pray this passage with someone on Saturday?",
+    "Day 7 - Prepare for worship": "What would ready their heart for Sunday?",
+  },
+  "pack.group": {
+    "Opening question": "What question gets the group talking before anyone opens a Bible?",
+    "Read the passage": "How should the group read the passage together (whole, in parts, twice)?",
+    "Observation questions": "What questions make the group look closely at what the text says?",
+    "Interpretation questions": "What questions push the group to what the text means?",
+    "Application questions": "What questions turn the meaning into Monday-morning obedience?",
+    "Prayer prompts": "How should the group pray in response to this passage?",
+    "Leader notes": "What does a leader need to know before walking into this discussion?",
+  },
+  "pack.personal": {
+    "Main idea": "In one sentence, what should a reader carry from this sermon?",
+    "Key Scripture": "Which verse anchors this reflection?",
+    "Reflection questions": "What questions help someone sit honestly with this text alone?",
+    "Confession prompt": "What does this passage invite a person to confess?",
+    "Prayer prompt": "How should someone pray this passage back to God?",
+    "One obedience step": "What is one concrete step of obedience before next Sunday?",
+  },
+  "pack.family": {
+    "Big idea for kids": "How would you say the big idea so a seven-year-old gets it?",
+    "Dinner table question": "What question could a parent ask over dinner?",
+    "Car ride question": "What question fits a five-minute car ride?",
+    "Prayer with children": "How could a parent pray this passage with their kids?",
+    "Family practice this week": "What could the family do together this week to live this text?",
+    "Memory verse suggestion": "Which short verse could the family memorize together?",
+  },
+  "pack.devotional": {
+    "Day 1": "Day 1: how do we re-enter the passage the day after hearing it?",
+    "Day 2": "Day 2: what does this text show us about God to dwell on?",
+    "Day 3": "Day 3: where does this text confront us, and how do we respond?",
+    "Day 4": "Day 4: what gospel promise here should we believe today?",
+    "Day 5": "Day 5: what does obedience to this text look like today?",
+    "Day 6": "Day 6: how do we carry this text toward others?",
+    "Day 7": "Day 7: how does this week of dwelling prepare us for worship?",
+  },
+  "pack.memory": {
+    "Verse reference": "Which single verse should the church carry out of this sermon?",
+    "Verse text": "Write the verse out in your preaching translation.",
+    "Why this verse matters": "In a sentence or two, why this verse from this sermon?",
+    "Simple memorization prompt": "How would you coach someone to memorize it this week?",
+  },
+  "pack.nextsteps": {
+    "Repent": "What should we turn from in response to this sermon?",
+    "Believe": "What should we believe and preach to ourselves this week?",
+    "Practice": "What should we do - concretely - before next Sunday?",
+    "Discuss": "What should we talk about with someone this week?",
+    "Pray": "What should we pray, alone or together?",
+    "Serve": "How does this sermon send us to serve someone?",
+    "Share": "Who needs to hear what we heard, and what would we say?",
+  },
+};
+
+function ministryQuestion(store, cardKey, field) {
+  return MINISTRY_QUESTIONS[`${store}.${cardKey}`]?.[field] || "";
+}
+
+// Everything the starters draw from - all of it the preacher's own work.
+function ministryStarterContext(active) {
+  const str = (value) => (typeof value === "string" ? value.trim() : "");
+  const passage = str(active.passage) || "this passage";
+  const bigIdea = str(worksheetValue(active, "aim", "burden"));
+  return {
+    passage,
+    title: str(active.title),
+    bigIdea,
+    idea: bigIdea || `the message of ${passage}`,
+    fallen: str(worksheetValue(active, "aim", "fallen")),
+    purpose: str(worksheetValue(active, "aim", "purpose")),
+    christ: str(worksheetValue(active, "gospel", "christ")),
+    grace: str(worksheetValue(active, "gospel", "grace")),
+    movements: (active.outline || []).map((movement) => movement.title.trim()).filter(Boolean),
+    applications: sermonAudiences(active)
+      .map((audience) => [audience, str(worksheetValue(active, "application", audience))])
+      .filter(([, text]) => text),
+  };
+}
+
+// Sermon-drawn starter suggestions for a question. Deterministic templates,
+// keyed on what the field is doing; every starter leans on the sermon's own
+// passage, big idea, and work so nothing arrives out of thin air.
+function ministryStarters(field, ctx) {
+  const label = field.toLowerCase();
+  const idea = ctx.idea;
+  const starters = [];
+  const respond = ctx.purpose || `respond to ${ctx.passage} with real obedience`;
+  if (/prayer|pray/.test(label)) {
+    starters.push(`That our people would take ${ctx.passage} seriously this week: ${idea}`);
+    if (/repent|confess/.test(label)) starters.push(ctx.fallen ? `Lord, we confess that ${lowerFirst(ctx.fallen)} Forgive us and turn our hearts.` : `Lord, show us where ${ctx.passage} confronts us, and give us honest repentance.`);
+    if (/encourag|comfort/.test(label)) starters.push(`For the weary and hurting among us: that ${ctx.passage} would be comfort, not condemnation.`);
+    if (/evangel|far from god/.test(label)) starters.push(`For friends and family far from God: that ${idea} would sound like good news, not religion.`);
+    if (/church-wide|one prayer/.test(label)) starters.push(`Father, make us a people who ${lowerFirst(respond)}`);
+  } else if (/focus|emphasis|theme/.test(label)) {
+    starters.push(`Keep ${ctx.passage} in front of people this week: ${idea}`);
+    if (ctx.movements.length) starters.push(`The sermon moves through: ${ctx.movements.join(" / ")}. Every ministry can reinforce one of these.`);
+  } else if (/reminder/.test(label)) {
+    starters.push(`As we serve this week, remember what we preached: ${idea}`);
+  } else if (/follow-up|meetings|people \/ categories/.test(label)) {
+    starters.push(`People this sermon may stir: anyone wrestling with ${ctx.fallen ? lowerFirst(ctx.fallen).replace(/\.$/, "") : `what ${ctx.passage} confronts`}. Plan gentle follow-up.`);
+  } else if (/scripture reading|key scripture|verse reference/.test(label)) {
+    starters.push(`${ctx.passage}${ctx.title ? ` (preached as "${ctx.title}")` : ""}`);
+  } else if (/observation/.test(label)) {
+    starters.push(`What words or ideas repeat in ${ctx.passage}? What did you notice on a second read that you missed on the first?`);
+  } else if (/interpretation/.test(label)) {
+    starters.push(`What is ${ctx.passage} actually claiming? Put the main point in your own words: is it "${idea}"?`);
+  } else if (/application question/.test(label)) {
+    starters.push(`If we believed ${ctx.passage} all week, what would change by Friday? What is one specific step for you?`);
+  } else if (/opening question/.test(label)) {
+    starters.push(`Before we read: when have you experienced something like what ${ctx.passage} describes?`);
+  } else if (/big idea for kids/.test(label)) {
+    starters.push(ctx.bigIdea ? `Kid version: ${ctx.bigIdea}` : `Say ${ctx.passage} in ten words a child can repeat.`);
+  } else if (/dinner|car ride/.test(label)) {
+    starters.push(`What did you hear on Sunday about ${ctx.passage}? What do you think God wants our family to do about it?`);
+  } else if (/confession/.test(label)) {
+    starters.push(ctx.fallen ? `Where ${ctx.passage} confronts us: ${lowerFirst(ctx.fallen)}` : `Name where ${ctx.passage} confronts you, plainly, before God.`);
+  } else if (/assurance|promise|believe/.test(label)) {
+    starters.push(ctx.grace || ctx.christ || `The good news under ${ctx.passage}: God gives what He commands.`);
+  } else if (/obedience|practice|next step/.test(label)) {
+    const application = ctx.applications[0];
+    starters.push(application ? `${application[1]}` : `One concrete step from ${ctx.passage} before next Sunday - specific enough to actually do.`);
+  } else if (/communion|table/.test(label)) {
+    starters.push(ctx.christ ? `At the table, remember: ${lowerFirst(ctx.christ)}` : `Trace ${ctx.passage} to the cross, and let the table preach it again.`);
+  } else if (/song/.test(label)) {
+    starters.push(`Songs that declare ${idea} - and give space to respond, not just perform.`);
+  } else if (/day \d/.test(label)) {
+    starters.push(`${ctx.passage}: ${idea}`);
+  } else if (/memoriz/.test(label)) {
+    starters.push(`Read it aloud each morning, write it once each evening, and say it from memory by Saturday.`);
+  } else if (/leader notes/.test(label)) {
+    starters.push(`The sermon's aim: ${idea}${ctx.movements.length ? ` It moved through: ${ctx.movements.join(", ")}.` : ""} Keep the group in the text, not in opinions.`);
+  } else if (/resource/.test(label)) {
+    starters.push(`A book, sermon, or passage plan that continues what ${ctx.passage} started.`);
+  } else {
+    starters.push(`From ${ctx.passage}: ${idea}`);
+  }
+  return starters.filter(Boolean).slice(0, 3);
+}
+
+function lowerFirst(value) {
+  const text = String(value || "").trim();
+  return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
 // Pull per-question answers back out of a card's labeled text blob, so the
 // wizard can revisit a section that already has writing in it.
 function parseMinistryAnswers(value, fields) {
@@ -5925,6 +6120,104 @@ function composeMinistryAnswers(fields, answers) {
   return fields.map((field) => `${field}:\n${(answers[field] || "").trim()}`).join("\n\n");
 }
 
+// Turn a card's labeled text into a clean, professional document: a
+// handout header, each question as a bold heading, answers as paragraphs
+// and real lists. Used for the on-screen view, rich copy, and exports.
+function formatAnswerHtml(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n").map((line) => line.trim());
+  const out = [];
+  let list = "";
+  const closeList = () => {
+    if (list) {
+      out.push(`</${list}>`);
+      list = "";
+    }
+  };
+  for (const line of lines) {
+    if (!line) {
+      closeList();
+      continue;
+    }
+    const bullet = line.match(/^[-•*]\s+(.*)$/);
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet || numbered) {
+      const kind = bullet ? "ul" : "ol";
+      if (list !== kind) {
+        closeList();
+        out.push(`<${kind}>`);
+        list = kind;
+      }
+      out.push(`<li>${escapeHtml((bullet || numbered)[1])}</li>`);
+      continue;
+    }
+    closeList();
+    out.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  closeList();
+  return out.join("");
+}
+
+function ministryDocHtml(active, store, card) {
+  const value = ministryStore(store)?.[card.key] || active?.[store]?.[card.key] || "";
+  const answers = parseMinistryAnswers(value, card.fields);
+  const churchName = typeof state.lens?.["profile.name"] === "string" ? state.lens["profile.name"].trim() : "";
+  const metaBits = [
+    active?.title ? `"${active.title}"` : "",
+    active?.passage || "",
+    active?.date ? fmtDate(active.date) : "",
+    churchName,
+  ].filter(Boolean);
+  const sections = card.fields
+    .filter((field) => (answers[field] || "").trim())
+    .map((field) => `<h4>${escapeHtml(ministryQuestion(store, card.key, field) ? field : field)}</h4>${formatAnswerHtml(answers[field])}`)
+    .join("");
+  return `
+    <div class="pf-mdoc">
+      <div class="pf-mdoc-head">
+        <h3>${escapeHtml(card.title)}</h3>
+        ${metaBits.length ? `<p>${escapeHtml(metaBits.join(" · "))}</p>` : ""}
+      </div>
+      ${sections || `<p class="pf-helper">Nothing written yet.</p>`}
+    </div>
+  `;
+}
+
+function ministryDocPlainText(active, store, card) {
+  const value = ministryStore(store)?.[card.key] || "";
+  const answers = parseMinistryAnswers(value, card.fields);
+  const churchName = typeof state.lens?.["profile.name"] === "string" ? state.lens["profile.name"].trim() : "";
+  const lines = [card.title.toUpperCase()];
+  const metaBits = [active?.title ? `"${active.title}"` : "", active?.passage || "", active?.date ? fmtDate(active.date) : "", churchName].filter(Boolean);
+  if (metaBits.length) lines.push(metaBits.join(" · "));
+  lines.push("");
+  card.fields.forEach((field) => {
+    const answer = (answers[field] || "").trim();
+    if (!answer) return;
+    lines.push(field.toUpperCase(), answer, "");
+  });
+  return lines.join("\n").trim();
+}
+
+// Copy that pastes formatted into Word, Docs, and email - with a plain
+// fallback for anything that can't take HTML.
+async function copyRichText(html, plain) {
+  try {
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        }),
+      ]);
+      showBanner("Copied with formatting - paste into Docs, Word, or email.");
+      return;
+    }
+  } catch {
+    // fall through to plain copy
+  }
+  copyText(plain);
+}
+
 function ministryWizardFor(store, key) {
   const wizard = ui.ministryWizard;
   return wizard && wizard.store === store && wizard.key === key ? wizard : null;
@@ -5940,14 +6233,22 @@ function finishMinistryWizard() {
     touchMinistryStore(wizard.store);
   }
   ui.ministryWizard = null;
-  if (hasContent) showBanner("Section complete - every answer is below, ready to edit.");
+  ui.ministryEdit = null;
+  // Keep this section expanded so the finished, formatted result is the
+  // first thing the leader sees.
+  ui.ministryOpen = `${wizard.store}.${wizard.key}`;
+  if (hasContent) showBanner("Section complete - formatted and ready to copy or edit.");
   render();
 }
 
-// One question at a time: the question large, one answer box, Back / Next.
+// One question at a time: a real question, sermon-drawn starters to tap,
+// one answer box, Back / Next.
 function renderMinistryWizard(card, wizard) {
   const field = wizard.fields[wizard.step];
   const last = wizard.step === wizard.fields.length - 1;
+  const question = ministryQuestion(wizard.store, wizard.key, field);
+  const active = getActive();
+  const starters = active ? ministryStarters(field, ministryStarterContext(active)) : [];
   return `
     <section class="pf-card-box pf-checklist-card pf-wizard-card">
       <div class="pf-checklist-head">
@@ -5955,8 +6256,17 @@ function renderMinistryWizard(card, wizard) {
         <span class="pf-checklist-count">Question ${wizard.step + 1} of ${wizard.fields.length}</span>
       </div>
       <div class="pf-wizard-progress" aria-hidden="true"><i style="width:${Math.round(((wizard.step + 1) / wizard.fields.length) * 100)}%"></i></div>
-      <label class="pf-wizard-question">${escapeHtml(field)}</label>
-      <textarea class="pf-ws-input" rows="4" data-action="ministry-wizard-answer" data-note-key="mw-${attr(wizard.store)}-${attr(wizard.key)}-${wizard.step}" placeholder="Write it plainly. You can refine it on the completed screen.">${escapeHtml(wizard.answers[field] || "")}</textarea>
+      <label class="pf-wizard-question">${escapeHtml(question || field)}</label>
+      ${question ? `<p class="pf-wizard-fieldname">Goes in the "${escapeHtml(field)}" line of the finished resource.</p>` : ""}
+      <textarea class="pf-ws-input" rows="4" data-action="ministry-wizard-answer" data-note-key="mw-${attr(wizard.store)}-${attr(wizard.key)}-${wizard.step}" placeholder="Write it plainly - or tap a starter below and make it yours.">${escapeHtml(wizard.answers[field] || "")}</textarea>
+      ${
+        starters.length
+          ? `<div class="pf-wizard-starters">
+              <span class="pf-wizard-starters-label">From your sermon - tap to insert, then edit:</span>
+              ${starters.map((starter) => `<button class="pf-starter" data-action="ministry-wizard-suggest" data-text="${attr(starter)}">${escapeHtml(starter)}</button>`).join("")}
+            </div>`
+          : ""
+      }
       <div class="pf-modal-actions" style="margin-top:12px;">
         <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-cancel">Save and exit</button>
         <span style="flex:1;"></span>
@@ -5978,15 +6288,17 @@ function renderMinistryCard(store, card, storeObj) {
       ? renderMinistryCardFilled(store, card, storeObj)
       : `
       <section class="pf-card-box pf-checklist-card" style="margin-top:10px;">
-        <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} questions, one at a time: ${escapeHtml(card.fields[0])}${card.fields[1] ? `, then ${escapeHtml(card.fields[1].toLowerCase())}` : ""}, and so on. When you finish, the whole section appears here, ready to edit. Or let Sermon Guide draft a starting point from your sermon.</p>
+        <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} real questions, one at a time - starting with: "${escapeHtml(ministryQuestion(store, card.key, card.fields[0]) || card.fields[0])}" Each question comes with starters drawn from your sermon, so you never begin from a blank box. Or let Sermon Guide draft the whole section from your sermon.</p>
         <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
           <button class="pf-btn pf-btn-primary" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}">Start the questions</button>
           <button class="pf-btn" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === `${store}.${card.key}` ? "Drafting…" : "Draft with Sermon Guide"}</button>
         </div>
       </section>
     `;
+  const specKey = `${store}.${card.key}`;
+  const stayOpen = wizard || ui.ministryEdit === specKey || ui.ministryOpen === specKey;
   return `
-    <details class="pf-ministry-acc" ${wizard ? "open" : ""}>
+    <details class="pf-ministry-acc" ${stayOpen ? "open" : ""}>
       <summary>
         <span class="pf-ministry-acc-title">${escapeHtml(card.title)}</span>
         <span class="pf-ministry-acc-desc">${escapeHtml(card.desc)}</span>
@@ -6000,20 +6312,25 @@ function renderMinistryCard(store, card, storeObj) {
 function renderMinistryCardFilled(store, card, storeObj) {
   const specKey = `${store}.${card.key}`;
   const drafting = ui.drafting === specKey;
+  const editing = ui.ministryEdit === specKey;
+  const active = getActive();
   return `
     <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head" style="align-items:flex-start;">
-        <div style="min-width:0;">
-          <span class="pf-eyebrow">${escapeHtml(card.title)}</span>
-          <p class="pf-ministry-desc">${escapeHtml(card.desc)}</p>
-        </div>
-        <div class="pf-ministry-actions">
-          <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Walk the questions again, one at a time">Revisit questions</button>
-          <button class="pf-btn pf-btn-ghost" data-action="ministry-copy" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Copy this card's content">Copy</button>
-          <button class="pf-btn" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${drafting ? "Drafting…" : "Draft with Sermon Guide"}</button>
-        </div>
+      <div class="pf-ministry-actions" style="justify-content:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+        ${
+          editing
+            ? `<button class="pf-btn pf-btn-primary" data-action="ministry-edit-done" data-store="${attr(store)}" data-key="${attr(card.key)}">Done editing</button>`
+            : `<button class="pf-btn" data-action="ministry-edit" data-store="${attr(store)}" data-key="${attr(card.key)}">Edit</button>
+               <button class="pf-btn" data-action="ministry-copy-formatted" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Copies with formatting - paste into Docs, Word, or email">Copy formatted</button>
+               <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Walk the questions again, one at a time">Revisit questions</button>
+               <button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${drafting ? "Drafting…" : "Draft with Sermon Guide"}</button>`
+        }
       </div>
-      <textarea class="pf-ws-input pf-ministry-area" rows="${Math.max(6, card.fields.length + 2)}" data-action="ministry-field" data-store="${attr(store)}" data-key="${attr(card.key)}">${escapeHtml(ministryValue(ministryStore(store), card.key, card.fields))}</textarea>
+      ${
+        editing
+          ? `<textarea class="pf-ws-input pf-ministry-area" rows="${Math.max(6, card.fields.length + 2)}" data-action="ministry-field" data-store="${attr(store)}" data-key="${attr(card.key)}">${escapeHtml(ministryValue(ministryStore(store), card.key, card.fields))}</textarea>`
+          : ministryDocHtml(active, store, card)
+      }
     </section>
   `;
 }
@@ -9751,6 +10068,36 @@ document.addEventListener("click", (event) => {
   if (action === "ministry-wizard-cancel") {
     finishMinistryWizard();
   }
+  if (action === "ministry-edit") {
+    ui.ministryEdit = `${target.dataset.store}.${target.dataset.key}`;
+    render();
+  }
+  if (action === "ministry-edit-done") {
+    ui.ministryEdit = null;
+    render();
+  }
+  if (action === "ministry-copy-formatted") {
+    const active = getActive();
+    const cards = { impact: IMPACT_CARDS, shepherd: SHEPHERD_CARDS, pack: PACK_CARDS }[target.dataset.store] || [];
+    const card = cards.find((entry) => entry.key === target.dataset.key);
+    if (!active || !card) return;
+    copyRichText(ministryDocHtml(active, target.dataset.store, card), ministryDocPlainText(active, target.dataset.store, card));
+  }
+  if (action === "ministry-wizard-suggest") {
+    const wizard = ui.ministryWizard;
+    if (!wizard) return;
+    const field = wizard.fields[wizard.step];
+    const existing = (wizard.answers[field] || "").trim();
+    wizard.answers[field] = existing ? `${existing}\n${target.dataset.text}` : target.dataset.text;
+    render();
+    requestAnimationFrame(() => {
+      const area = document.querySelector('[data-action="ministry-wizard-answer"]');
+      if (area) {
+        area.focus();
+        area.setSelectionRange(area.value.length, area.value.length);
+      }
+    });
+  }
   if (action === "lib-import-open") {
     ui.libImport = { show: true, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
     render();
@@ -10352,13 +10699,19 @@ document.addEventListener("click", (event) => {
       showBanner("Nothing to export yet.");
       return;
     }
+    const cards = { impact: IMPACT_CARDS, shepherd: SHEPHERD_CARDS, pack: PACK_CARDS }[resource.store] || [];
+    const card = cards.find((entry) => entry.key === resource.field);
     const heading = `${resource.label} - ${active.passage || "Sermon"}`;
+    const docHtml = card
+      ? ministryDocHtml(active, resource.store, card)
+      : `<h1>${escapeHtml(heading)}</h1><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p>`;
     if (action === "delivery-copy") {
-      copyText(text);
+      if (card) copyRichText(docHtml, ministryDocPlainText(active, resource.store, card));
+      else copyText(text);
     } else if (target.dataset.format === "pdf") {
-      exportPdf(heading, `<section class="sermon"><h1>${escapeHtml(heading)}</h1><div class="note"><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p></div></section>`);
+      exportPdf(heading, `<section class="sermon">${docHtml}</section>`);
     } else if (target.dataset.format === "doc") {
-      exportDoc(heading, `<h1>${escapeHtml(heading)}</h1><p>${escapeHtml(text).replaceAll("\n", "<br>")}</p>`);
+      exportDoc(heading, docHtml);
     } else {
       downloadText(`${slug(active.passage)}-${resource.key}.md`, `# ${heading}\n\n${text}\n`);
     }
