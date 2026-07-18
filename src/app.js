@@ -628,6 +628,8 @@ const ui = {
     configured: false,
     client: null,
     user: null,
+    recovery: false,
+    confirmInput: "",
     accessToken: "",
     emailInput: "",
     passwordInput: "",
@@ -1518,7 +1520,33 @@ function renderOpenAIKeyPanel() {
 
 const GOOGLE_G_SVG = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>`;
 
+function renderPasswordResetScreen() {
+  return `
+    <div class="pf-signin-wrap">
+      <div class="pf-signin-inner">
+        <div class="pf-signin-head">
+          <a class="pf-signin-mark" href="./" aria-label="PreachFlow home" style="text-decoration:none;">${pfMarkSvg(30)}</a>
+          <h1 class="pf-signin-title">Set a new password</h1>
+          <p class="pf-signin-subtitle">You're verified. Choose a new password for ${escapeHtml(ui.auth.user?.email || "your account")} and you're back in.</p>
+        </div>
+        <div class="pf-signin-card">
+          <div class="pf-field">
+            <label class="pf-label" for="reset-password">New password</label>
+            <input id="reset-password" class="pf-input" type="password" data-action="auth-password-input" value="${attr(ui.auth.passwordInput)}" placeholder="At least 6 characters" autocomplete="new-password" />
+          </div>
+          <div class="pf-field">
+            <label class="pf-label" for="reset-confirm">Confirm new password</label>
+            <input id="reset-confirm" class="pf-input" type="password" data-action="auth-confirm-input" value="${attr(ui.auth.confirmInput)}" placeholder="Type it again" autocomplete="new-password" />
+          </div>
+          <button class="pf-signin-submit" data-action="password-reset-save" ${ui.auth.loading ? "disabled" : ""}>${ui.auth.loading ? "Saving…" : "Save new password"}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSignin(active) {
+  if (ui.auth.recovery) return renderPasswordResetScreen();
   if (ui.auth.user) return renderProfile(active);
   const creating = ui.signinMode === "signup";
   const disabled = ui.auth.loading || !ui.auth.configured;
@@ -1900,7 +1928,7 @@ function renderProfileAccountTab(active) {
       <div class="pf-account-row">
         <div style="flex:1;">
           <div class="pf-account-label">${ui.auth.user ? "Signed in" : "Working on this device"}</div>
-          <div class="pf-account-meta">${ui.auth.user ? escapeHtml(ui.auth.user.email || "") : "Everything saves here automatically. Sign in to sync across devices, keep backups, and use Sermon Guide with zero setup."}</div>
+          <div class="pf-account-meta">${ui.auth.user ? escapeHtml(ui.auth.user.email || "") : "Everything saves here automatically. Sign in to sync across devices, keep backups, and use Sermon Guide with zero setup. Signed in before on this device? The session expired or was cleared - one sign-in brings it back and it sticks."}</div>
         </div>
         ${ui.auth.user ? "" : `<button class="pf-btn pf-btn-primary" data-action="go-signin">Sign in / create account</button>`}
       </div>
@@ -8597,15 +8625,26 @@ async function initSupabase(config) {
   ui.auth.user = data.session?.user || null;
   ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Sign in to sync across devices";
   ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
+  // Show the restored session right away - the signed-in state must never
+  // depend on a later event to become visible.
+  render();
 
   ui.auth.client.auth.onAuthStateChange((event, session) => {
     ui.auth.user = session?.user || null;
     ui.auth.accessToken = session?.access_token || "";
     ui.auth.status = ui.auth.user ? "Loading cloud progress..." : "Signed out. Saving on this device.";
     ui.auth.statusKey = ui.auth.user ? "syncing" : "neutral";
-    if (event === "SIGNED_IN" && state.view === "signin") state.view = "home";
+    if (event === "PASSWORD_RECOVERY") {
+      // The user arrived from a password-reset email: take them straight
+      // to the set-a-new-password screen.
+      ui.auth.recovery = true;
+      ui.auth.passwordInput = "";
+      ui.auth.confirmInput = "";
+      state.view = "signin";
+    }
+    if (event === "SIGNED_IN" && state.view === "signin" && !ui.auth.recovery) state.view = "home";
     render();
-    if (ui.auth.user) loadCloudState();
+    if (ui.auth.user && event !== "PASSWORD_RECOVERY") loadCloudState();
   });
 
   if (ui.auth.user) await loadCloudState();
@@ -8656,6 +8695,60 @@ function afterSignedIn() {
   state.view = ui.lastView && ui.lastView !== "signin" ? ui.lastView : "workspace";
 }
 
+async function sendPasswordReset() {
+  if (!requireAuthConfigured()) return;
+  const email = ui.auth.emailInput.trim();
+  if (!email) {
+    showBanner("Enter your email above first, then tap Forgot.");
+    return;
+  }
+  ui.auth.loading = true;
+  ui.auth.status = "Sending a password reset link...";
+  ui.auth.statusKey = "syncing";
+  render();
+  const { error } = await ui.auth.client.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/app`,
+  });
+  ui.auth.loading = false;
+  if (error) {
+    ui.auth.status = error.message || "Could not send the reset link.";
+    ui.auth.statusKey = "missing";
+    showBanner("Could not send the reset link.");
+  } else {
+    ui.auth.status = "Check your email for a password reset link. Opening it brings you back here to set a new password.";
+    ui.auth.statusKey = "ready";
+    showBanner("Password reset link sent - check your email.");
+  }
+  render();
+}
+
+async function savePasswordReset() {
+  const password = ui.auth.passwordInput;
+  const confirm = ui.auth.confirmInput;
+  if (password.length < 6) {
+    showBanner("Use a password of at least 6 characters.");
+    return;
+  }
+  if (password !== confirm) {
+    showBanner("The two passwords don't match.");
+    return;
+  }
+  ui.auth.loading = true;
+  render();
+  const { error } = await ui.auth.client.auth.updateUser({ password });
+  ui.auth.loading = false;
+  if (error) {
+    showBanner(error.message || "Could not update the password.");
+  } else {
+    ui.auth.recovery = false;
+    ui.auth.passwordInput = "";
+    ui.auth.confirmInput = "";
+    state.view = "home";
+    showBanner("Password updated - you're signed in.");
+  }
+  render();
+}
+
 async function signInWithPassword() {
   if (!requireAuthConfigured()) return;
   const email = ui.auth.emailInput.trim();
@@ -8672,9 +8765,11 @@ async function signInWithPassword() {
   const { error } = await ui.auth.client.auth.signInWithPassword({ email, password });
   ui.auth.loading = false;
   if (error) {
-    ui.auth.status = error.message || "Could not sign in.";
+    ui.auth.status = /invalid login credentials/i.test(error.message || "")
+      ? "That email and password don't match an account here. If you usually sign in with Google or an email link, use that instead - or tap Forgot to set a password for this email."
+      : error.message || "Could not sign in.";
     ui.auth.statusKey = "missing";
-    showBanner("Sign-in failed.");
+    showBanner("Sign-in failed - see the note below the form.");
   } else {
     afterSignedIn();
     showBanner("Signed in.");
@@ -10101,7 +10196,10 @@ document.addEventListener("click", (event) => {
     render();
   }
   if (action === "forgot-password") {
-    sendMagicLink();
+    sendPasswordReset();
+  }
+  if (action === "password-reset-save") {
+    savePasswordReset();
   }
   if (action === "send-magic-link") {
     sendMagicLink();
@@ -10450,6 +10548,9 @@ document.addEventListener("input", (event) => {
   }
   if (action === "auth-password-input") {
     ui.auth.passwordInput = target.value;
+  }
+  if (action === "auth-confirm-input") {
+    ui.auth.confirmInput = target.value;
   }
   if (action === "switcher-query") {
     ui.switcherQuery = target.value;
