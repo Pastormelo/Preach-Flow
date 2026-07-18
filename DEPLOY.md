@@ -30,7 +30,7 @@ SUPABASE_ANON_KEY
 https://your-site.vercel.app
 ```
 
-8. Add the same URL to Redirect URLs so magic-link login returns to Preach Flow.
+8. Add the same URL to Redirect URLs so magic-link login returns to Preach Flow. Also add the `/app` path (for example `https://your-site.vercel.app/app`) so password-reset emails can return the user to the set-a-new-password screen.
 
 ## Option 1: Vercel Dashboard + GitHub
 

@@ -4310,3 +4310,70 @@ p {
   color: var(--text-brand);
   user-select: none;
 }
+
+/* --- Ministry documents: professional formatted view --- */
+.pf-mdoc {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+  padding: 22px 26px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.pf-mdoc-head {
+  border-bottom: 2px solid var(--brand);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.pf-mdoc-head h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.pf-mdoc-head p { margin: 3px 0 0; font-size: 13px; color: var(--text-muted); }
+.pf-mdoc h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-brand);
+  margin: 16px 0 6px;
+}
+.pf-mdoc h4:first-of-type { margin-top: 0; }
+.pf-mdoc p { margin: 0 0 8px; color: var(--text-secondary); }
+.pf-mdoc ul, .pf-mdoc ol { margin: 0 0 8px 22px; color: var(--text-secondary); }
+.pf-mdoc li { margin-bottom: 5px; }
+
+/* --- Wizard starters --- */
+.pf-wizard-fieldname { font-size: 12.5px; color: var(--text-muted); margin: -4px 0 10px; }
+.pf-wizard-starters { margin-top: 10px; }
+.pf-wizard-starters-label {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+}
+.pf-starter {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 9px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pf-starter:hover { border-color: var(--brand); background: var(--brand-soft); color: var(--text-primary); }
