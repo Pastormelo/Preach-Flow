@@ -134,12 +134,6 @@ const PHASES = [
     ],
     actions: [
       {
-        label: "Build a Logos research plan",
-        direct: true,
-        seed:
-          "Build me a Logos research plan for this passage - exact searches and tools (Passage Guide, Exegetical Guide, Bible Word Study, Factbook, Smart Search, Precise Search, commentaries, cross references), organized by exegetical issues, background, biblical theology, systematic theology, pastoral application, and illustration. Prefer Sailhamer, Stott, Carson, Atkinson. Tell me exactly what to copy back.",
-      },
-      {
         label: "Interrogate my research",
         placeholder: "Paste your commentary and research notes...",
         seed:
@@ -378,7 +372,7 @@ const PHASE_RESOURCES = {
   commentary: [
     { url: "https://www.bestcommentaries.com", label: "Best Commentaries", note: "Which commentaries deserve your hours on this book." },
     { url: "https://bibleproject.com/explore", label: "BibleProject", note: "Book overviews for canonical and literary context." },
-    { url: "https://www.logos.com", label: "Logos", note: "Run the research plan Sermon Guide builds for you." },
+    { url: "https://www.logos.com", label: "Logos", note: "Passage guides, word studies, and your commentary library." },
   ],
   aim: [
     { url: "https://simeontrust.org", label: "Simeon Trust", note: "Workshop instruction on landing a text-driven big idea." },
