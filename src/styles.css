@@ -4501,3 +4501,42 @@ p {
   vertical-align: 1px;
 }
 .pm-sec-add:hover { border-color: var(--brand); color: var(--text-brand); background: var(--brand-soft); }
+
+/* --- Sermon Guide door in the phase rail (static, above Prev/Next) --- */
+.pf-rail-cta {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border-radius: 12px;
+}
+.pf-rail-cta span {
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.pf-rail-cta em {
+  display: block;
+  margin-left: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.pf-rail-cta.open {
+  border-style: dashed;
+  background: transparent;
+}
+.pf-rail-cta.open span { font-weight: 700; }
+.pf-rail-devotional {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.pf-rail-devotional svg { margin-top: 1px; }
