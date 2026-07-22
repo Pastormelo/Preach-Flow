@@ -1,5 +1,5 @@
 /* =====================================================================
-   Preach Flow — One Family Church redesign
+   Preach Flow - One Family Church redesign
    Token-driven, light + dark themes. Components reference semantic
    variables only; the brand orange (#FF953E) is constant across themes.
    ===================================================================== */
@@ -3054,7 +3054,7 @@ p {
 }
 
 /* =====================================================================
-   Pulpit View — focused preaching interface (practice + live)
+   Pulpit View - focused preaching interface (practice + live)
    ===================================================================== */
 .pf-pulpit {
   position: fixed;
@@ -4377,3 +4377,127 @@ p {
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .pf-starter:hover { border-color: var(--brand); background: var(--brand-soft); color: var(--text-primary); }
+
+/* --- Single bold Sermon Guide door --- */
+.pf-coach-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 2px solid var(--brand);
+  border-radius: 14px;
+  background: var(--brand-soft);
+  padding: 14px 18px;
+  cursor: pointer;
+  font-family: var(--font-display);
+}
+.pf-coach-cta span {
+  font-weight: 800;
+  font-size: 15.5px;
+  color: var(--text-primary);
+}
+.pf-coach-cta em {
+  font-style: normal;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-left: auto;
+  flex: none;
+}
+.pf-coach-cta:hover { background: var(--brand); }
+.pf-coach-cta:hover span, .pf-coach-cta:hover em { color: #1c1206; }
+@media (max-width: 700px) {
+  .pf-coach-cta em { display: none; }
+}
+
+/* --- Outline part drag reorder --- */
+.pf-part-drag {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 13px;
+  letter-spacing: -2px;
+  padding: 0 6px 0 0;
+  user-select: none;
+}
+.pf-part-drag:active { cursor: grabbing; }
+.pf-outline-part.dragging { opacity: 0.45; }
+.pf-outline-part.drop-target { outline: 2px dashed var(--brand); outline-offset: 2px; }
+
+/* --- Google Docs standout button in the import modal --- */
+.pf-gdocs-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  border: 2px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-card);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pf-gdocs-cta:hover { border-color: var(--brand); background: var(--brand-soft); }
+.pf-gdocs-cta svg { flex: none; width: 22px; height: 22px; }
+.pf-gdocs-cta strong { display: block; font-family: var(--font-display); font-size: 15px; color: var(--text-primary); }
+.pf-gdocs-cta em { display: block; font-style: normal; font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* --- Readiness questions + big phase buttons --- */
+.pf-btn-big { font-size: 15.5px; padding: 13px 22px; }
+.pf-ready-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  margin-bottom: 7px;
+  cursor: pointer;
+  font-size: 14.5px;
+  color: var(--text-secondary);
+}
+.pf-ready-row input { margin-top: 3px; flex: none; }
+.pf-ready-row.done { border-color: rgba(22, 163, 74, 0.45); background: rgba(22, 163, 74, 0.06); }
+.pf-ready-row.done span { color: var(--text-primary); }
+
+/* --- Passage Map: section pills + add markers --- */
+.pm-sec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--brand);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--text-brand);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 12px;
+  margin: 14px 0 2px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-sec-pill:hover, .pm-sec-pill.active { background: var(--brand); color: #1c1206; }
+.pm-sec-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.pm-sec-add:hover { border-color: var(--brand); color: var(--text-brand); background: var(--brand-soft); }

@@ -155,10 +155,10 @@ const PHASES = [
     focus:
       "Settle the target before you build. Name the Fallen Condition the text addresses, the author's intended meaning, and land one governing proposition. Rifle, not shotgun.",
     doItems: [
-      "Identify the Fallen Condition Focus - the brokenness the text speaks to",
-      "State the A.I.M. / Central Idea of the Text",
-      "Write a present-tense proposition: my goal is for you to ___ so that ___",
-      "Distill the one big idea that governs everything",
+      "Name the main burden of the text in the worksheet",
+      "Identify the Fallen Condition the text confronts",
+      "Name how the gospel meets that condition",
+      "Write the present-tense purpose: my goal is for you to ___ so that ___",
     ],
     actions: [
       {
@@ -284,9 +284,7 @@ const PHASES = [
     focus:
       "Write it out, word for word, in your voice - clear, direct, pastoral, convictional, Scripture-saturated. You may not take the full manuscript to the pulpit, but writing it forces clarity. Pare it to preaching notes after.",
     doItems: [
-      "Write the full manuscript: intro, points, gospel, conclusion, call",
-      "Keep your voice - not academic, not fluffy, not social-media",
-      "Pare down to a brief set of pulpit notes",
+      "Write the full manuscript in your voice (500+ words) - the head start below is assembled from your own work",
     ],
     actions: [
       {
@@ -305,9 +303,8 @@ const PHASES = [
     focus:
       "Before you call it ready, run the full check. This is where Preach Flow makes sure nothing is missing - the gospel, Christ as hero, illustrations, specific application, the invitation, and a clear landing.",
     doItems: [
-      "Run the completeness and clarity check below",
-      "Fix only what is genuinely missing or unclear",
-      "Confirm it is ready to preach, not just written",
+      "Answer every readiness question below (or run the Sermon Guide check)",
+      "Fix what is genuinely missing, then confirm it is ready to preach",
     ],
     actions: [
       {
@@ -326,10 +323,10 @@ const PHASES = [
     focus:
       "Get it into your body. Mark the sentences to emphasize, plan your delivery, time it, and rehearse aloud - with notes and without. Confidence in the pulpit is built here.",
     doItems: [
-      "Write out the key sentences to emphasize, verbatim",
-      "Mark delivery notes: tone, where to slow down, raise energy, pause",
-      "Time a run-through against your goal length",
-      "Practice aloud - with notes, then without",
+      "Step 1 - Read the manuscript aloud once, and underline the sentences that must land word for word",
+      "Step 2 - Mark your delivery notes in the text: where to slow down, pause, drop the volume, or lift the energy",
+      "Step 3 - Open Preach It and time a full run-through against your target length",
+      "Step 4 - Run it once more without looking at your notes; keep only what you actually need",
     ],
     actions: [
       {
@@ -349,12 +346,7 @@ const PHASES = [
     focus:
       "The sermon is finished. Now prepare the preacher. Pray it in, invite honest feedback, and step into Sunday emptied of yourself and full of Christ.",
     doItems: [
-      "Pray for boldness and freedom in the pulpit",
-      "Pray for faithfulness to the text and illumination for all",
-      "Pray for the specific people you will preach to",
-      "Pray that the Word will not return void",
-      "Pray to be yourself and forget yourself",
-      "Ask 2 to 3 trusted people: What did I do well? What can I improve? Was the gospel preached?",
+      "Pray the sermon in: for boldness and freedom in the pulpit, for faithfulness to the text, for the specific people who will hear it, that the Word will not return void, and to be yourself while forgetting yourself",
     ],
     enc:
       "The sermon is finished. Now prepare the preacher. Forget yourself, and lift up Christ.",
@@ -467,6 +459,7 @@ function normalizePassageMap(map) {
             id: section.id || genId(),
             title: str(section.title),
             verseRange: str(section.verseRange),
+            startRef: str(section.startRef),
             summary: str(section.summary),
             mainIdea: str(section.mainIdea),
             functionInPassage: str(section.functionInPassage),
@@ -594,7 +587,7 @@ const ui = {
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "", coachCollapsed: null },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   refine: null,
-  pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, suggestion: null },
+  pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, selectedSection: "" },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
   ministryEdit: null,
@@ -2609,7 +2602,7 @@ function renderEditorPage(active) {
           <p class="pf-helper" style="margin-top:4px;">Same manuscript as the Workspace's Manuscript phase - write here or there, it's one document.</p>
         </div>
         <div class="pf-editor-actions">
-          ${ui.google.configured ? `<button class="pf-btn pf-btn-ghost" data-action="editor-gdoc-export" ${ui.google.loading ? "disabled" : ""}>${ui.google.loading ? "Sending…" : "Send to Google Docs"}</button>` : ""}
+          <button class="pf-btn pf-btn-ghost" data-action="editor-gdoc-export" ${ui.google.loading ? "disabled" : ""}>${ui.google.loading ? "Sending…" : "Send to Google Docs"}</button>
           <button class="pf-btn" data-view="pulpit">Preach It ▸</button>
           <button class="pf-btn pf-btn-ghost" data-view="slides">Slides</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
@@ -3238,9 +3231,10 @@ const AUTO_CHECKS = {
   "passagemap:3": { test: (s) => PM_SUMMARY_KEYS.some((key) => s.passageMap.summary[key].trim()), why: "the flow summary has begun" },
   "exegesis:0": { test: (s) => phaseTextLength(s, "exegesis") >= 120, why: "observations are written in this phase" },
   "commentary:1": { test: (s) => phaseTextLength(s, "commentary") >= 120, why: "research notes are written in this phase" },
-  "aim:0": { test: (s) => Boolean(worksheetValue(s, "aim", "fallen").trim()), why: "the Fallen condition is filled in the worksheet" },
-  "aim:1": { test: (s) => Boolean(worksheetValue(s, "aim", "burden").trim()), why: "the main burden is filled in the worksheet" },
-  "aim:2": { test: (s) => Boolean(worksheetValue(s, "aim", "purpose").trim()), why: "the sermon purpose is filled in the worksheet" },
+  "aim:0": { test: (s) => Boolean(worksheetValue(s, "aim", "burden").trim()), why: "the main burden is filled in the worksheet" },
+  "aim:1": { test: (s) => Boolean(worksheetValue(s, "aim", "fallen").trim()), why: "the Fallen condition is filled in the worksheet" },
+  "aim:2": { test: (s) => Boolean(worksheetValue(s, "aim", "gospelResponse").trim()), why: "the gospel response is filled in the worksheet" },
+  "aim:3": { test: (s) => Boolean(worksheetValue(s, "aim", "purpose").trim()), why: "the sermon purpose is filled in the worksheet" },
   "gospel:0": { test: (s) => Boolean(worksheetValue(s, "gospel", "christ").trim()), why: "the Christ connection is filled in the worksheet" },
   "gospel:1": { test: (s) => Boolean(worksheetValue(s, "gospel", "grace").trim()), why: "the grace-empowered response is filled in the worksheet" },
   "structure:0": { test: (s) => (s.outline || []).filter((m) => m.title.trim()).length >= 2, why: "the outline has two or more movements" },
@@ -3249,12 +3243,34 @@ const AUTO_CHECKS = {
     why: "counsel is written for two or more audiences",
   },
   "invitation:1": { test: (s) => phaseTextLength(s, "invitation") >= 60, why: "the invitation is written in this phase" },
-  "introtitle:0": { test: (s) => phaseTextLength(s, "introtitle") >= 150, why: "the introduction is drafted in this phase" },
+  "introtitle:0": { test: (s) => worksheetValue(s, "introtitle", "intro").trim().length >= 100, why: "the introduction is written in the worksheet" },
+  "introtitle:1": { test: (s) => Boolean(worksheetValue(s, "introtitle", "transition").trim()), why: "the transitional statement is written" },
   "introtitle:2": { test: (s) => Boolean(s.title.trim()), why: "the sermon has a title" },
   "manuscript:0": { test: (s) => manuscriptWordCount(s) >= 500, why: "the manuscript has real length (500+ words)" },
-  "readiness:0": { test: (s) => (s.thread || []).some((m) => m.phaseId === "readiness"), why: "the completeness check ran with Sermon Guide" },
+  "readiness:0": {
+    test: (s) => readinessAnswered(s) === READINESS_QUESTIONS.length || (s.thread || []).some((m) => m.phaseId === "readiness"),
+    why: "every readiness question is marked Ready (or the Sermon Guide check ran)",
+  },
   "delivery:2": { test: (s) => (s.practice?.runs || 0) > 0, why: "you timed a run-through in Preach It" },
 };
+
+// Some phases are pure worksheet work: when every checklist item passes
+// automatically, the phase marks itself complete.
+const AUTO_COMPLETE_PHASES = new Set(["aim", "introtitle", "manuscript"]);
+function maybeAutoCompletePhase(sermon, phaseId) {
+  if (!AUTO_COMPLETE_PHASES.has(phaseId) || sermon.completed.includes(phaseId)) return;
+  const phase = PHASES.find((item) => item.id === phaseId);
+  if (!phase) return;
+  const allDone = phase.doItems.every((item, index) => autoChecked(sermon, phaseId, index));
+  if (!allDone) return;
+  sermon.completed = [...sermon.completed, phaseId];
+  sermon.updatedAt = new Date().toISOString();
+  saveState();
+  showBanner(`${phase.name} complete - filled straight from your work.`);
+  // Re-rendering mid-keystroke would drop the caret in a contenteditable;
+  // the progress UI catches up on the next natural render.
+  if (!document.activeElement?.isContentEditable) render();
+}
 
 function phaseTextLength(sermon, phaseId) {
   const phase = PHASES.find((item) => item.id === phaseId);
@@ -3392,6 +3408,13 @@ const WORKSHEETS = {
       ["purpose", "Sermon purpose", "My goal is for you to ___ so that ___."],
     ],
   },
+  introtitle: {
+    eyebrow: "Introduction & title worksheet",
+    fields: [
+      ["intro", "Introduction (write it in full)", "Grab attention, raise the tension the text answers, and make them need to hear this passage."],
+      ["transition", "Transitional statement into the proposition", "The exact sentence that moves from the intro into your big idea."],
+    ],
+  },
   gospel: {
     eyebrow: "Christ connection check",
     fields: [
@@ -3429,6 +3452,14 @@ function renderWorksheetCard(active, phase) {
           `,
         )
         .join("")}
+      ${
+        phase.id === "introtitle"
+          ? `<div class="pf-ws-field">
+              <label class="pf-label">Sermon title (change it here if the message outgrew it)</label>
+              <input class="pf-input" data-action="sermon-title-inline" data-note-key="it-title" value="${attr(active.title)}" placeholder="A title that advertises the actual content" />
+            </div>`
+          : ""
+      }
     </section>
   `;
 }
@@ -3480,7 +3511,7 @@ function renderOutlineCard(active, phase) {
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head">
         <span class="pf-eyebrow">Outline lab</span>
-        <span class="pf-checklist-count">${outline.length} movement${outline.length === 1 ? "" : "s"}</span>
+        <span class="pf-checklist-count">${outline.length} point${outline.length === 1 ? "" : "s"}</span>
       </div>
       ${outline
         .map(
@@ -3491,13 +3522,14 @@ function renderOutlineCard(active, phase) {
                 <button class="pf-outline-btn" data-action="outline-down" data-index="${index}" title="Move down" ${index === outline.length - 1 ? "disabled" : ""}>▼</button>
               </div>
               <div style="flex:1;min-width:0;">
-                <input class="pf-ws-input pf-outline-title" data-action="outline-title" data-note-key="ol-t-${index}" data-index="${index}" value="${attr(movement.title)}" placeholder="Movement ${index + 1} - point title" />
-                <input class="pf-ws-input pf-outline-sub" data-action="outline-sub" data-note-key="ol-s-${index}" data-index="${index}" value="${attr(movement.sub)}" placeholder="Verse range (vv. 1-3)" />
+                <input class="pf-ws-input pf-outline-title" data-action="outline-title" data-note-key="ol-t-${index}" data-index="${index}" value="${attr(movement.title)}" placeholder="Point ${index + 1} - title and verses (e.g. Praise is commanded, vv. 1-2)" />
+                ${movement.sub ? `<input class="pf-ws-input pf-outline-sub" data-action="outline-sub" data-note-key="ol-s-${index}" data-index="${index}" value="${attr(movement.sub)}" placeholder="Verse range" />` : ""}
                 ${(movement.parts || [])
                   .map(
                     (part) => `
-                      <div class="pf-outline-part kind-${attr(part.kind)}">
+                      <div class="pf-outline-part kind-${attr(part.kind)}" data-part-row data-index="${index}" data-part="${attr(part.id)}">
                         <div class="pf-outline-part-head">
+                          <span class="pf-part-drag" draggable="true" data-drag-part data-index="${index}" data-part="${attr(part.id)}" title="Drag to reorder">⋮⋮</span>
                           <span class="pf-outline-part-label">${escapeHtml(OUTLINE_PART_KINDS.find(([key]) => key === part.kind)?.[1] || part.kind)}</span>
                           <button class="pf-chip-x" data-action="outline-part-remove" data-index="${index}" data-part="${attr(part.id)}" aria-label="Remove this ${attr(part.kind)}">✕</button>
                         </div>
@@ -3515,13 +3547,180 @@ function renderOutlineCard(active, phase) {
           `,
         )
         .join("")}
-      <button class="pf-ghost-add" data-action="outline-add">+ Add movement</button>
-      <p class="pf-helper" style="margin-top:10px;">Under each movement, write the explanation, illustration, and application in full, and the transition word for word. The outline IS the work here - there's no separate notes box to maintain.</p>
+      <button class="pf-ghost-add" data-action="outline-add">+ Add a point</button>
+      <p class="pf-helper" style="margin-top:10px;">Under each point, write the explanation, illustration, and application in full, and the transition word for word. Drag the ⋮⋮ handle to reorder them. The outline IS the work here.</p>
+    </section>
+  `;
+}
+
+// A head start, not a ghostwriter: when the manuscript is still empty,
+// assemble everything the preacher already wrote (title, intro, points
+// with their parts, gospel work, applications, invitation) into an
+// organized draft skeleton ready to be written into.
+function assembleManuscriptDraft(sermon) {
+  const parts = [];
+  const intro = worksheetValue(sermon, "introtitle", "intro").trim();
+  const transition = worksheetValue(sermon, "introtitle", "transition").trim();
+  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
+  const purpose = worksheetValue(sermon, "aim", "purpose").trim();
+  if (bigIdea) parts.push(`<p><b>Big idea:</b> ${escapeHtml(bigIdea)}</p>`);
+  if (purpose) parts.push(`<p><b>Purpose:</b> ${escapeHtml(purpose)}</p>`);
+  parts.push("<h2>Introduction</h2>");
+  parts.push(intro ? textToRichHtml(intro) : "<p><br></p>");
+  if (transition) parts.push(`<p><em>${escapeHtml(transition)}</em></p>`);
+  (sermon.outline || [])
+    .filter((point) => point.title.trim())
+    .forEach((point, index) => {
+      parts.push(`<h2>Point ${index + 1}: ${escapeHtml(point.title)}</h2>`);
+      if (point.sub?.trim()) parts.push(`<p>${escapeHtml(point.sub)}</p>`);
+      (point.parts || [])
+        .filter((part) => part.text.trim())
+        .forEach((part) => {
+          const label = OUTLINE_PART_KINDS.find(([key]) => key === part.kind)?.[1] || part.kind;
+          parts.push(`<p><b>${escapeHtml(label)}:</b> ${escapeHtml(part.text)}</p>`);
+        });
+      if (!(point.parts || []).some((part) => part.text.trim())) parts.push("<p><br></p>");
+    });
+  const christ = worksheetValue(sermon, "gospel", "christ").trim();
+  const grace = worksheetValue(sermon, "gospel", "grace").trim();
+  if (christ || grace) {
+    parts.push("<h2>Gospel</h2>");
+    if (christ) parts.push(`<p>${escapeHtml(christ)}</p>`);
+    if (grace) parts.push(`<p>${escapeHtml(grace)}</p>`);
+  }
+  const applications = sermonAudiences(sermon)
+    .map((audience) => [audience, worksheetValue(sermon, "application", audience).trim()])
+    .filter(([, text]) => text);
+  if (applications.length) {
+    parts.push("<h2>Application</h2>");
+    applications.forEach(([audience, text]) => parts.push(`<p><b>${escapeHtml(audience)}:</b> ${escapeHtml(text)}</p>`));
+  }
+  const invitation = phaseNoteHtml(sermon, PHASES.find((phase) => phase.id === "invitation"));
+  if (richHtmlToText(invitation).trim()) {
+    parts.push("<h2>Invitation</h2>");
+    parts.push(sanitizeRichHtml(invitation));
+  }
+  parts.push("<h2>Conclusion</h2><p><br></p>");
+  return sanitizeRichHtml(parts.join(""));
+}
+
+function ensureManuscriptSeed(sermon) {
+  const manuscriptPhase = manuscriptPhaseDef();
+  if (phaseNoteText(sermon, manuscriptPhase).trim()) return;
+  const hasSource =
+    (sermon.outline || []).some((point) => point.title.trim()) ||
+    worksheetValue(sermon, "aim", "burden").trim() ||
+    worksheetValue(sermon, "introtitle", "intro").trim();
+  if (!hasSource) return;
+  sermon.notes = { ...sermon.notes, manuscript: assembleManuscriptDraft(sermon) };
+  sermon.updatedAt = new Date().toISOString();
+  saveState();
+  showBanner("Your work so far is assembled below - a head start, organized and ready to write into.");
+}
+
+// The readiness check the app itself walks you through - no AI required.
+// Each question is marked Ready when the preacher can answer it honestly.
+const READINESS_QUESTIONS = [
+  ["bigidea", "Is there ONE clear big idea - and could a listener repeat it after hearing the sermon once?"],
+  ["textdriven", "Does the structure flow from the text, or is it imposed on it?"],
+  ["christ", "Is Christ the hero - gospel woven through, not moralism with a Jesus ending?"],
+  ["eia", "Does every point carry explanation, illustration, and application?"],
+  ["application", "Is the application specific enough to act on Monday - not vague religious advice?"],
+  ["transitions", "Are the transitions written word for word, so no seam gets lost in the moment?"],
+  ["invitation", "Is there a clear invitation - what should people actually do in response?"],
+  ["length", "Does it fit your target length without rushing the landing?"],
+];
+
+function readinessAnswered(sermon) {
+  return READINESS_QUESTIONS.filter(([key]) => worksheetValue(sermon, "readiness", key) === "ready").length;
+}
+
+function renderReadinessCard(active, phase) {
+  if (phase.id !== "readiness") return "";
+  const answered = readinessAnswered(active);
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head">
+        <span class="pf-eyebrow">Readiness check</span>
+        <span class="pf-checklist-count">${answered} of ${READINESS_QUESTIONS.length} ready</span>
+      </div>
+      <div class="pf-modal-actions" style="margin-top:0;margin-bottom:14px;justify-content:flex-start;">
+        <button class="pf-btn pf-btn-primary pf-btn-big" data-action="coach-cta">Run the Readiness Check with Sermon Guide</button>
+        <button class="pf-btn pf-btn-ghost" data-view="review">Open the full Review page</button>
+      </div>
+      <p class="pf-section-hint">No Sermon Guide? The check still works: walk each question against your manuscript and mark it Ready only when it is honestly true.</p>
+      ${READINESS_QUESTIONS.map(
+        ([key, question]) => `
+          <label class="pf-ready-row ${worksheetValue(active, "readiness", key) === "ready" ? "done" : ""}">
+            <input type="checkbox" data-action="readiness-toggle" data-key="${key}" ${worksheetValue(active, "readiness", key) === "ready" ? "checked" : ""} />
+            <span>${escapeHtml(question)}</span>
+          </label>
+        `,
+      ).join("")}
+    </section>
+  `;
+}
+
+// Delivery prep: one card with the two doors that matter.
+function renderDeliveryCard(active, phase) {
+  if (phase.id !== "delivery") return "";
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">Get it into your body</span></div>
+      <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
+        <button class="pf-btn pf-btn-primary pf-btn-big" data-action="coach-cta">Guide my delivery plan</button>
+        <button class="pf-btn pf-btn-big" data-view="pulpit">▶ Preach It - practice a run-through</button>
+      </div>
+      <p class="pf-section-hint" style="margin-top:12px;margin-bottom:0;">Work the steps below in order; the timer in Preach It handles the run-through.</p>
+    </section>
+  `;
+}
+
+// First-Pass Exegesis works FROM the Passage Map: what you marked is the
+// raw material for this phase's questions.
+function renderPmEchoCard(active, phase) {
+  if (phase.id !== "exegesis") return "";
+  const map = active.passageMap;
+  if (!map.verses.length) {
+    return `
+      <section class="pf-card-box pf-checklist-card">
+        <div class="pf-checklist-head"><span class="pf-eyebrow">Start with the Passage Map</span></div>
+        <p class="pf-section-hint">Exegesis goes faster when you've already seen the text's shape. Map the passage first - mark repeated words, commands, and connectors, and divide it into sections - then answer this phase's questions from what you found.</p>
+        <div class="pf-modal-actions" style="margin-top:0;">
+          <button class="pf-btn pf-btn-primary" data-view="map">Open the Passage Map</button>
+        </div>
+      </section>
+    `;
+  }
+  const counts = {};
+  map.highlights.forEach((item) => {
+    counts[item.category] = (counts[item.category] || 0) + 1;
+  });
+  const top = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([key, count]) => `${PM_CATEGORIES.find(([k]) => k === key)?.[1] || key} (${count})`);
+  const ordered = pmOrderedSections(active.passageMap);
+  return `
+    <section class="pf-card-box pf-checklist-card">
+      <div class="pf-checklist-head"><span class="pf-eyebrow">From your Passage Map</span><span class="pf-checklist-count">${map.highlights.length} marks</span></div>
+      <p class="pf-section-hint">Everything you marked is raw material for this phase. Answer the exegesis questions from what YOU saw in the text.</p>
+      ${top.length ? `<p class="pf-ministry-desc" style="margin-bottom:8px;"><strong>Most marked:</strong> ${escapeHtml(top.join(" · "))}</p>` : ""}
+      ${
+        ordered.length
+          ? `<p class="pf-ministry-desc" style="margin-bottom:8px;"><strong>Your sections:</strong> ${ordered.map((section, index) => `§${index + 1} ${escapeHtml(section.title || section.verseRange || "untitled")}`).join(" · ")}</p>`
+          : ""
+      }
+      ${map.summary.doing.trim() ? `<p class="pf-ministry-desc" style="margin-bottom:8px;"><strong>What the passage is doing:</strong> ${escapeHtml(map.summary.doing)}</p>` : ""}
+      <div class="pf-modal-actions" style="margin-top:8px;">
+        <button class="pf-btn pf-btn-ghost" data-view="map">Back to the map</button>
+      </div>
     </section>
   `;
 }
 
 function renderCanvas(active, phase) {
+  if (phase.id === "manuscript") ensureManuscriptSeed(active);
   const curIdx = PHASES.findIndex((p) => p.id === phase.id);
   const complete = active.completed.includes(phase.id);
   const checkedCount = phaseCheckCount(active, phase);
@@ -3534,12 +3733,15 @@ function renderCanvas(active, phase) {
       ${renderDebriefNudge(active, phase)}
       ${renderLibraryEcho(active, phase)}
       ${phase.id === "passagemap" ? renderPassageMapLaunchCard(active) : ""}
-      ${renderChecklistCard(active, phase)}
+      ${renderPmEchoCard(active, phase)}
+      ${phase.id === "readiness" ? renderReadinessCard(active, phase) : ""}
+      ${phase.id === "delivery" ? renderDeliveryCard(active, phase) : ""}
+      ${["manuscript", "readiness"].includes(phase.id) ? "" : renderChecklistCard(active, phase)}
       ${renderWorksheetCard(active, phase)}
       ${renderOutlineCard(active, phase)}
       ${renderApplicationCard(active, phase)}
-      ${(phase.id === "structure" || phase.id === "application") && !phaseNoteText(active, phase).trim() ? "" : renderWriterCard(active, phase)}
-      ${renderResourcesCard(active, phase)}
+      ${["structure", "application", "aim", "introtitle", "readiness", "heart"].includes(phase.id) && !phaseNoteText(active, phase).trim() ? "" : renderWriterCard(active, phase)}
+      ${["meditation", "gospel", "readiness", "delivery", "heart"].includes(phase.id) ? "" : renderResourcesCard(active, phase)}
       <div class="pf-complete-row">
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
           ${complete ? "Phase complete · undo" : checklistReady ? "Mark phase complete" : `Checklist ${checkedCount}/${phase.doItems.length} - finish to complete`}
@@ -3781,25 +3983,33 @@ function renderCoachComposer(active, phase) {
     `;
   }
 
-  const chips =
-    !ui.showCoach && phase.actions?.length
-      ? `<div class="pf-coach-chips">${phase.actions
-          .map(
-            (action, index) =>
-              `<button class="pf-coach-chip" data-action="phase-action" data-action-index="${index}">${escapeHtml(action.label)}</button>`,
-          )
-          .join("")}</div>`
-      : "";
+  // One clear door into Sermon Guide per phase. Collapsed: a single bold
+  // button seeded with this phase's best question. Open: the thread and
+  // the composer.
+  if (!ui.showCoach) {
+    const label = phase.actions?.[0]?.label || `Ask Sermon Guide about your ${phase.name.toLowerCase()}`;
+    return `
+      <div class="pf-coach-wrap">
+        <div class="pf-coach-inner">
+          <button class="pf-coach-cta" data-action="coach-cta">
+            ${COACH_SPARK}
+            <span>${escapeHtml(label)}</span>
+            <em>Sermon Guide reacts to your work - it never writes for you</em>
+          </button>
+        </div>
+      </div>
+    `;
+  }
 
   return `
     <div class="pf-coach-wrap">
       <div class="pf-coach-inner">
-        ${ui.showCoach ? renderCoachPanel(active) : chips}
+        ${renderCoachPanel(active)}
         <div class="pf-coach">
           ${COACH_SPARK}
           <input class="pf-coach-input" data-action="coach-input" value="${attr(ui.composer)}" placeholder="Ask Sermon Guide to react to your ${attr(phase.name.toLowerCase())}…" />
-          <button class="pf-coach-toggle" data-action="${ui.showCoach ? "close-coach" : "open-coach"}" title="${ui.showCoach ? "Hide thread" : "Show thread"}" aria-label="Toggle coach thread">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ui.showCoach ? "m6 9 6 6 6-6" : "m18 15-6-6-6 6"}"/></svg>
+          <button class="pf-coach-toggle" data-action="close-coach" title="Hide thread" aria-label="Hide coach thread">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <button class="pf-coach-send" data-action="send" ${ui.loading || !ui.composer.trim() ? "disabled" : ""}>${ui.loading ? "…" : "Send"} <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#20242A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
         </div>
@@ -4115,16 +4325,6 @@ const PM_CATEGORIES = [
 // connector pen can still mark one by hand.
 const PM_SCAN_CONNECTORS = ["in order that", "so that", "therefore", "nevertheless", "although", "because", "since", "then", "but", "yet", "for", "if"];
 const PM_RELATIONS = ["Cause", "Result", "Contrast", "Purpose", "Explanation", "Condition", "Progression", "Summary"];
-const PM_NOTE_TYPES = ["Observation", "Question", "Theological Insight", "Original Audience", "Application Seed", "Christ Connection Seed", "Sermon Idea", "Prayer"];
-const PM_FLOW_TEMPLATES = [
-  ["Argument Flow", ["Claim", "Explanation", "Application"]],
-  ["Narrative Flow", ["Scene 1", "Scene 2", "Turning Point", "Resolution"]],
-  ["Psalm / Poetry Flow", ["Opening Image", "Tension", "Turn", "Resolution / Praise"]],
-  ["Epistle Logic Flow", ["Truth", "Therefore", "Command", "Promise"]],
-  ["Prophetic Oracle Flow", ["Indictment", "Warning", "Call to Return", "Promise"]],
-  ["Gospel Narrative Flow", ["Setting", "Encounter", "Revelation", "Response"]],
-  ["Wisdom Contrast Flow", ["The Righteous Way", "The Wicked Way", "The Outcome"]],
-];
 const PM_SUMMARY_FIELDS = [
   ["doing", "What is the passage doing?", "Rebuking? Comforting? Arguing? Telling a story that…?"],
   ["movement", "What is the main movement?", "Where does it start, and where does it land?"],
@@ -4320,17 +4520,17 @@ function pmRemoveHighlight(id) {
 function renderPmHowTo(open) {
   return `
     <details class="pm-howto" ${open ? "open" : ""}>
-      <summary>How to use the Passage Map (and why it matters)</summary>
+      <summary>How to use the Passage Map - exact steps</summary>
       <div class="pm-howto-body">
-        <p>Most weak outlines happen because the structure was decided before the text was really seen. The Passage Map fixes the order: you study the shape of the passage first, and the outline comes out of what you find. Nothing here is automated. Every mark is yours.</p>
+        <p>You study the shape of the passage first, and the outline comes out of what you find. Nothing here is automated. Every mark is yours. Here is exactly how it works:</p>
         <ol>
-          <li><strong>Load the passage.</strong> Fetch it verse by verse, or paste your preferred translation.</li>
-          <li><strong>Mark what the text is doing.</strong> Pick a pen on the right, then select words or phrases in the passage. Start simple: repeated words, commands, and contrasts. Use the quick scans to catch connectors like "therefore" and "because," then click each connector and label what it joins.</li>
-          <li><strong>Divide it into sections.</strong> Where does the passage turn? Give each movement a title and name what it is doing (rebuking, comforting, arguing, resolving).</li>
-          <li><strong>Sketch the flow and answer the summary.</strong> The seven questions turn your discoveries into words: what the passage is doing, what it reveals, and what response it calls for.</li>
-          <li><strong>Send your sections to the Outline Lab.</strong> Your movements become the sermon's skeleton. You shaped it from the text, and it will preach that way.</li>
+          <li><strong>Load the passage.</strong> Use the Load button to fetch it verse by verse, or paste your preferred translation.</li>
+          <li><strong>Mark the text with the Marker tool.</strong> Click a pen on the right (say, Repeated Words). Then press and hold at the first word in the passage, drag across the words you want, and let go - the highlight appears the moment you release. Single-click any highlight to open it on the right, where you can note it or remove it; a small ✕ also appears on the word itself for quick removal.</li>
+          <li><strong>Use the quick scans.</strong> One click marks every logical connector (therefore, because, but); the repeated-words list marks every occurrence of a word with one click. Then click each connector once and label what it joins.</li>
+          <li><strong>Divide into sections with the Sections tool.</strong> Open Sections and a <strong>⊕</strong> appears at the start of every verse. Click the ⊕ where the passage turns - a numbered marker (§1, §2...) appears in the text. Click any marker to open that section's box on the right and give it a title and a job (rebuking, comforting, arguing, resolving). Each section runs until the next marker.</li>
+          <li><strong>Answer the Summary questions.</strong> Seven questions turn what you saw into words: what the passage is doing, what it reveals, and what response it calls for.</li>
+          <li><strong>Send your sections to the Outline Lab.</strong> One button - your sections become the sermon's points, shaped by where the text itself turns.</li>
         </ol>
-        <p class="pf-helper" style="margin:0;">The Guide tab can react to your map with observations and questions, but it will never mark the text, divide it, or build the outline for you. That work is the point.</p>
       </div>
     </details>
   `;
@@ -4375,6 +4575,33 @@ function pmShowRemoveChip() {
   pmChipEl.style.top = `${Math.max(4, rect.top - 19)}px`;
 }
 
+// Sections sorted by where they start in the text; ranges recomputed so
+// each section runs until the next marker.
+function pmVerseIndexOf(map, ref) {
+  return map.verses.findIndex((verse) => verse.ref === ref);
+}
+
+function pmOrderedSections(map) {
+  return [...map.sections].sort((a, b) => {
+    const ai = a.startRef ? pmVerseIndexOf(map, a.startRef) : Number.MAX_SAFE_INTEGER;
+    const bi = b.startRef ? pmVerseIndexOf(map, b.startRef) : Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+}
+
+function pmRecomputeSectionRanges(map) {
+  const ordered = pmOrderedSections(map).filter((section) => section.startRef);
+  ordered.forEach((section, index) => {
+    const startIdx = pmVerseIndexOf(map, section.startRef);
+    if (startIdx === -1) return;
+    const next = ordered[index + 1];
+    const endIdx = next ? pmVerseIndexOf(map, next.startRef) - 1 : map.verses.length - 1;
+    const startRef = map.verses[startIdx]?.ref || "";
+    const endRef = map.verses[Math.max(startIdx, endIdx)]?.ref || "";
+    section.verseRange = startRef === endRef ? `v. ${startRef}` : `vv. ${startRef}-${endRef}`;
+  });
+}
+
 function renderPassageMap(active) {
   if (!active) return renderNeedSermon("The Passage Map works on your current sermon - start one first.");
   const map = active.passageMap;
@@ -4398,16 +4625,28 @@ function renderPassageMap(active) {
                 : `Pick a pen on the right, then select words or phrases to mark. Click any mark to note or remove it.`
             }
           </div>
-          <div class="pm-passage ${hiddenClasses}" data-pm-passage>
+          <div class="pm-passage ${hiddenClasses} ${ui.pm.tool === "sections" ? "pm-sections-mode" : ""}" data-pm-passage>
             ${map.verses
-              .map(
-                (verse, index) => `
+              .map((verse, index) => {
+                const section = verse.ref ? map.sections.find((item) => item.startRef === verse.ref) : null;
+                const sectionNumber = section ? pmOrderedSections(map).findIndex((item) => item.id === section.id) + 1 : 0;
+                return `
+                  ${
+                    section
+                      ? `<button class="pm-sec-pill ${ui.pm.selectedSection === section.id ? "active" : ""}" data-action="pm-section-open" data-id="${attr(section.id)}" title="Open this section">§${sectionNumber}${section.title ? ` ${escapeHtml(section.title)}` : ""}</button>`
+                      : ""
+                  }
                   <p class="pm-verse" data-ref="${attr(verse.ref)}">
+                    ${
+                      ui.pm.tool === "sections" && verse.ref && !section
+                        ? `<button class="pm-sec-add" data-action="pm-section-here" data-ref="${attr(verse.ref)}" title="Start a section at verse ${attr(verse.ref)}">⊕</button>`
+                        : ""
+                    }
                     ${verse.ref ? `<sup class="pm-vnum">${escapeHtml(verse.ref)}</sup>` : ""}
                     <span class="pm-text" data-pm-verse data-idx="${index}">${pmDecorateSelected(sanitizePmHtml(verse.html))}</span>
                   </p>
-                `,
-              )
+                `;
+              })
               .join("")}
           </div>
           <p class="pf-helper" style="margin-top:10px;">
@@ -4418,16 +4657,13 @@ function renderPassageMap(active) {
         </section>
         <aside class="pm-tools">
           <div class="pf-subtabs" style="margin-bottom:14px;">
-            ${[["mark", "Mark"], ["sections", "Sections"], ["notes", "Notes"], ["flow", "Flow"], ["summary", "Summary"], ["guide", "Guide"]]
+            ${[["mark", "Marker"], ["sections", "Sections"], ["summary", "Summary"]]
               .map(([key, label]) => `<button class="pf-chip ${ui.pm.tool === key ? "active" : ""}" data-action="pm-tool" data-tool="${key}">${label}</button>`)
               .join("")}
           </div>
           ${ui.pm.tool === "mark" ? renderPmMarkPanel(map) : ""}
           ${ui.pm.tool === "sections" ? renderPmSectionsPanel(active, map) : ""}
-          ${ui.pm.tool === "notes" ? renderPmNotesPanel(map) : ""}
-          ${ui.pm.tool === "flow" ? renderPmFlowPanel(map) : ""}
           ${ui.pm.tool === "summary" ? renderPmSummaryPanel(map) : ""}
-          ${ui.pm.tool === "guide" ? renderPmGuidePanel(active, map) : ""}
         </aside>
       </div>
       ${ui.pm.paste ? renderPmPasteModal() : ""}
@@ -4548,119 +4784,47 @@ function renderPmMarkPanel(map) {
 }
 
 function renderPmSectionsPanel(active, map) {
+  const ordered = pmOrderedSections(map);
+  const selected = map.sections.find((section) => section.id === ui.pm.selectedSection);
+  const selectedNumber = selected ? ordered.findIndex((section) => section.id === selected.id) + 1 : 0;
   return `
     <section class="pf-card-box pf-checklist-card">
       <div class="pf-checklist-head">
-        <span class="pf-eyebrow">Sections / movements</span>
+        <span class="pf-eyebrow">Sections</span>
         <span class="pf-checklist-count">${map.sections.length}</span>
       </div>
-      <p class="pf-section-hint">Divide the passage where IT turns - title each movement and name what it's doing.</p>
-      ${map.sections
-        .map(
-          (section, index) => `
-            <div class="pm-section">
-              <div class="pm-section-head">
-                <input class="pf-input" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="title" value="${attr(section.title)}" placeholder="Section title" />
-                <input class="pf-input pm-range" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="verseRange" value="${attr(section.verseRange)}" placeholder="vv. 1-2" />
-              </div>
-              <input class="pf-input" style="margin-top:6px;" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="mainIdea" value="${attr(section.mainIdea)}" placeholder="Main idea of this movement" />
-              <textarea class="pf-ws-input" style="margin-top:6px;" rows="2" data-action="pm-section-field" data-id="${attr(section.id)}" data-field="functionInPassage" placeholder="Function in the passage - what is this movement doing?">${escapeHtml(section.functionInPassage)}</textarea>
-              <div class="pm-section-tools">
-                <button class="pf-outline-btn" data-action="pm-section-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move up">▲</button>
-                <button class="pf-outline-btn" data-action="pm-section-down" data-index="${index}" ${index === map.sections.length - 1 ? "disabled" : ""} aria-label="Move down">▼</button>
-                <button class="pf-outline-btn" data-action="pm-section-remove" data-index="${index}" aria-label="Delete section">✕</button>
-                <span style="flex:1;"></span>
-                <button class="pf-btn pf-btn-ghost" style="padding:5px 12px;font-size:12px;" data-action="pm-section-outline" data-index="${index}">→ Outline</button>
-              </div>
-            </div>
-          `,
-        )
-        .join("")}
-      <button class="pf-ghost-add" data-action="pm-section-add">+ Add section</button>
+      <p class="pf-section-hint">Divide the passage where IT turns. Click the <strong>⊕</strong> at the start of a verse in the text to begin a section there; a numbered marker appears. Click any marker to name that section - it runs until the next marker.</p>
+      ${
+        ordered.length && !selected
+          ? `<p class="pf-helper" style="margin-bottom:10px;">${ordered
+              .map((section, index) => `<button class="pf-chip" data-action="pm-section-open" data-id="${attr(section.id)}">§${index + 1} ${escapeHtml(section.title || section.verseRange || "untitled")}</button>`)
+              .join(" ")}</p>`
+          : ""
+      }
+      ${
+        selected
+          ? `
+        <div class="pm-section">
+          <div class="pf-checklist-head" style="align-items:center;">
+            <span class="pf-eyebrow">Section ${selectedNumber}${selected.verseRange ? ` · ${escapeHtml(selected.verseRange)}` : ""}</span>
+            <span style="display:inline-flex;gap:6px;">
+              <button class="pf-outline-btn" data-action="pm-section-remove-id" data-id="${attr(selected.id)}" title="Remove this section">✕</button>
+              <button class="pf-outline-btn" data-action="pm-section-close" title="Close">−</button>
+            </span>
+          </div>
+          <input class="pf-input" data-action="pm-section-field" data-note-key="pmsec-t" data-id="${attr(selected.id)}" data-field="title" value="${attr(selected.title)}" placeholder="Section title" />
+          <input class="pf-input" style="margin-top:6px;" data-action="pm-section-field" data-note-key="pmsec-m" data-id="${attr(selected.id)}" data-field="mainIdea" value="${attr(selected.mainIdea)}" placeholder="Main idea of this section" />
+          <textarea class="pf-ws-input" style="margin-top:6px;" rows="2" data-action="pm-section-field" data-note-key="pmsec-f" data-id="${attr(selected.id)}" data-field="functionInPassage" placeholder="What is this section doing? (rebuking, comforting, arguing, resolving...)">${escapeHtml(selected.functionInPassage)}</textarea>
+        </div>`
+          : ""
+      }
       ${
         map.sections.length
           ? `<div class="pf-modal-actions" style="margin-top:12px;">
               <button class="pf-btn pf-btn-primary" data-action="pm-outline-bridge">Send to Outline Lab</button>
             </div>`
-          : ""
+          : `<p class="pf-helper">No sections yet. Click a ⊕ in the text to start the first one.</p>`
       }
-    </section>
-  `;
-}
-
-function renderPmNotesPanel(map) {
-  return `
-    <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow">Observation notes</span><span class="pf-checklist-count">${map.observations.length}</span></div>
-      <div class="pf-form-grid" style="margin-bottom:8px;">
-        <div class="pf-field" style="margin-bottom:0;">
-          <label class="pf-label">Type</label>
-          <select class="pf-select" data-pm-obs-type>
-            ${PM_NOTE_TYPES.map((type) => `<option>${type}</option>`).join("")}
-          </select>
-        </div>
-        <div class="pf-field" style="margin-bottom:0;">
-          <label class="pf-label">Anchor (optional)</label>
-          <input class="pf-input" data-pm-obs-anchor placeholder="v. 3 · “delight” · Section 2…" />
-        </div>
-      </div>
-      <textarea class="pf-ws-input" rows="3" data-pm-obs-content placeholder="What do you notice?"></textarea>
-      <button class="pf-btn pf-btn-ghost" data-action="pm-obs-add" style="margin-top:8px;">Add note</button>
-      <div style="margin-top:14px;">
-        ${map.observations
-          .slice()
-          .reverse()
-          .map(
-            (observation) => `
-              <div class="pm-obs">
-                <div class="pm-obs-head">
-                  <span class="pf-lib-badge">${escapeHtml(observation.type)}</span>
-                  ${observation.anchor ? `<span class="pf-helper">${escapeHtml(observation.anchor)}</span>` : ""}
-                  <button class="pf-chip-x" data-action="pm-obs-remove" data-id="${attr(observation.id)}" aria-label="Delete note">✕</button>
-                </div>
-                <p>${escapeHtml(observation.content)}</p>
-              </div>
-            `,
-          )
-          .join("") || `<p class="pf-helper">No notes yet - observations, questions, seeds for application and Christ connection all live here.</p>`}
-      </div>
-    </section>
-  `;
-}
-
-function renderPmFlowPanel(map) {
-  return `
-    <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow">Passage flow</span></div>
-      <p class="pf-section-hint">Sketch the passage's movement as simple steps. Load a template for your genre, then rename the steps to match the text.</p>
-      <div class="pf-form-grid" style="margin-bottom:10px;">
-        <div class="pf-field full" style="margin-bottom:0;">
-          <label class="pf-label">Template</label>
-          <select class="pf-select" data-action="pm-flow-template">
-            <option value="">Choose a flow template…</option>
-            ${PM_FLOW_TEMPLATES.map(([name]) => `<option ${map.flow.template === name ? "selected" : ""}>${name}</option>`).join("")}
-          </select>
-        </div>
-      </div>
-      <div class="pm-flow">
-        ${map.flow.steps
-          .map(
-            (step, index) => `
-              ${index ? `<span class="pm-flow-arrow" aria-hidden="true">→</span>` : ""}
-              <div class="pm-step">
-                <input class="pf-input" data-action="pm-step-field" data-id="${attr(step.id)}" data-field="label" value="${attr(step.label)}" placeholder="Step" />
-                <input class="pf-input pm-range" data-action="pm-step-field" data-id="${attr(step.id)}" data-field="verseRange" value="${attr(step.verseRange)}" placeholder="vv." />
-                <div class="pm-section-tools" style="margin-top:4px;">
-                  <button class="pf-outline-btn" data-action="pm-step-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move left">◀</button>
-                  <button class="pf-outline-btn" data-action="pm-step-down" data-index="${index}" ${index === map.flow.steps.length - 1 ? "disabled" : ""} aria-label="Move right">▶</button>
-                  <button class="pf-outline-btn" data-action="pm-step-remove" data-index="${index}" aria-label="Delete step">✕</button>
-                </div>
-              </div>
-            `,
-          )
-          .join("")}
-      </div>
-      <button class="pf-ghost-add" data-action="pm-step-add">+ Add step</button>
     </section>
   `;
 }
@@ -4681,133 +4845,15 @@ function renderPmSummaryPanel(map) {
   `;
 }
 
-// Suggest-only Sermon Guide actions: observations and questions the preacher
-// tests against the text. The Guide never marks, divides, or outlines.
-const PM_GUIDE_ACTIONS = [
-  ["patterns", "What patterns stand out?", "Point at two to four features of the text itself - repetition, contrast, cause and effect, a turn - that the preacher may want to look at. Ask at least one question that sends them back to the passage."],
-  ["connectors", "Weigh the connectors", "Look at the logical connectors in the passage (therefore, because, so that, but) and what each one joins. Suggest which relationships the preacher should trace, as observations and questions - never as finished conclusions."],
-  ["sections", "React to my sections", "React to the preacher's section divisions: which ones follow the text's own turns, and which may be imposed on it? You may say where a break MAY belong and why, but do not re-divide the passage for them."],
-  ["claim", "Pressure-test the main claim", "Weigh the preacher's marked main claim (or their summary of what the passage is doing) against the passage itself. Is it what THIS text says? Push where it drifts; affirm only what the text supports."],
-  ["movement", "Trace the movement", "Consider where the passage starts and where it lands. Offer observations about the journey between - as things for the preacher to verify in the text, not as a finished flow."],
-  ["audience", "Original audience questions", "Raise three to five questions about what this passage meant to its first hearers - questions the preacher should answer from their own study, not answers you supply."],
-  ["missing", "What might I be missing?", "Given the preacher's marks, sections, and summary, gently point at parts of the passage they have not touched yet, and what work those parts may be doing. Never produce an outline or sermon points."],
-];
-
-// Everything the Guide sees is the preacher's own work on the text.
-function pmGuideContext(active, map) {
-  const lines = [activeContext(active), "", `THE PASSAGE${map.translation ? ` (${map.translation})` : ""}:`];
-  const template = document.createElement("template");
-  map.verses.slice(0, 80).forEach((verse) => {
-    template.innerHTML = verse.html;
-    lines.push(`${verse.ref ? `[${verse.ref}] ` : ""}${template.content.textContent}`);
-  });
-  if (map.highlights.length) {
-    lines.push("", "THE PREACHER'S MARKS:");
-    PM_CATEGORIES.forEach(([key, label]) => {
-      const items = map.highlights.filter((item) => item.category === key);
-      if (!items.length) return;
-      lines.push(
-        `- ${label}: ${items
-          .slice(0, 20)
-          .map((item) => `"${item.text}"${item.verseRef ? ` (v.${item.verseRef})` : ""}${item.relation ? ` [${item.relation}]` : ""}${item.note ? ` - note: ${item.note}` : ""}`)
-          .join("; ")}`,
-      );
-    });
-  }
-  if (map.sections.length) {
-    lines.push("", "THE PREACHER'S SECTIONS:");
-    map.sections.forEach((section, index) => {
-      lines.push(`${index + 1}. ${section.title || "(untitled)"}${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` - ${section.mainIdea}` : ""}${section.functionInPassage ? ` - function: ${section.functionInPassage}` : ""}`);
-    });
-  }
-  if (map.flow.steps.length) {
-    lines.push("", `THE PREACHER'S FLOW${map.flow.template ? ` (${map.flow.template})` : ""}: ${map.flow.steps.map((step) => `${step.label}${step.verseRange ? ` (${step.verseRange})` : ""}`).join(" → ")}`);
-  }
-  const summaryLines = PM_SUMMARY_FIELDS.filter(([key]) => map.summary[key].trim()).map(([key, label]) => `- ${label} ${map.summary[key].trim()}`);
-  if (summaryLines.length) lines.push("", "THE PREACHER'S FLOW SUMMARY:", ...summaryLines);
-  if (map.observations.length) {
-    lines.push("", "THE PREACHER'S OBSERVATION NOTES:");
-    map.observations.slice(-12).forEach((observation) => lines.push(`- [${observation.type}${observation.anchor ? ` · ${observation.anchor}` : ""}] ${observation.content}`));
-  }
-  return lines.join("\n").slice(0, 9000);
-}
-
-async function runPmGuide(kind) {
-  const active = getActive();
-  const map = active?.passageMap;
-  if (!active || !map?.verses.length) return;
-  const def = PM_GUIDE_ACTIONS.find(([key]) => key === kind);
-  if (!def || ui.pm.suggestion?.loading) return;
-  if (!requireOpenAIKey()) return;
-  ui.pm.suggestion = { loading: true, label: def[1], text: "" };
-  render();
-  try {
-    const response = await fetch("./api/draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...openAIHeaders() },
-      body: JSON.stringify({
-        context: pmGuideContext(active, map),
-        prompt: `${def[2]}\nHard rules: you are looking at the text WITH the preacher, not mapping it for them. Respond with brief observations and questions - "Notice…", "Consider…", "This may suggest…". Never write sermon points, an outline, applications, or marked-up text. Everything you say is a suggestion for the preacher to test against the passage.`,
-      }),
-    });
-    const data = await response.json();
-    ui.pm.suggestion = { loading: false, label: def[1], text: data.text || "No suggestion came back - try again." };
-  } catch {
-    ui.pm.suggestion = null;
-    showBanner("Could not reach Sermon Guide.");
-  }
-  render();
-}
-
-function renderPmGuidePanel(active, map) {
-  const suggestion = ui.pm.suggestion;
-  return `
-    <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head"><span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · suggestions only</span></div>
-      <p class="pf-section-hint">The Guide looks at the text with you. It never marks the passage, divides it, or writes your outline - every response is an observation or question for you to test against the text, then keep or reject.</p>
-      <div class="pm-guide-actions">
-        ${PM_GUIDE_ACTIONS.map(([key, label]) => `<button class="pf-btn pf-btn-ghost" data-action="pm-guide" data-kind="${key}" ${suggestion?.loading ? "disabled" : ""}>${escapeHtml(label)}</button>`).join("")}
-      </div>
-    </section>
-    ${
-      suggestion
-        ? `
-      <section class="pf-card-box pf-refine-card" aria-live="polite">
-        <div class="pf-checklist-head" style="align-items:flex-start;">
-          <div style="min-width:0;">
-            <span class="pf-eyebrow pf-eyebrow-brand">Sermon Guide · ${escapeHtml(suggestion.label)}</span>
-            <p class="pf-helper" style="margin-top:2px;">A suggestion to test against the text - yours to keep or reject.</p>
-          </div>
-          <button class="pf-btn pf-btn-ghost" data-action="pm-suggest-dismiss">Dismiss</button>
-        </div>
-        ${
-          suggestion.loading
-            ? `<p class="pf-ministry-desc">Reading what you marked…</p>`
-            : `
-          <div class="pf-review-result" style="margin-top:6px;">${escapeHtml(suggestion.text)}</div>
-          <div class="pf-modal-actions" style="margin-top:12px;">
-            <button class="pf-btn" data-action="pm-suggest-note">Save as observation note</button>
-            <button class="pf-btn pf-btn-ghost" data-action="pm-suggest-copy">Copy</button>
-          </div>`
-        }
-      </section>`
-        : ""
-    }
-  `;
-}
-
 // Sections (or flow steps, if no sections) become outline movements.
 function pmOutlineMovements(map) {
-  const fromSections = map.sections
+  const fromSections = pmOrderedSections(map)
     .filter((section) => section.title.trim() || section.mainIdea.trim())
     .map((section) => ({
       title: section.title.trim() || section.mainIdea.trim(),
       sub: [section.verseRange.trim(), section.title.trim() ? section.mainIdea.trim() : ""].filter(Boolean).join(" · "),
     }));
-  if (fromSections.length) return fromSections;
-  return map.flow.steps
-    .filter((step) => step.label.trim())
-    .map((step) => ({ title: step.label.trim(), sub: step.verseRange.trim() }));
+  return fromSections;
 }
 
 function renderPmBridgeModal(active, map) {
@@ -4840,7 +4886,6 @@ function renderPassageMapLaunchCard(active) {
     [map.verses.length, map.verses.length === 1 ? "verse loaded" : "verses loaded"],
     [map.highlights.length, map.highlights.length === 1 ? "mark on the text" : "marks on the text"],
     [map.sections.length, map.sections.length === 1 ? "section" : "sections"],
-    [map.observations.length, map.observations.length === 1 ? "observation note" : "observation notes"],
     [summaryDone, `of ${PM_SUMMARY_KEYS.length} summary answers`],
   ];
   return `
@@ -5310,10 +5355,10 @@ function renderGDocsBrowser() {
   const gdocs = ui.libImport.gdocs;
   if (!gdocs.open) {
     return `
-      <div class="pf-gdocs">
-        <button class="pf-btn pf-btn-ghost" data-action="lib-gdocs-open">Browse your Google Docs instead</button>
-        <span class="pf-helper" style="margin-left:8px;">Check the docs you want; PreachFlow reads only what you check.</span>
-      </div>
+      <button class="pf-gdocs-cta" data-action="lib-gdocs-open">
+        ${GOOGLE_G_SVG}
+        <span><strong>Browse your Google Docs</strong><em>Check the sermons you want - PreachFlow reads only what you check.</em></span>
+      </button>
     `;
   }
   const checkedCount = Object.values(gdocs.picked).filter(Boolean).length;
@@ -8460,17 +8505,10 @@ function pmMarkdownLines(sermon) {
       lines.push(`${index + 1}. **${section.title || "Untitled"}**${section.verseRange ? ` (${section.verseRange})` : ""}${section.mainIdea ? ` - ${section.mainIdea}` : ""}${section.functionInPassage ? ` - _${section.functionInPassage}_` : ""}`);
     });
   }
-  if (map.flow.steps.length) {
-    lines.push("", "### Passage flow", "", map.flow.steps.map((step) => `${step.label}${step.verseRange ? ` (${step.verseRange})` : ""}`).join(" → "));
-  }
   const summary = PM_SUMMARY_FIELDS.filter(([key]) => map.summary[key].trim());
   if (summary.length) {
     lines.push("", "### Flow summary", "");
     summary.forEach(([key, label]) => lines.push(`- **${label}** ${map.summary[key].trim()}`));
-  }
-  if (map.observations.length) {
-    lines.push("", "### Observation notes", "");
-    map.observations.forEach((observation) => lines.push(`- [${observation.type}${observation.anchor ? ` · ${observation.anchor}` : ""}] ${observation.content}`));
   }
   lines.push("");
   return lines;
@@ -8492,15 +8530,9 @@ function pmSectionsHtml(sermon) {
   if (map.sections.length) {
     html += `<h3>Sections</h3><div class="note"><ol>${map.sections.map((section) => `<li><strong>${escapeHtml(section.title || "Untitled")}</strong>${section.verseRange ? ` (${escapeHtml(section.verseRange)})` : ""}${section.mainIdea ? ` - ${escapeHtml(section.mainIdea)}` : ""}${section.functionInPassage ? ` - <em>${escapeHtml(section.functionInPassage)}</em>` : ""}</li>`).join("")}</ol></div>`;
   }
-  if (map.flow.steps.length) {
-    html += `<h3>Passage flow</h3><div class="note"><p>${map.flow.steps.map((step) => `${escapeHtml(step.label)}${step.verseRange ? ` (${escapeHtml(step.verseRange)})` : ""}`).join(" → ")}</p></div>`;
-  }
   const summary = PM_SUMMARY_FIELDS.filter(([key]) => map.summary[key].trim());
   if (summary.length) {
     html += `<h3>Flow summary</h3><div class="note"><ul>${summary.map(([key, label]) => `<li><strong>${escapeHtml(label)}</strong> ${escapeHtml(map.summary[key].trim())}</li>`).join("")}</ul></div>`;
-  }
-  if (map.observations.length) {
-    html += `<h3>Observation notes</h3><div class="note"><ul>${map.observations.map((observation) => `<li>[${escapeHtml(observation.type)}${observation.anchor ? ` · ${escapeHtml(observation.anchor)}` : ""}] ${escapeHtml(observation.content)}</li>`).join("")}</ul></div>`;
   }
   return html;
 }
@@ -9365,6 +9397,10 @@ function googleDocTitle(sermon) {
 async function exportManuscriptToGoogleDocs() {
   const active = getActive();
   if (!active || ui.google.loading) return;
+  if (!ui.google.configured) {
+    showBanner("Google Docs needs GOOGLE_CLIENT_ID configured on this deployment (see DEPLOY.md).");
+    return;
+  }
   const manuscript = sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()));
   if (!richHtmlToText(manuscript).trim()) {
     showBanner("Write the manuscript first - there's nothing to send yet.");
@@ -9918,41 +9954,33 @@ document.addEventListener("click", (event) => {
     pmSave();
     render();
   }
-  if (action === "pm-section-add") {
+  if (action === "pm-section-here") {
     const map = pmActiveMap();
     if (!map) return;
-    map.sections.push({ id: genId(), title: "", verseRange: "", summary: "", mainIdea: "", functionInPassage: "" });
+    const section = { id: genId(), title: "", verseRange: "", startRef: target.dataset.ref, summary: "", mainIdea: "", functionInPassage: "" };
+    map.sections.push(section);
+    pmRecomputeSectionRanges(map);
+    ui.pm.selectedSection = section.id;
     pmSave();
     render();
+    requestAnimationFrame(() => document.querySelector('[data-action="pm-section-field"][data-field="title"]')?.focus());
   }
-  if (action === "pm-section-up" || action === "pm-section-down") {
+  if (action === "pm-section-open") {
+    ui.pm.selectedSection = target.dataset.id;
+    ui.pm.tool = "sections";
+    render();
+  }
+  if (action === "pm-section-close") {
+    ui.pm.selectedSection = "";
+    render();
+  }
+  if (action === "pm-section-remove-id") {
     const map = pmActiveMap();
     if (!map) return;
-    const index = Number(target.dataset.index);
-    const swap = action === "pm-section-up" ? index - 1 : index + 1;
-    if (swap < 0 || swap >= map.sections.length) return;
-    [map.sections[index], map.sections[swap]] = [map.sections[swap], map.sections[index]];
+    map.sections = map.sections.filter((section) => section.id !== target.dataset.id);
+    pmRecomputeSectionRanges(map);
+    if (ui.pm.selectedSection === target.dataset.id) ui.pm.selectedSection = "";
     pmSave();
-    render();
-  }
-  if (action === "pm-section-remove") {
-    const map = pmActiveMap();
-    if (!map) return;
-    map.sections.splice(Number(target.dataset.index), 1);
-    pmSave();
-    render();
-  }
-  if (action === "pm-section-outline") {
-    const active = getActive();
-    const map = pmActiveMap();
-    const section = map?.sections[Number(target.dataset.index)];
-    if (!active || !section) return;
-    active.outline.push({
-      title: section.title.trim() || section.mainIdea.trim() || "Movement",
-      sub: [section.verseRange.trim(), section.title.trim() ? section.mainIdea.trim() : ""].filter(Boolean).join(" · "),
-    });
-    pmSave();
-    showBanner(`"${section.title.trim() || "Movement"}" added to the Outline Lab.`);
     render();
   }
   if (action === "pm-outline-bridge" || action === "pm-outline-bridge-from-phase") {
@@ -9983,55 +10011,6 @@ document.addEventListener("click", (event) => {
     state.view = "workspace";
     saveState();
     showBanner("Your passage movements are in the Outline Lab - shape the sermon from what the text is doing.");
-    render();
-  }
-  if (action === "pm-obs-add") {
-    const map = pmActiveMap();
-    if (!map) return;
-    const content = document.querySelector("[data-pm-obs-content]")?.value.trim() || "";
-    if (!content) {
-      showBanner("Write the observation first.");
-      return;
-    }
-    map.observations.push({
-      id: genId(),
-      type: document.querySelector("[data-pm-obs-type]")?.value || "Observation",
-      anchor: document.querySelector("[data-pm-obs-anchor]")?.value.trim() || "",
-      content,
-      createdAt: new Date().toISOString(),
-    });
-    pmSave();
-    render();
-  }
-  if (action === "pm-obs-remove") {
-    const map = pmActiveMap();
-    if (!map) return;
-    map.observations = map.observations.filter((observation) => observation.id !== target.dataset.id);
-    pmSave();
-    render();
-  }
-  if (action === "pm-step-add") {
-    const map = pmActiveMap();
-    if (!map) return;
-    map.flow.steps.push({ id: genId(), label: "", description: "", verseRange: "" });
-    pmSave();
-    render();
-  }
-  if (action === "pm-step-up" || action === "pm-step-down") {
-    const map = pmActiveMap();
-    if (!map) return;
-    const index = Number(target.dataset.index);
-    const swap = action === "pm-step-up" ? index - 1 : index + 1;
-    if (swap < 0 || swap >= map.flow.steps.length) return;
-    [map.flow.steps[index], map.flow.steps[swap]] = [map.flow.steps[swap], map.flow.steps[index]];
-    pmSave();
-    render();
-  }
-  if (action === "pm-step-remove") {
-    const map = pmActiveMap();
-    if (!map) return;
-    map.flow.steps.splice(Number(target.dataset.index), 1);
-    pmSave();
     render();
   }
   if (action === "ministry-wizard-start") {
@@ -10119,34 +10098,6 @@ document.addEventListener("click", (event) => {
   if (action === "lib-gdocs-import") {
     importPickedGDocs();
   }
-  if (action === "pm-guide") {
-    runPmGuide(target.dataset.kind);
-  }
-  if (action === "pm-suggest-dismiss") {
-    ui.pm.suggestion = null;
-    render();
-  }
-  if (action === "pm-suggest-copy") {
-    if (ui.pm.suggestion?.text) {
-      navigator.clipboard?.writeText(ui.pm.suggestion.text).catch(() => {});
-      showBanner("Copied - weigh it against the text.");
-    }
-  }
-  if (action === "pm-suggest-note") {
-    const map = pmActiveMap();
-    if (!map || !ui.pm.suggestion?.text) return;
-    map.observations.push({
-      id: genId(),
-      type: "Observation",
-      anchor: "Sermon Guide suggestion",
-      content: `${ui.pm.suggestion.label}: ${ui.pm.suggestion.text}`,
-      createdAt: new Date().toISOString(),
-    });
-    ui.pm.suggestion = null;
-    pmSave();
-    showBanner("Saved to your observation notes - yours to keep or cut.");
-    render();
-  }
   if (action === "toggle-check") {
     const active = getActive();
     if (!active) return;
@@ -10163,6 +10114,10 @@ document.addEventListener("click", (event) => {
   }
   if (action === "phase-action") {
     tapPhaseAction(Number(target.dataset.actionIndex));
+  }
+  if (action === "coach-cta") {
+    ui.showCoach = true;
+    tapPhaseAction(0);
   }
   if (action === "send") {
     send();
@@ -10924,6 +10879,10 @@ document.addEventListener("input", (event) => {
   if (action === "phase-editor" || action === "notes-editor") {
     persistPhaseEditor(target);
     updateEditorStats();
+    if (target.dataset.phase === "manuscript") {
+      const active = getActive();
+      if (active) maybeAutoCompletePhase(active, "manuscript");
+    }
   }
   if (action === "ministry-wizard-answer") {
     const wizard = ui.ministryWizard;
@@ -10969,12 +10928,21 @@ document.addEventListener("input", (event) => {
     row[target.dataset.field] = target.value;
     touchMinistryStore("series");
   }
+  if (action === "sermon-title-inline") {
+    const active = getActive();
+    if (!active) return;
+    active.title = target.value;
+    active.updatedAt = new Date().toISOString();
+    saveState();
+    maybeAutoCompletePhase(active, "introtitle");
+  }
   if (action === "worksheet-field") {
     const active = getActive();
     if (!active) return;
     active.worksheet[`${target.dataset.phase}.${target.dataset.key}`] = target.value;
     active.updatedAt = new Date().toISOString();
     saveState();
+    maybeAutoCompletePhase(active, target.dataset.phase);
   }
   if (action === "outline-part-text") {
     const active = getActive();
@@ -11041,12 +11009,6 @@ document.addEventListener("input", (event) => {
     section[target.dataset.field] = target.value;
     pmSave();
   }
-  if (action === "pm-step-field") {
-    const step = pmActiveMap()?.flow.steps.find((item) => item.id === target.dataset.id);
-    if (!step) return;
-    step[target.dataset.field] = target.value;
-    pmSave();
-  }
   if (action === "pm-summary-field") {
     const map = pmActiveMap();
     if (!map) return;
@@ -11069,6 +11031,14 @@ document.addEventListener("change", (event) => {
   }
   if (action === "lib-gdocs-check") {
     ui.libImport.gdocs.picked[target.dataset.id] = target.checked;
+    render();
+  }
+  if (action === "readiness-toggle") {
+    const active = getActive();
+    if (!active) return;
+    active.worksheet[`readiness.${target.dataset.key}`] = target.checked ? "ready" : "";
+    active.updatedAt = new Date().toISOString();
+    saveState();
     render();
   }
   if (action === "lens-toggle") {
@@ -11159,20 +11129,6 @@ document.addEventListener("change", (event) => {
       else el.removeAttribute("data-rel");
     });
     pmSerializeVerses();
-    render();
-  }
-  if (action === "pm-flow-template") {
-    const map = pmActiveMap();
-    if (!map) return;
-    const template = PM_FLOW_TEMPLATES.find(([name]) => name === target.value);
-    map.flow.template = target.value;
-    if (template) {
-      const hasWork = map.flow.steps.some((step) => step.label.trim());
-      if (!hasWork || confirm(`Replace your current flow steps with the ${target.value} template?`)) {
-        map.flow.steps = template[1].map((label) => ({ id: genId(), label, description: "", verseRange: "" }));
-      }
-    }
-    pmSave();
     render();
   }
   if (action === "pm-include-exports") {
@@ -11531,6 +11487,55 @@ document.addEventListener(
   },
   true,
 );
+
+// Outline Lab: drag a part's handle onto another part in the same point
+// to reorder without deleting and re-adding.
+let outlinePartDrag = null;
+document.addEventListener("dragstart", (event) => {
+  const handle = event.target.closest?.("[data-drag-part]");
+  if (!handle) return;
+  outlinePartDrag = { index: Number(handle.dataset.index), part: handle.dataset.part };
+  event.dataTransfer.effectAllowed = "move";
+  handle.closest("[data-part-row]")?.classList.add("dragging");
+});
+document.addEventListener("dragover", (event) => {
+  if (!outlinePartDrag) return;
+  const over = event.target.closest?.("[data-part-row]");
+  if (over && Number(over.dataset.index) === outlinePartDrag.index) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    over.classList.add("drop-target");
+  }
+});
+document.addEventListener("dragleave", (event) => {
+  event.target.closest?.("[data-part-row]")?.classList.remove("drop-target");
+});
+document.addEventListener("drop", (event) => {
+  if (!outlinePartDrag) return;
+  const over = event.target.closest?.("[data-part-row]");
+  const drag = outlinePartDrag;
+  outlinePartDrag = null;
+  if (!over || Number(over.dataset.index) !== drag.index || over.dataset.part === drag.part) return;
+  event.preventDefault();
+  const active = getActive();
+  const movement = active?.outline[drag.index];
+  if (!movement) return;
+  const parts = movement.parts || [];
+  const from = parts.findIndex((part) => part.id === drag.part);
+  let to = parts.findIndex((part) => part.id === over.dataset.part);
+  if (from === -1 || to === -1) return;
+  const rect = over.getBoundingClientRect();
+  if (event.clientY > rect.top + rect.height / 2) to += 1;
+  const [moved] = parts.splice(from, 1);
+  parts.splice(from < to ? to - 1 : to, 0, moved);
+  active.updatedAt = new Date().toISOString();
+  saveState();
+  render();
+});
+document.addEventListener("dragend", () => {
+  outlinePartDrag = null;
+  document.querySelectorAll(".dragging, .drop-target").forEach((el) => el.classList.remove("dragging", "drop-target"));
+});
 
 // Pulpit View quiet controls: chrome fades after a few idle seconds and
 // returns on any pointer or key activity.
