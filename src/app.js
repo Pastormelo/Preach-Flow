@@ -3389,6 +3389,7 @@ function renderRail(active, phase) {
           })
           .join("")}
       </div>
+      ${renderRailGuide(active, phase)}
       <div class="pf-rail-nav">
         <button class="pf-rail-nav-btn" data-action="prev-phase" ${curIdx <= 0 ? "disabled" : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Prev</button>
         <button class="pf-rail-nav-btn" data-action="next-phase" ${curIdx >= PHASES.length - 1 ? "disabled" : ""}>Next<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
@@ -3967,39 +3968,44 @@ function renderWriterCard(active, phase) {
 
 const COACH_SPARK = `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m12 3 1.9 4.6L19 9.5l-4.1 2.4L12 17l-2.9-5.1L5 9.5l5.1-1.9z"/></svg>`;
 
-function renderCoachComposer(active, phase) {
+// The one door into Sermon Guide sits in the phase rail, under the last
+// step of the movement and above Prev/Next. Devotional phases get a quiet
+// line instead of a button.
+function renderRailGuide(active, phase) {
   if (phase.devotional) {
     const text =
       phase.id === "heart"
         ? "The work is done. Walk into Sunday emptied of yourself and full of Christ."
-        : "This phase is between you and the Lord. Keep it in your writing canvas above.";
+        : "This phase is between you and the Lord. Keep it in your writing canvas.";
     return `
-      <div class="pf-coach-wrap">
-        <div class="pf-devotional">
-          ${COACH_SPARK}
-          <span>${escapeHtml(text)}</span>
-        </div>
+      <div class="pf-rail-devotional">
+        ${COACH_SPARK}
+        <span>${escapeHtml(text)}</span>
       </div>
     `;
   }
+  if (ui.showCoach) {
+    return `
+      <button class="pf-coach-cta pf-rail-cta open" data-action="close-coach">
+        ${COACH_SPARK}
+        <span>Hide Sermon Guide</span>
+      </button>
+    `;
+  }
+  const label = phase.actions?.[0]?.label || `Ask Sermon Guide about your ${phase.name.toLowerCase()}`;
+  return `
+    <button class="pf-coach-cta pf-rail-cta" data-action="coach-cta">
+      ${COACH_SPARK}
+      <span>${escapeHtml(label)}</span>
+      <em>Sermon Guide reacts to your work - it never writes for you</em>
+    </button>
+  `;
+}
 
-  // One clear door into Sermon Guide per phase. Collapsed: a single bold
-  // button seeded with this phase's best question. Open: the thread and
-  // the composer.
-  if (!ui.showCoach) {
-    const label = phase.actions?.[0]?.label || `Ask Sermon Guide about your ${phase.name.toLowerCase()}`;
-    return `
-      <div class="pf-coach-wrap">
-        <div class="pf-coach-inner">
-          <button class="pf-coach-cta" data-action="coach-cta">
-            ${COACH_SPARK}
-            <span>${escapeHtml(label)}</span>
-            <em>Sermon Guide reacts to your work - it never writes for you</em>
-          </button>
-        </div>
-      </div>
-    `;
-  }
+function renderCoachComposer(active, phase) {
+  // The static rail button is the way in; nothing floats until the
+  // conversation is actually open.
+  if (phase.devotional || !ui.showCoach) return "";
 
   return `
     <div class="pf-coach-wrap">
