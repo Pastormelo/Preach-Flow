@@ -710,7 +710,10 @@ function loadState() {
   }
 }
 
+let localWipeInProgress = false;
+
 function saveState() {
+  if (localWipeInProgress) return;
   const snapshot = stateSnapshot();
   localStorage.setItem(
     STORE_KEY,
@@ -723,6 +726,7 @@ function saveState() {
 // ticking clock doesn't trigger Google Docs / cloud syncs every minute. The
 // accumulated time rides along on the next regular saveState().
 function saveStateQuiet() {
+  if (localWipeInProgress) return;
   localStorage.setItem(STORE_KEY, JSON.stringify(stateSnapshot()));
 }
 
@@ -1227,6 +1231,13 @@ function render() {
   const active = getActive();
   syncHistory();
   const focus = captureFocus();
+  const keptScrolls = [...document.querySelectorAll("[data-scroll-keep]")].map((el) => [el.getAttribute("data-scroll-keep"), el.scrollTop]);
+  const restoreScrolls = () => {
+    for (const [key, top] of keptScrolls) {
+      const el = document.querySelector(`[data-scroll-keep="${key}"]`);
+      if (el && top) el.scrollTop = top;
+    }
+  };
   const overlays = `
     ${ui.showAuth ? renderAuthPanel() : ""}
     ${ui.showOpenAIKey ? renderOpenAIKeyPanel() : ""}
@@ -1249,6 +1260,7 @@ function render() {
       </div>
     `;
     restoreFocus(focus);
+  restoreScrolls();
     return;
   }
 
@@ -1260,6 +1272,7 @@ function render() {
       </div>
     `;
     restoreFocus(focus);
+  restoreScrolls();
     return;
   }
 
@@ -1274,6 +1287,7 @@ function render() {
     </div>
   `;
   restoreFocus(focus);
+  restoreScrolls();
   requestAnimationFrame(() => {
     const thread = document.querySelector("[data-thread]");
     if (thread) thread.scrollTop = thread.scrollHeight;
@@ -1758,6 +1772,7 @@ function renderProfile(active) {
       </div>
       <div class="pf-subtabs" style="margin-bottom:22px;">
         ${PROFILE_TABS.map(([key, label]) => `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="profile-tab" data-tab="${key}">${label}</button>`).join("")}
+        ${ui.auth.user ? `<button class="pf-chip pf-chip-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>` : ""}
       </div>
       ${tab === "profile" ? renderProfileTab() : ""}
       ${tab === "guide" ? renderProfileGuideTab() : ""}
@@ -5262,15 +5277,17 @@ function calMarkDuplicates(rows) {
   }
 }
 
-function calReadText(text, sourceNote) {
+function calReadText(text, sourceNote, sourceLabel) {
   const rows = parseCalendarRows(text);
   if (!rows.length) {
-    showBanner(`No sermon rows found${sourceNote ? ` in ${sourceNote}` : ""} - each line needs a date or a passage.`);
-    return;
+    if (sourceNote !== null) showBanner(`No sermon rows found${sourceNote ? ` in ${sourceNote}` : ""} - each line needs a date or a passage.`);
+    return 0;
   }
+  for (const row of rows) row.source = sourceLabel || sourceNote || "Pasted rows";
   calMarkDuplicates(rows);
   ui.calImport.rows = [...ui.calImport.rows, ...rows];
   render();
+  return rows.length;
 }
 
 async function handleCalImportFiles(input) {
@@ -5309,7 +5326,7 @@ async function loadCalGDocsList() {
     const params = new URLSearchParams({
       q: `(mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet') and trashed=false${nameFilter}`,
       orderBy: "modifiedTime desc",
-      pageSize: "25",
+      pageSize: "50",
       fields: "files(id,name,mimeType,modifiedTime)",
     });
     const data = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
@@ -5322,28 +5339,61 @@ async function loadCalGDocsList() {
   render();
 }
 
-async function importPickedCalDocs() {
-  const gdocs = ui.calImport.gdocs;
-  const picked = gdocs.files.filter((file) => gdocs.picked[file.id]);
-  if (!picked.length) {
-    showBanner("Check at least one calendar file first.");
-    return;
-  }
+// One click on a Drive file reads it in. Google Sheets are read tab by
+// tab through the Sheets API (a calendar per year in tabs is common), so
+// every tab's rows arrive labeled with the tab they came from. If the
+// Sheets API isn't enabled for the deployment, the first tab still comes
+// through Drive's CSV export.
+async function readCalGDocFile(fileId, fileName, mimeType) {
   ui.calImport.busy = true;
   render();
-  for (const file of picked) {
-    delete gdocs.picked[file.id];
-    try {
-      const sheet = file.mimeType === "application/vnd.google-apps.spreadsheet";
+  try {
+    if (mimeType === "application/vnd.google-apps.spreadsheet") {
+      let total = 0;
+      let tabsRead = [];
+      try {
+        const metaResponse = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(fileId)}?fields=sheets(properties(title))`,
+          { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
+        );
+        if (!metaResponse.ok) throw new Error(`Sheets API returned ${metaResponse.status}`);
+        const meta = await metaResponse.json();
+        const tabs = (meta.sheets || []).map((sheet) => sheet.properties?.title).filter(Boolean);
+        if (!tabs.length) throw new Error("No tabs found.");
+        for (const tab of tabs) {
+          const range = encodeURIComponent(`'${tab.replace(/'/g, "''")}'`);
+          const valuesResponse = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(fileId)}/values/${range}`,
+            { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
+          );
+          if (!valuesResponse.ok) continue;
+          const values = await valuesResponse.json();
+          const text = (values.values || []).map((row) => row.join("\t")).join("\n");
+          const count = calReadText(text, null, `${fileName} · ${tab}`);
+          if (count) tabsRead.push(`${tab} (${count})`);
+          total += count;
+        }
+        showBanner(total ? `Read ${total} row${total === 1 ? "" : "s"} from ${fileName} - tabs: ${tabsRead.join(", ")}.` : `No sermon rows found in ${fileName} - each row needs a date or a passage.`);
+      } catch {
+        // Sheets API unavailable: Drive's CSV export covers the first tab.
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/csv`,
+          { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
+        );
+        if (!response.ok) throw new Error(`Google returned ${response.status}`);
+        const count = calReadText(await response.text(), fileName, fileName);
+        if (count) showBanner(`Read ${count} row${count === 1 ? "" : "s"} from the first tab of ${fileName}. To read every tab, enable the Google Sheets API for this deployment.`);
+      }
+    } else {
       const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=${sheet ? "text/csv" : "text/plain"}`,
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/plain`,
         { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
       );
       if (!response.ok) throw new Error(`Google returned ${response.status}`);
-      calReadText(await response.text(), file.name);
-    } catch (error) {
-      showBanner(`Could not read ${file.name} (${error.message || "fetch failed"}).`);
+      calReadText(await response.text(), fileName, fileName);
     }
+  } catch (error) {
+    showBanner(`Could not read ${fileName} (${error.message || "fetch failed"}).`);
   }
   ui.calImport.busy = false;
   render();
@@ -5377,8 +5427,8 @@ function renderCalImportModal() {
   const cal = ui.calImport;
   const includable = cal.rows.filter((row) => !row.skip && (row.date || row.passage)).length;
   return `
-    <div class="pf-overlay" data-action="cal-close" data-overlay>
-      <div class="pf-modal wide" data-stop>
+    <div class="pf-overlay">
+      <div class="pf-modal wide" data-stop data-scroll-keep="cal-modal">
         <div class="pf-modal-head">
           <span class="pf-eyebrow">Preaching calendar</span>
           <h2 class="pf-modal-title">Load your calendar into the pipeline</h2>
@@ -5407,17 +5457,17 @@ function renderCalImportModal() {
                     cal.gdocs.loading
                       ? `<p class="pf-helper" style="margin-top:8px;">Loading your Drive files…</p>`
                       : cal.gdocs.files.length
-                        ? `<div class="pf-cal-gdocs-list pf-scroll">${cal.gdocs.files
+                        ? `<p class="pf-helper" style="margin:8px 0 4px;">Click a file and PreachFlow reads it right in - Sheets are read tab by tab.</p>
+                          <div class="pf-cal-gdocs-list pf-scroll" data-scroll-keep="cal-gdocs">${cal.gdocs.files
                             .map(
                               (file) => `
-                                <label class="pf-cal-gdocs-row">
-                                  <input type="checkbox" data-action="cal-gdocs-check" data-id="${attr(file.id)}" ${cal.gdocs.picked[file.id] ? "checked" : ""} />
+                                <button class="pf-cal-gdocs-row" data-action="cal-gdocs-add" data-id="${attr(file.id)}" data-name="${attr(file.name)}" data-mime="${attr(file.mimeType)}" ${cal.busy ? "disabled" : ""}>
                                   <span>${escapeHtml(file.name)}</span>
                                   <em>${file.mimeType.includes("spreadsheet") ? "Sheet" : "Doc"}</em>
-                                </label>`,
+                                  <b>+ Read</b>
+                                </button>`,
                             )
-                            .join("")}</div>
-                          <button class="pf-btn" data-action="cal-gdocs-import" ${cal.busy ? "disabled" : ""}>Read the checked files</button>`
+                            .join("")}</div>`
                         : `<p class="pf-helper" style="margin-top:8px;">No Docs or Sheets found${cal.gdocs.query ? " for that search" : ""}.</p>`
                   }
                 </div>`
@@ -5428,13 +5478,13 @@ function renderCalImportModal() {
         ${
           cal.rows.length
             ? `
-              <div class="pf-cal-rows pf-scroll">
+              <div class="pf-cal-rows pf-scroll" data-scroll-keep="cal-rows">
                 <div class="pf-cal-row pf-cal-head-row">
                   <span>Preaching date</span><span>Passage</span><span>Title</span><span>Series</span><span></span>
                 </div>
                 ${cal.rows
                   .map(
-                    (row) => `
+                    (row, rowIndex) => `${row.source && row.source !== cal.rows[rowIndex - 1]?.source ? `<div class="pf-cal-src">From ${escapeHtml(row.source)}</div>` : ""}
                       <div class="pf-cal-row ${row.skip ? "skipped" : ""}">
                         <input class="pf-input" type="date" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="date" value="${attr(row.date)}" />
                         <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="passage" value="${attr(row.passage)}" placeholder="Psalm 100" />
@@ -5516,7 +5566,7 @@ async function loadGDocsList() {
     const params = new URLSearchParams({
       q: `mimeType='application/vnd.google-apps.document' and trashed=false${nameFilter}`,
       orderBy: "modifiedTime desc",
-      pageSize: "25",
+      pageSize: "50",
       fields: "files(id,name,modifiedTime)",
     });
     const data = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
@@ -5529,33 +5579,24 @@ async function loadGDocsList() {
   render();
 }
 
-async function importPickedGDocs() {
-  const gdocs = ui.libImport.gdocs;
-  const picked = gdocs.files.filter((file) => gdocs.picked[file.id]);
-  if (!picked.length) {
-    showBanner("Check at least one Google Doc first.");
-    return;
+async function importGDocById(fileId, fileName) {
+  const item = { id: genId(), fileName, text: "", html: "", status: "reading", note: "Fetching from Google…", series: "", tags: "", ...guessImportMeta(fileName) };
+  ui.libImport.queue.push(item);
+  render();
+  try {
+    const content = await googleExportContent(fileId);
+    item.text = content.text;
+    item.html = content.html;
+    const words = item.text.trim().split(/\s+/).filter(Boolean).length;
+    if (!words) throw new Error("No text found in this doc.");
+    fillGuessFromContent(item);
+    item.status = "ready";
+    item.note = `${words.toLocaleString()} words from Google Docs`;
+  } catch (error) {
+    item.status = "error";
+    item.note = error.message || "Could not fetch this doc.";
   }
-  for (const file of picked) {
-    const item = { id: genId(), fileName: file.name, text: "", html: "", status: "reading", note: "Fetching from Google…", series: "", tags: "", ...guessImportMeta(file.name) };
-    ui.libImport.queue.push(item);
-    delete gdocs.picked[file.id];
-    render();
-    try {
-      const content = await googleExportContent(file.id);
-      item.text = content.text;
-      item.html = content.html;
-      const words = item.text.trim().split(/\s+/).filter(Boolean).length;
-      if (!words) throw new Error("No text found in this doc.");
-      fillGuessFromContent(item);
-      item.status = "ready";
-      item.note = `${words.toLocaleString()} words from Google Docs`;
-    } catch (error) {
-      item.status = "error";
-      item.note = error.message || "Could not fetch this doc.";
-    }
-    render();
-  }
+  render();
 }
 
 function applyLibImport() {
@@ -5597,7 +5638,6 @@ function renderGDocsBrowser() {
       </button>
     `;
   }
-  const checkedCount = Object.values(gdocs.picked).filter(Boolean).length;
   return `
     <div class="pf-gdocs open">
       <div class="pf-checklist-head" style="margin-bottom:8px;">
@@ -5608,20 +5648,20 @@ function renderGDocsBrowser() {
         <input class="pf-input" data-action="lib-gdocs-query" placeholder="Search your Docs by name" value="${attr(gdocs.query)}" />
         <button class="pf-btn pf-btn-ghost" data-action="lib-gdocs-search">Search</button>
       </div>
-      <div class="pf-gdoc-list">
+      <p class="pf-helper" style="margin:0 0 8px;">Click a doc and it's added - PreachFlow reads it straight into the queue below.</p>
+      <div class="pf-gdoc-list" data-scroll-keep="lib-gdocs">
         ${gdocs.files
           .map(
             (file) => `
-              <label class="pf-gdoc-row">
-                <input type="checkbox" data-action="lib-gdocs-check" data-id="${attr(file.id)}" ${gdocs.picked[file.id] ? "checked" : ""} />
+              <button class="pf-gdoc-row" data-action="lib-gdocs-add" data-id="${attr(file.id)}" data-name="${attr(file.name)}">
                 <strong>${escapeHtml(file.name)}</strong>
                 <span>${file.modifiedTime ? escapeHtml(fmtDate(file.modifiedTime.slice(0, 10))) : ""}</span>
-              </label>
+                <em>+ Add</em>
+              </button>
             `,
           )
           .join("") || (gdocs.loading ? "" : `<p class="pf-helper">No Google Docs found${gdocs.query ? " for that search" : ""}.</p>`)}
       </div>
-      ${gdocs.files.length ? `<button class="pf-btn" data-action="lib-gdocs-import" style="margin-top:8px;" ${checkedCount ? "" : "disabled"}>${checkedCount ? `Fetch ${checkedCount} checked doc${checkedCount === 1 ? "" : "s"}` : "Check docs to fetch"}</button>` : ""}
     </div>
   `;
 }
@@ -5631,8 +5671,8 @@ function renderLibImportModal() {
   const ready = queue.filter((item) => item.status === "ready").length;
   const reading = queue.some((item) => item.status === "reading");
   return `
-    <div class="pf-overlay" data-action="lib-import-close" data-overlay>
-      <div class="pf-modal wide" data-stop>
+    <div class="pf-overlay">
+      <div class="pf-modal wide" data-stop data-scroll-keep="lib-modal">
         <div class="pf-modal-head">
           <span class="pf-eyebrow pf-eyebrow-brand">Sermon Library</span>
           <h2 class="pf-modal-title">Bring in the sermons you've already preached</h2>
@@ -9379,13 +9419,18 @@ async function signOut() {
   if (!ui.auth.client) return;
   ui.auth.loading = true;
   render();
+  // Push the latest work to the account first, then clear this device so
+  // an open laptop can't hand a signed-out session to the next person.
+  try {
+    await saveCloudState({ background: true });
+  } catch {
+    /* the cloud copy is already current or unreachable; sign out anyway */
+  }
   await ui.auth.client.auth.signOut();
-  ui.auth.user = null;
-  ui.auth.loading = false;
-  ui.auth.status = "Signed out. Saving on this device.";
-  ui.auth.statusKey = "neutral";
-  showBanner("Signed out.");
-  render();
+  localWipeInProgress = true;
+  localStorage.removeItem(STORE_KEY);
+  window.location.hash = "#signin";
+  window.location.reload();
 }
 
 async function loadCloudState() {
@@ -10283,8 +10328,8 @@ document.addEventListener("click", (event) => {
   if (action === "cal-gdocs-open" || action === "cal-gdocs-search") {
     loadCalGDocsList();
   }
-  if (action === "cal-gdocs-import") {
-    importPickedCalDocs();
+  if (action === "cal-gdocs-add") {
+    readCalGDocFile(target.dataset.id, target.dataset.name || "Drive file", target.dataset.mime || "");
   }
   if (action === "cal-row-remove") {
     ui.calImport.rows = ui.calImport.rows.filter((row) => row.id !== target.dataset.id);
@@ -10319,8 +10364,8 @@ document.addEventListener("click", (event) => {
   if (action === "lib-gdocs-open" || action === "lib-gdocs-search") {
     loadGDocsList();
   }
-  if (action === "lib-gdocs-import") {
-    importPickedGDocs();
+  if (action === "lib-gdocs-add") {
+    importGDocById(target.dataset.id, target.dataset.name || "Google Doc");
   }
   if (action === "toggle-check") {
     const active = getActive();
@@ -11197,15 +11242,8 @@ document.addEventListener("change", (event) => {
   if (action === "cal-import-files") {
     handleCalImportFiles(target);
   }
-  if (action === "cal-gdocs-check") {
-    ui.calImport.gdocs.picked[target.dataset.id] = target.checked;
-  }
   if (action === "lib-import-files") {
     handleLibImportFiles(target);
-  }
-  if (action === "lib-gdocs-check") {
-    ui.libImport.gdocs.picked[target.dataset.id] = target.checked;
-    render();
   }
   if (action === "readiness-toggle") {
     const active = getActive();
@@ -11439,6 +11477,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 // Deep links from the marketing homepage: /app#signin opens sign-in,
+// Test/debug handle: lets browser drives inspect and nudge app state.
+window.__pf = { ui, state, render };
+
 // /app#ahead opens the Stay Ahead page. Without a hash, never boot into a
 // stale persisted sign-in view.
 if (window.location.hash === "#signin" && !ui.auth.user) {
