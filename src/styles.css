@@ -4798,3 +4798,78 @@ p {
   0% { transform: translateX(-110%); }
   100% { transform: translateX(290%); }
 }
+
+/* --- Preaching Calendar import --- */
+.pf-cal-sources { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.pf-cal-source-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.pf-cal-gdocs {
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface-page);
+}
+.pf-cal-gdocs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+  margin: 10px 0;
+}
+.pf-cal-gdocs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.pf-cal-gdocs-row:hover { background: var(--brand-soft); }
+.pf-cal-gdocs-row em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.pf-cal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  margin-top: 6px;
+  padding-right: 4px;
+}
+.pf-cal-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 1.2fr 1fr 62px;
+  gap: 8px;
+  align-items: center;
+}
+.pf-cal-row-tools .pf-inline-link { font-size: 12.5px; white-space: nowrap; }
+.pf-cal-head-row {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pf-cal-row.skipped .pf-input { opacity: 0.45; }
+.pf-cal-row-tools { display: flex; justify-content: center; }
+.pf-cal-row-note {
+  grid-column: 1 / -1;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--brand-strong, #b45309);
+  margin-top: -2px;
+}
+@media (max-width: 700px) {
+  .pf-cal-row { grid-template-columns: 1fr 1fr; }
+  .pf-cal-row-tools { justify-content: flex-end; }
+  .pf-cal-head-row { display: none; }
+}

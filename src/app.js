@@ -582,6 +582,7 @@ const ui = {
   refine: null,
   refineMenu: false,
   encourage: null,
+  calImport: { show: false, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, selectedSection: "" },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
@@ -1234,6 +1235,7 @@ function render() {
     ${ui.showSlides && active ? renderSlidesModal(active) : ""}
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.libImport.show ? renderLibImportModal() : ""}
+    ${ui.calImport.show ? renderCalImportModal() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
     ${ui.scripture.show ? renderScriptureModal() : ""}
     ${renderOnboarding()}
@@ -3140,10 +3142,16 @@ function renderPipelineSermons() {
           <span class="pf-eyebrow pf-eyebrow-brand">Pipeline</span>
           <h1 class="pf-h1">Sermons in motion</h1>
         </div>
-        <button class="pf-btn pf-btn-primary" style="margin-left:auto;" data-action="new-sermon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          New sermon
-        </button>
+        <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="pf-btn" data-action="cal-import-open">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Import preaching calendar
+          </button>
+          <button class="pf-btn pf-btn-primary" data-action="new-sermon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            New sermon
+          </button>
+        </div>
       </div>
       ${libraryCount ? `<p class="pf-helper" style="margin:-6px 0 14px;">Preached and imported sermons are filed in the <button class="pf-inline-link" data-view="library">Sermon Library</button> (${libraryCount}).</p>` : ""}
       <div class="pf-tools">
@@ -5129,6 +5137,327 @@ function fillGuessFromContent(item) {
   const guessed = guessMetaFromText(item.text);
   if (!item.passage && guessed.passage) item.passage = guessed.passage;
   if (!item.title && guessed.title) item.title = guessed.title;
+}
+
+// ---- Preaching Calendar import ----
+// A calendar doc only carries sermon identity (date, passage, title,
+// series). Parse it, let the preacher correct anything, then load the
+// pipeline so every upcoming sermon is already waiting with its date.
+
+const CAL_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function parseCalDate(input) {
+  const text = String(input || "").trim();
+  if (!text) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const valid = (y, m, d) => m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${pad(m)}-${pad(d)}` : "";
+  let match = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) return valid(Number(match[1]), Number(match[2]), Number(match[3]));
+  match = text.match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})/);
+  if (match) {
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+    return valid(year, Number(match[1]), Number(match[2]));
+  }
+  // "June 7, 2026" / "Jun 7" / "7 June 2026"
+  const monthPattern = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?";
+  match = text.match(new RegExp(`${monthPattern}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?`, "i"))
+    || text.match(new RegExp(`(?:^|\\s)(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthPattern}(?:,?\\s*(\\d{4}))?`, "i"));
+  if (match) {
+    const monthToken = (match[1].length <= 2 ? match[2] : match[1]).toLowerCase();
+    const day = Number(match[1].length <= 2 ? match[1] : match[2]);
+    const month = CAL_MONTHS.findIndex((name) => name.startsWith(monthToken.slice(0, 3))) + 1;
+    let year = Number(match[3]) || 0;
+    if (!year) {
+      // No year on the calendar row: assume the next time that date occurs.
+      const today = new Date();
+      year = today.getFullYear();
+      const candidate = new Date(year, month - 1, day);
+      if (candidate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) year += 1;
+    }
+    return valid(year, month, day);
+  }
+  return "";
+}
+
+// One calendar line -> cells. Tabs (Sheets paste) and pipes are explicit;
+// commas are CSV only when they aren't just the comma inside "June 7, 2026".
+function calSplitCells(line) {
+  if (line.includes("\t")) return line.split("\t").map((cell) => cell.trim());
+  if (line.includes("|")) return line.split("|").map((cell) => cell.trim());
+  if ((line.match(/,/g) || []).length >= 2) {
+    const cells = line.split(",").map((cell) => cell.trim());
+    // Re-join "June 7" + "2026" style splits.
+    const merged = [];
+    for (let i = 0; i < cells.length; i++) {
+      const next = cells[i + 1] || "";
+      if (/^\d{4}$/.test(next) && new RegExp("(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}", "i").test(cells[i])) {
+        merged.push(`${cells[i]}, ${next}`);
+        i += 1;
+      } else {
+        merged.push(cells[i]);
+      }
+    }
+    if (merged.length >= 2) return merged;
+  }
+  return null;
+}
+
+function parseCalendarRows(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const rows = [];
+  let columns = null; // header-driven column map
+  for (const line of lines) {
+    const cells = calSplitCells(line);
+    // Header row ("Date, Passage, Title, Series") sets the column map.
+    if (cells && !columns && cells.some((cell) => /^date/i.test(cell)) && cells.some((cell) => /^(passage|text|scripture)/i.test(cell))) {
+      columns = cells.map((cell) =>
+        /^date/i.test(cell) ? "date"
+        : /^(passage|text|scripture)/i.test(cell) ? "passage"
+        : /^(title|sermon)/i.test(cell) ? "title"
+        : /^series/i.test(cell) ? "series"
+        : "");
+      continue;
+    }
+    const row = { id: genId(), date: "", passage: "", title: "", series: "", skip: false, note: "" };
+    const leftovers = [];
+    const segments = cells || line.split(/\s+[-\u2013\u00b7]\s+|\s{3,}/).map((segment) => segment.trim()).filter(Boolean);
+    segments.forEach((segment, index) => {
+      const clean = segment.replace(/^[""]|[""]$/g, "").trim();
+      if (!clean) return;
+      const mapped = cells && columns ? columns[index] : "";
+      if (mapped === "date") { row.date = parseCalDate(clean) || row.date; return; }
+      if (mapped === "passage") { row.passage = parseBibleRef(clean)?.reference || clean; return; }
+      if (mapped === "title") { row.title = row.title || clean; return; }
+      if (mapped === "series") { row.series = row.series || clean; return; }
+      const seriesTag = clean.match(/^series\s*:\s*(.+)$/i);
+      if (seriesTag) { row.series = seriesTag[1].trim(); return; }
+      if (!row.date) {
+        const date = parseCalDate(clean);
+        if (date && (!parseBibleRef(clean) || /\d{4}|\//.test(clean))) { row.date = date; return; }
+      }
+      if (!row.passage && parseBibleRef(clean)) { row.passage = parseBibleRef(clean).reference; return; }
+      leftovers.push(clean);
+    });
+    if (!row.title && leftovers.length) row.title = leftovers.shift();
+    if (!row.series && leftovers.length) row.series = leftovers.shift();
+    // A calendar row must at least identify itself by date or passage.
+    if (!row.date && !row.passage) continue;
+    if (!row.date) row.note = "Add the preaching date";
+    if (!row.passage) row.note = row.note ? `${row.note} + passage` : "Add the passage";
+    rows.push(row);
+  }
+  return rows;
+}
+
+function calMarkDuplicates(rows) {
+  for (const row of rows) {
+    const dup = state.sermons.some((sermon) =>
+      (row.date && sermon.date === row.date && !sermon.imported) ||
+      (row.date && row.passage && sermon.date === row.date && (sermon.passage || "").toLowerCase() === row.passage.toLowerCase()));
+    if (dup) {
+      row.skip = true;
+      row.note = "Already in the app - skipped (Include if it's a different sermon)";
+    }
+  }
+}
+
+function calReadText(text, sourceNote) {
+  const rows = parseCalendarRows(text);
+  if (!rows.length) {
+    showBanner(`No sermon rows found${sourceNote ? ` in ${sourceNote}` : ""} - each line needs a date or a passage.`);
+    return;
+  }
+  calMarkDuplicates(rows);
+  ui.calImport.rows = [...ui.calImport.rows, ...rows];
+  render();
+}
+
+async function handleCalImportFiles(input) {
+  const files = [...(input.files || [])];
+  if (!files.length) return;
+  ui.calImport.busy = true;
+  render();
+  for (const file of files) {
+    try {
+      const text = file.name.toLowerCase().endsWith(".docx")
+        ? (await extractSermonFileContent(file)).text
+        : await file.text();
+      calReadText(text, file.name);
+    } catch (error) {
+      showBanner(`Could not read ${file.name} (${error.message || "unreadable"}).`);
+    }
+  }
+  ui.calImport.busy = false;
+  render();
+}
+
+async function loadCalGDocsList() {
+  const gdocs = ui.calImport.gdocs;
+  gdocs.open = true;
+  gdocs.loading = true;
+  render();
+  const connected = await ensureGoogleToken();
+  if (!connected) {
+    gdocs.open = false;
+    gdocs.loading = false;
+    render();
+    return;
+  }
+  try {
+    const nameFilter = gdocs.query.trim() ? ` and name contains '${gdocs.query.trim().replace(/'/g, "\\'")}'` : "";
+    const params = new URLSearchParams({
+      q: `(mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet') and trashed=false${nameFilter}`,
+      orderBy: "modifiedTime desc",
+      pageSize: "25",
+      fields: "files(id,name,mimeType,modifiedTime)",
+    });
+    const data = await googleFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
+    gdocs.files = data.files || [];
+  } catch (error) {
+    gdocs.files = [];
+    showBanner(`Could not list your Google files (${error.message || "connection failed"}).`);
+  }
+  gdocs.loading = false;
+  render();
+}
+
+async function importPickedCalDocs() {
+  const gdocs = ui.calImport.gdocs;
+  const picked = gdocs.files.filter((file) => gdocs.picked[file.id]);
+  if (!picked.length) {
+    showBanner("Check at least one calendar file first.");
+    return;
+  }
+  ui.calImport.busy = true;
+  render();
+  for (const file of picked) {
+    delete gdocs.picked[file.id];
+    try {
+      const sheet = file.mimeType === "application/vnd.google-apps.spreadsheet";
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=${sheet ? "text/csv" : "text/plain"}`,
+        { headers: { Authorization: `Bearer ${ui.google.accessToken}` } },
+      );
+      if (!response.ok) throw new Error(`Google returned ${response.status}`);
+      calReadText(await response.text(), file.name);
+    } catch (error) {
+      showBanner(`Could not read ${file.name} (${error.message || "fetch failed"}).`);
+    }
+  }
+  ui.calImport.busy = false;
+  render();
+}
+
+function applyCalImport() {
+  const ready = ui.calImport.rows.filter((row) => !row.skip && (row.date || row.passage));
+  if (!ready.length) {
+    showBanner("Nothing to add - read your calendar in first.");
+    return;
+  }
+  for (const row of ready) {
+    state.sermons.push(normalizeSermon({
+      id: genId(),
+      passage: row.passage.trim(),
+      title: row.title.trim(),
+      series: row.series.trim(),
+      date: row.date || "",
+      activePhase: "plan",
+    }));
+  }
+  ui.calImport = { show: false, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
+  state.view = "pipeline";
+  state.filter = "all";
+  saveState();
+  showBanner(`${ready.length} upcoming sermon${ready.length === 1 ? "" : "s"} added to your pipeline, each with its preaching date set.`);
+  render();
+}
+
+function renderCalImportModal() {
+  const cal = ui.calImport;
+  const includable = cal.rows.filter((row) => !row.skip && (row.date || row.passage)).length;
+  return `
+    <div class="pf-overlay" data-action="cal-close" data-overlay>
+      <div class="pf-modal wide" data-stop>
+        <div class="pf-modal-head">
+          <span class="pf-eyebrow">Preaching calendar</span>
+          <h2 class="pf-modal-title">Load your calendar into the pipeline</h2>
+        </div>
+        <p class="pf-modal-text">Bring the plan, not the sermons: each row needs a <strong>date</strong> and a <strong>passage</strong>, plus an optional title and series. Every row becomes an upcoming sermon in the Pipeline with its preaching date already set.</p>
+
+        <div class="pf-cal-sources">
+          <textarea class="pf-textarea" rows="4" data-action="cal-paste-text" placeholder="Paste calendar rows here - straight from Google Sheets, Docs, or anywhere. One sermon per line, for example:&#10;June 7, 2026 - Psalm 100 - Joyful Noise - Summer Psalms">${escapeHtml(cal.text)}</textarea>
+          <div class="pf-cal-source-row">
+            <button class="pf-btn pf-btn-primary" data-action="cal-parse" ${cal.text.trim() ? "" : "disabled"}>Read the pasted rows</button>
+            <label class="pf-btn pf-btn-ghost" style="cursor:pointer;">
+              Upload a file (.csv, .txt, .docx)
+              <input type="file" data-action="cal-import-files" accept=".csv,.tsv,.txt,.md,.markdown,.docx" multiple style="display:none;" />
+            </label>
+            <button class="pf-gdocs-cta" style="width:auto;flex:1;min-width:220px;" data-action="cal-gdocs-open">${GOOGLE_G_SVG}<span><strong>Browse Google Docs &amp; Sheets</strong><em>Read your calendar straight from Drive</em></span></button>
+          </div>
+          ${
+            cal.gdocs.open
+              ? `
+                <div class="pf-cal-gdocs">
+                  <div style="display:flex;gap:8px;">
+                    <input class="pf-input" data-action="cal-gdocs-query" value="${attr(cal.gdocs.query)}" placeholder="Search by name (e.g. preaching calendar)" />
+                    <button class="pf-btn pf-btn-ghost" data-action="cal-gdocs-search">Search</button>
+                  </div>
+                  ${
+                    cal.gdocs.loading
+                      ? `<p class="pf-helper" style="margin-top:8px;">Loading your Drive files…</p>`
+                      : cal.gdocs.files.length
+                        ? `<div class="pf-cal-gdocs-list pf-scroll">${cal.gdocs.files
+                            .map(
+                              (file) => `
+                                <label class="pf-cal-gdocs-row">
+                                  <input type="checkbox" data-action="cal-gdocs-check" data-id="${attr(file.id)}" ${cal.gdocs.picked[file.id] ? "checked" : ""} />
+                                  <span>${escapeHtml(file.name)}</span>
+                                  <em>${file.mimeType.includes("spreadsheet") ? "Sheet" : "Doc"}</em>
+                                </label>`,
+                            )
+                            .join("")}</div>
+                          <button class="pf-btn" data-action="cal-gdocs-import" ${cal.busy ? "disabled" : ""}>Read the checked files</button>`
+                        : `<p class="pf-helper" style="margin-top:8px;">No Docs or Sheets found${cal.gdocs.query ? " for that search" : ""}.</p>`
+                  }
+                </div>`
+              : ""
+          }
+        </div>
+
+        ${
+          cal.rows.length
+            ? `
+              <div class="pf-cal-rows pf-scroll">
+                <div class="pf-cal-row pf-cal-head-row">
+                  <span>Preaching date</span><span>Passage</span><span>Title</span><span>Series</span><span></span>
+                </div>
+                ${cal.rows
+                  .map(
+                    (row) => `
+                      <div class="pf-cal-row ${row.skip ? "skipped" : ""}">
+                        <input class="pf-input" type="date" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="date" value="${attr(row.date)}" />
+                        <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="passage" value="${attr(row.passage)}" placeholder="Psalm 100" />
+                        <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="title" value="${attr(row.title)}" placeholder="Title (optional)" />
+                        <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="series" value="${attr(row.series)}" placeholder="Series (optional)" />
+                        <span class="pf-cal-row-tools">
+                          ${row.skip ? `<button class="pf-inline-link" data-action="cal-row-include" data-id="${attr(row.id)}">Include</button>` : `<button class="pf-outline-btn" data-action="cal-row-remove" data-id="${attr(row.id)}" aria-label="Remove row">✕</button>`}
+                        </span>
+                        ${row.note ? `<em class="pf-cal-row-note">${escapeHtml(row.note)}</em>` : ""}
+                      </div>`,
+                  )
+                  .join("")}
+              </div>`
+            : `<p class="pf-helper" style="margin-top:14px;">Nothing read yet. Paste rows, upload a file, or browse Drive above.</p>`
+        }
+
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="cal-apply" ${includable ? "" : "disabled"}>Add ${includable || ""} sermon${includable === 1 ? "" : "s"} to the pipeline</button>
+          <button class="pf-btn pf-btn-ghost" data-action="cal-close">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // Read each chosen file into the Library import queue.
@@ -9939,6 +10268,39 @@ document.addEventListener("click", (event) => {
       }
     });
   }
+  if (action === "cal-import-open") {
+    ui.calImport = { show: true, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
+    render();
+  }
+  if (action === "cal-close") {
+    ui.calImport = { show: false, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
+    render();
+  }
+  if (action === "cal-parse") {
+    calReadText(ui.calImport.text, "the pasted rows");
+    ui.calImport.text = "";
+  }
+  if (action === "cal-gdocs-open" || action === "cal-gdocs-search") {
+    loadCalGDocsList();
+  }
+  if (action === "cal-gdocs-import") {
+    importPickedCalDocs();
+  }
+  if (action === "cal-row-remove") {
+    ui.calImport.rows = ui.calImport.rows.filter((row) => row.id !== target.dataset.id);
+    render();
+  }
+  if (action === "cal-row-include") {
+    const row = ui.calImport.rows.find((entry) => entry.id === target.dataset.id);
+    if (row) {
+      row.skip = false;
+      row.note = "";
+      render();
+    }
+  }
+  if (action === "cal-apply") {
+    applyCalImport();
+  }
   if (action === "lib-import-open") {
     ui.libImport = { show: true, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
     render();
@@ -10778,6 +11140,21 @@ document.addEventListener("input", (event) => {
     saveState();
     render();
   }
+  if (action === "cal-paste-text") {
+    ui.calImport.text = target.value;
+    const parse = document.querySelector('[data-action="cal-parse"]');
+    if (parse) parse.disabled = !target.value.trim();
+  }
+  if (action === "cal-gdocs-query") {
+    ui.calImport.gdocs.query = target.value;
+  }
+  if (action === "cal-row-field") {
+    const row = ui.calImport.rows.find((entry) => entry.id === target.dataset.id);
+    if (row) {
+      row[target.dataset.field] = target.dataset.field === "passage" && parseBibleRef(target.value) ? target.value : target.value;
+      row.note = "";
+    }
+  }
   if (action === "lib-gdocs-query") {
     ui.libImport.gdocs.query = target.value;
   }
@@ -10816,6 +11193,12 @@ document.addEventListener("change", (event) => {
   const action = target.dataset.action;
   if (action === "import-file") {
     handleImportFile(target);
+  }
+  if (action === "cal-import-files") {
+    handleCalImportFiles(target);
+  }
+  if (action === "cal-gdocs-check") {
+    ui.calImport.gdocs.picked[target.dataset.id] = target.checked;
   }
   if (action === "lib-import-files") {
     handleLibImportFiles(target);
