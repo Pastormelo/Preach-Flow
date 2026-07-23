@@ -4543,15 +4543,16 @@ p {
 
 /* --- Big Refine door under the Sermon Editor --- */
 .pf-refine-launch {
-  margin-top: 16px;
+  max-width: 860px;
+  margin: 16px auto 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .pf-refine-big {
   align-self: stretch;
-  font-size: 16px;
-  padding: 16px 22px;
+  font-size: 14.5px;
+  padding: 12px 20px;
 }
 .pf-refine-options {
   display: flex;
@@ -4712,4 +4713,88 @@ p {
 @media (max-width: 700px) {
   .pf-pulpit-seg { margin-left: 8px; }
   .pf-pulpit-seg-btn { padding: 7px 10px; font-size: 12px; }
+}
+
+/* --- Sermon Guide drafting indicator: flipping book + progress --- */
+.pf-drafting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--brand);
+  border-radius: 12px;
+  background: var(--brand-soft);
+  max-width: 100%;
+}
+.pf-draftbook {
+  position: relative;
+  width: 40px;
+  height: 30px;
+  flex: none;
+  perspective: 120px;
+}
+.pf-draftbook b {
+  position: absolute;
+  inset: 2px 0 0 0;
+  border: 2px solid var(--brand);
+  border-radius: 3px 6px 6px 3px;
+  background: var(--surface-raised);
+}
+.pf-draftbook i {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 16px;
+  height: 21px;
+  background: var(--surface-page);
+  border: 1px solid var(--border-strong);
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  animation: pf-page-flip 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.pf-draftbook i:nth-child(3) { animation-delay: 0.25s; }
+.pf-draftbook i:nth-child(4) { animation-delay: 0.5s; }
+@keyframes pf-page-flip {
+  0% { transform: rotateY(0deg); opacity: 1; }
+  60% { transform: rotateY(-165deg); opacity: 1; }
+  100% { transform: rotateY(-180deg); opacity: 0; }
+}
+.pf-drafting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.pf-drafting-info strong {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+.pf-drafting-info em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pf-drafting-bar {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  overflow: hidden;
+  margin-top: 3px;
+}
+.pf-drafting-bar i {
+  display: block;
+  height: 100%;
+  width: 38%;
+  border-radius: 999px;
+  background: var(--brand);
+  animation: pf-drafting-slide 1.3s ease-in-out infinite;
+}
+@keyframes pf-drafting-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(290%); }
 }
