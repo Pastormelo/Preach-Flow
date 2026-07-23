@@ -391,7 +391,6 @@ const PHASE_RESOURCES = {
     { view: "editor", label: "Sermon Editor", note: "Write the manuscript full-page, with formatting, sizes, and export." },
   ],
   readiness: [
-    { view: "review", label: "Review", note: "Run the standalone completeness review on the full manuscript." },
   ],
   delivery: [
     { view: "pulpit", label: "Preach It", note: "Your manuscript, the clock, and nothing else - for the run-through and for Sunday." },
@@ -581,6 +580,8 @@ const ui = {
   pulpit: { mode: "live", section: 0, showSettings: false, startedAt: "", coachCollapsed: null },
   scripture: { show: false, ref: "", text: "", attribution: "", error: "", loading: false, slide: true, pulpit: true, production: true },
   refine: null,
+  refineMenu: false,
+  encourage: null,
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, selectedSection: "" },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
@@ -603,8 +604,6 @@ const ui = {
   },
   banner: "",
   loading: false,
-  reviewLoading: false,
-  reviewResult: "",
   composer: "",
   composerPlaceholder: "Bring your work, or ask Sermon Guide a question...",
   serverStatus: { available: false, configured: false, checked: false },
@@ -640,8 +639,10 @@ const ui = {
 const state = loadState();
 if (!state.theme) state.theme = loadTheme();
 if (!state.view) state.view = "workspace";
+if (state.view === "slides") state.view = "editor";
+if (state.view === "review") state.view = "home";
 if (!state.query) state.query = "";
-if (!state.filter) state.filter = "all";
+if (!state.filter || state.filter === "done") state.filter = "all";
 if (!state.reviewMeta) state.reviewMeta = { passage: "", title: "" };
 if (!state.reviewText) state.reviewText = "";
 if (!state.reviewChecks || typeof state.reviewChecks !== "object") state.reviewChecks = {};
@@ -1265,6 +1266,7 @@ function render() {
       ${renderTopbar(active)}
       ${active && SERMON_VIEWS.has(state.view) && !ui.showNew ? renderSermonStrip(active) : ""}
       ${ui.banner ? `<div class="pf-banner">${escapeHtml(ui.banner)}</div>` : ""}
+      ${renderEncourageCard()}
       ${renderMain(active)}
       ${overlays}
     </div>
@@ -1358,7 +1360,6 @@ const NAV_GROUPS = [
   ]],
   ["Tools", [
     ["journal", "Notes"],
-    ["review", "Review"],
     ["debrief", "Debrief"],
     ["lens", "Congregational Lens"],
   ]],
@@ -1370,12 +1371,11 @@ const SERMON_TABS = [
   ["workspace", "Workspace"],
   ["map", "Map"],
   ["editor", "Editor"],
-  ["slides", "Slides"],
   ["pulpit", "Pulpit"],
   ["impact", "Impact"],
   ["sharing", "Share"],
 ];
-const SERMON_VIEWS = new Set(["workspace", "map", "editor", "slides", "impact", "sharing"]);
+const SERMON_VIEWS = new Set(["workspace", "map", "editor", "impact", "sharing"]);
 
 function renderSermonStrip(active) {
   const status = sermonStatus(active);
@@ -2067,7 +2067,6 @@ function renderMain(active) {
   if (state.view === "home") return renderHome(active);
   if (state.view === "pipeline") return renderPipeline();
   if (state.view === "journal") return renderJournal(active);
-  if (state.view === "review") return renderReview();
   if (state.view === "ahead") return renderAhead();
   if (state.view === "impact") return renderImpact(active);
   if (state.view === "lens") return renderLens();
@@ -2080,7 +2079,6 @@ function renderMain(active) {
     state.view = "editor";
   }
   if (state.view === "map") return renderPassageMap(active);
-  if (state.view === "slides") return renderSlideBuilder(active);
   if (state.view === "sharing") return renderSharingCenter(active);
   if (state.view === "library") return renderLibrary();
   if (state.view === "debrief") return renderDebriefPage();
@@ -2176,7 +2174,6 @@ function renderEmpty() {
         <p>A focused sermon-prep workspace for exegesis, research, outline, application, manuscript review, and delivery.</p>
         <div class="action-row">
           <button class="btn btn-primary" data-action="new-sermon">+ Sermon</button>
-          <button class="btn" data-view="review">Review</button>
         </div>
       </div>
       <div class="quick-actions">
@@ -2187,8 +2184,8 @@ function renderEmpty() {
         </div>
         <div class="panel quick-card">
           <h3>Bring a finished sermon</h3>
-          <p>Run the completeness review against the core preaching framework.</p>
-          <button class="btn" data-view="review">Review</button>
+          <p>Import it into your Sermon Library and keep every message findable.</p>
+          <button class="btn" data-view="library">Open the Library</button>
         </div>
       </div>
     </section>
@@ -2267,7 +2264,6 @@ const PIPELINE_FILTERS = [
   ["behind", "Behind"],
   ["on-track", "On track"],
   ["ahead", "Ahead"],
-  ["done", "Preached"],
 ];
 
 function cardStatus(sermon) {
@@ -2388,7 +2384,7 @@ function renderRefineCard() {
         refine.loading
           ? `<p class="pf-ministry-desc">Weighing your words…</p>`
           : `
-        <div class="pf-review-result" style="margin-top:6px;">${escapeHtml(refine.text)}</div>
+        <div class="pf-review-result pf-review-rich" style="margin-top:6px;">${formatGuideHtml(refine.text)}</div>
         <div class="pf-modal-actions" style="margin-top:12px;">
           <button class="pf-btn" data-action="refine-copy">Copy suggestion</button>
           <button class="pf-btn pf-btn-ghost" data-action="refine-insert-note">Insert as personal note</button>
@@ -2443,30 +2439,6 @@ function scriptureBlockHtml({ reference, translation, text, attribution, slide, 
 
 // Block palette: structured, styled blocks inserted into the manuscript.
 // Points/subpoints are real headings so Pulpit View and slides see them.
-const EDITOR_BLOCKS = [
-  ["point", "Sermon Point"],
-  ["sub", "Subpoint"],
-  ["illustration", "Illustration"],
-  ["application", "Application"],
-  ["transition", "Transition"],
-  ["prayer", "Prayer"],
-  ["quote", "Quote"],
-  ["cue", "Media Cue"],
-  ["slide", "Slide Cue"],
-  ["note", "Personal Note"],
-  ["public", "Public Note"],
-  ["respond", "Call to Respond"],
-];
-
-function editorBlockHtml(kind) {
-  if (kind === "point") return `<h3>New point…</h3><p><br></p>`;
-  if (kind === "sub") return `<h4>Subpoint…</h4><p><br></p>`;
-  if (kind === "slide") {
-    return `<div class="pf-b pf-b-slide" data-slide="1"><p class="pf-slide-title">Slide: title…</p><p>On-screen text…</p></div><p><br></p>`;
-  }
-  const labels = Object.fromEntries(EDITOR_BLOCKS);
-  return `<div class="pf-b pf-b-${attr(kind)}"><p>${escapeHtml(labels[kind] || "Note")}…</p></div><p><br></p>`;
-}
 
 // Remember where the cursor was in the manuscript editor so modal-driven
 // inserts land in the right place.
@@ -2598,7 +2570,7 @@ function renderEditorPage(active) {
         <div class="pf-editor-actions">
           <button class="pf-btn pf-btn-ghost" data-action="editor-gdoc-export" ${ui.google.loading ? "disabled" : ""}>${ui.google.loading ? "Sending…" : "Send to Google Docs"}</button>
           <button class="pf-btn" data-view="pulpit">Preach It ▸</button>
-          <button class="pf-btn pf-btn-ghost" data-view="slides">Slides</button>
+          <button class="pf-btn pf-btn-ghost" data-action="open-slides">Send to production</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-doc">Word</button>
         </div>
@@ -2610,7 +2582,6 @@ function renderEditorPage(active) {
         <button class="pf-inline-link" data-view="workspace">back to the Workspace</button>
       </div>
       ${renderFormatToolbar({ full: true })}
-      ${renderRefineCard()}
       <div
         class="pf-editor pf-doc-canvas"
         contenteditable="true"
@@ -2619,6 +2590,18 @@ function renderEditorPage(active) {
         data-phase="manuscript"
         data-placeholder="Write the sermon here - introduction, points, gospel, conclusion, call."
       >${sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()))}</div>
+      <div class="pf-refine-launch">
+        <button class="pf-btn pf-btn-primary pf-btn-big pf-refine-big" data-action="refine-menu">✦ Refine with Sermon Guide${ui.refineMenu ? "" : " ▾"}</button>
+        ${
+          ui.refineMenu
+            ? `<div class="pf-refine-options">
+                <p class="pf-helper" style="width:100%;margin:0 0 4px;">Select text in the manuscript to refine just that section, or run it on the whole sermon. Suggestions only - your words stay yours.</p>
+                ${REFINE_ACTIONS.map(([kind, label]) => `<button class="pf-refine-opt" data-action="refine" data-kind="${kind}">${label}</button>`).join("")}
+              </div>`
+            : ""
+        }
+      </div>
+      ${renderRefineCard()}
     </div>
   `;
 }
@@ -3260,7 +3243,7 @@ function maybeAutoCompletePhase(sermon, phaseId) {
   sermon.completed = [...sermon.completed, phaseId];
   sermon.updatedAt = new Date().toISOString();
   saveState();
-  showBanner(`${phase.name} complete - filled straight from your work.`);
+  showEncouragement(phase, sermon);
   // Re-rendering mid-keystroke would drop the caret in a contenteditable;
   // the progress UI catches up on the next natural render.
   if (!document.activeElement?.isContentEditable) render();
@@ -3641,7 +3624,6 @@ function renderReadinessCard(active, phase) {
       </div>
       <div class="pf-modal-actions" style="margin-top:0;margin-bottom:14px;justify-content:flex-start;">
         <button class="pf-btn pf-btn-primary pf-btn-big" data-action="coach-cta">Run the Readiness Check with Sermon Guide</button>
-        <button class="pf-btn pf-btn-ghost" data-view="review">Open the full Review page</button>
       </div>
       <p class="pf-section-hint">No Sermon Guide? The check still works: walk each question against your manuscript and mark it Ready only when it is honestly true.</p>
       ${READINESS_QUESTIONS.map(
@@ -3745,7 +3727,7 @@ function renderCanvas(active, phase) {
         <button class="pf-btn pf-btn-ghost" data-view="pulpit">Open Pulpit View</button>
         <button class="pf-btn pf-btn-ghost" data-action="open-impact">Impact Plan</button>
         ${debriefAvailable(active) ? `<button class="pf-btn pf-btn-ghost" data-action="open-debrief">Debrief</button>` : ""}
-        <button class="pf-btn pf-btn-ghost" data-view="slides">Slide Builder</button>
+        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Send slides to production</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active">Export PDF</button>
         <button class="pf-btn pf-btn-ghost" data-action="export-active-doc">Word</button>
         <button class="pf-btn pf-btn-ghost" data-action="copy-active">Copy</button>
@@ -3903,19 +3885,7 @@ function renderFormatToolbar(options = {}) {
       ${
         full
           ? `
-        <span class="pf-tool-menu-wrap">
-          <button class="pf-tool-pill" data-action="heading-menu" title="Insert a sermon block" aria-haspopup="true">+ Block ${menuChevron}</button>
-          <span class="pf-tool-menu" data-tool-menu>
-            ${EDITOR_BLOCKS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="insert-block" data-kind="${kind}">${label}</button>`).join("")}
-          </span>
-        </span>
         <button class="pf-tool-pill" data-action="open-scripture" title="Insert a Bible passage">Scripture ＋</button>
-        <span class="pf-tool-menu-wrap">
-          <button class="pf-tool-pill" data-action="heading-menu" title="Refine with Sermon Guide" aria-haspopup="true">Refine ✦ ${menuChevron}</button>
-          <span class="pf-tool-menu" data-tool-menu>
-            ${REFINE_ACTIONS.map(([kind, label]) => `<button class="pf-tool-menu-item" data-action="refine" data-kind="${kind}">${label}</button>`).join("")}
-          </span>
-        </span>
         <span class="pf-tool-menu-wrap">
           <button class="pf-tool-pill" data-action="heading-menu" title="Font size" aria-haspopup="true">Size ${menuChevron}</button>
           <span class="pf-tool-menu" data-tool-menu>
@@ -4038,6 +4008,87 @@ function renderCoachPanel(active) {
   `;
 }
 
+// Sermon Guide replies arrive as markdown-ish plain text. Render them as a
+// clean, readable document: headings, bold, lists, and real paragraphs.
+function formatGuideHtml(text) {
+  const inline = (line) =>
+    escapeHtml(line)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  let list = null; // "ul" | "ol"
+  let para = [];
+  const closeList = () => {
+    if (list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+  };
+  const flushPara = () => {
+    if (para.length) {
+      out.push(`<p>${para.map(inline).join("<br>")}</p>`);
+      para = [];
+    }
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flushPara();
+      closeList();
+      continue;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      flushPara();
+      closeList();
+      const level = Math.min(heading[1].length + 2, 5);
+      out.push(`<h${level}>${inline(heading[2].replace(/\*\*/g, ""))}</h${level}>`);
+      continue;
+    }
+    const bullet = line.match(/^[-•*]\s+(.*)$/);
+    if (bullet) {
+      flushPara();
+      if (list !== "ul") {
+        closeList();
+        out.push("<ul>");
+        list = "ul";
+      }
+      out.push(`<li>${inline(bullet[1])}</li>`);
+      continue;
+    }
+    const numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+    if (numbered) {
+      flushPara();
+      if (list !== "ol") {
+        closeList();
+        out.push("<ol>");
+        list = "ol";
+      }
+      out.push(`<li>${inline(numbered[2])}</li>`);
+      continue;
+    }
+    // "Label: detail" lead-ins read better with the label bolded.
+    const lead = line.match(/^([A-Z][A-Za-z''\s]{2,40}):\s+(.+)$/);
+    if (lead && !line.includes("**")) {
+      flushPara();
+      closeList();
+      out.push(`<p><strong>${inline(lead[1])}:</strong> ${inline(lead[2])}</p>`);
+      continue;
+    }
+    if (list) {
+      // continuation of the previous list item
+      out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, `<br>${inline(line)}</li>`);
+      continue;
+    }
+    para.push(line);
+  }
+  flushPara();
+  closeList();
+  return `<div class="pf-guide-doc">${out.join("")}</div>`;
+}
+
 function renderMessage(message) {
   if (message.role === "meta") {
     return `<div class="pf-msg-divider">${escapeHtml(message.content)}</div>`;
@@ -4046,7 +4097,7 @@ function renderMessage(message) {
   return `
     <div class="pf-msg ${kind}">
       ${message.role === "assistant" ? `<div class="pf-msg-who">Sermon Guide</div>` : ""}
-      <div class="pf-bubble">${escapeHtml(message.content)}</div>
+      <div class="pf-bubble">${message.role === "assistant" ? formatGuideHtml(message.content) : escapeHtml(message.content)}</div>
     </div>
   `;
 }
@@ -4187,118 +4238,6 @@ function generateSlidesDoc(sermon) {
   return pieces.join("");
 }
 
-// ---- Slide Builder ----
-// Slides serve preaching, not the other way around: short lines, readable
-// Scripture with attribution, and a warning when a slide gets text-heavy.
-const SLIDE_TYPES = {
-  title: "Title",
-  passage: "Passage",
-  bigidea: "Big idea",
-  point: "Point",
-  scripture: "Scripture",
-  quote: "Quote",
-  application: "Application",
-  respond: "Response",
-  closing: "Closing",
-  custom: "Custom",
-};
-
-// Build the deck from what the sermon already marked slide-worthy.
-function buildSlideDeck(sermon) {
-  const slides = [];
-  const push = (type, title, text = "", notes = "") => slides.push({ id: genId(), type, title, text, notes });
-  push("title", sermon.title || sermon.passage || "Sermon", [sermon.passage, sermon.series].filter(Boolean).join(" · "));
-  if (sermon.passage) push("passage", sermon.passage, "");
-  const bigIdea = worksheetValue(sermon, "aim", "burden").trim();
-  if (bigIdea) push("bigidea", "Big idea", bigIdea);
-
-  const template = document.createElement("template");
-  template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
-  let sawHeadings = false;
-  for (const node of [...template.content.querySelectorAll("h3, .pf-b-scripture, .pf-b-slide, .pf-b-quote, .pf-b-respond")]) {
-    if (node.tagName === "H3") {
-      sawHeadings = true;
-      const text = node.textContent.trim();
-      if (text) push("point", text);
-    } else if (node.classList.contains("pf-b-scripture")) {
-      if (node.getAttribute("data-slide") !== "1") continue;
-      const ref = node.getAttribute("data-ref") || node.querySelector(".pf-scripture-ref")?.textContent || "Scripture";
-      const body = node.querySelector(".pf-scripture-text")?.textContent.trim() || "";
-      const attribution = node.querySelector(".pf-scripture-attr")?.textContent.trim() || "";
-      push("scripture", ref, body, attribution);
-    } else if (node.classList.contains("pf-b-slide")) {
-      const title = (node.querySelector(".pf-slide-title")?.textContent || "").replace(/^slide:\s*/i, "").trim();
-      const body = [...node.querySelectorAll("p:not(.pf-slide-title)")].map((p) => p.textContent.trim()).filter(Boolean).join("\n");
-      push("custom", title || "Slide", body);
-    } else if (node.classList.contains("pf-b-quote")) {
-      const body = node.textContent.trim();
-      if (body) push("quote", "Quote", body);
-    } else if (node.classList.contains("pf-b-respond")) {
-      const body = node.textContent.trim();
-      if (body) push("respond", "Respond", body);
-    }
-  }
-  if (!sawHeadings) {
-    (sermon.outline || [])
-      .filter((movement) => movement.title.trim())
-      .forEach((movement) => push("point", movement.title.trim(), movement.sub.trim()));
-  }
-  if (bigIdea) push("closing", "Walk away with this", bigIdea);
-  return { theme: sermon.slideDeck?.theme || "dark", fontScale: sermon.slideDeck?.fontScale ?? 1, builtAt: new Date().toISOString(), slides };
-}
-
-function slideTooHeavy(slide) {
-  const words = `${slide.title} ${slide.text}`.split(/\s+/).filter(Boolean).length;
-  return words > 34 || slide.text.split("\n").length > 6;
-}
-
-function deckPlainText(sermon) {
-  return sermon.slideDeck.slides
-    .map((slide, index) => {
-      const lines = [`[${index + 1} · ${SLIDE_TYPES[slide.type] || "Slide"}] ${slide.title}`];
-      if (slide.text.trim()) lines.push(slide.text.trim());
-      if (slide.notes.trim()) lines.push(`(production: ${slide.notes.trim()})`);
-      return lines.join("\n");
-    })
-    .join("\n\n");
-}
-
-function deckMarkdown(sermon) {
-  return `# ${sermon.title || sermon.passage || "Sermon"} - slides\n\n${sermon.slideDeck.slides
-    .map((slide, index) => {
-      const lines = [`## ${index + 1}. ${slide.title || SLIDE_TYPES[slide.type]}`];
-      if (slide.text.trim()) lines.push(slide.text.trim());
-      if (slide.notes.trim()) lines.push(`> production: ${slide.notes.trim()}`);
-      return lines.join("\n\n");
-    })
-    .join("\n\n")}\n`;
-}
-
-function deckPrintHtml(sermon) {
-  const dark = sermon.slideDeck.theme !== "light";
-  const bg = sermon.slideDeck.theme === "brand" ? "#FF953E" : dark ? "#16181c" : "#ffffff";
-  const fg = sermon.slideDeck.theme === "brand" ? "#20242a" : dark ? "#f4f1ea" : "#20242a";
-  const scale = [0.85, 1, 1.2][sermon.slideDeck.fontScale] || 1;
-  return sermon.slideDeck.slides
-    .map(
-      (slide) => `
-        <div style="page-break-after:always;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:92vh;background:${bg};color:${fg};padding:6vh 8vw;border-radius:6px;">
-          <div style="font-size:${Math.round(14 * scale)}px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:18px;">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}</div>
-          <div style="font-weight:800;font-size:${Math.round(44 * scale)}px;line-height:1.15;margin-bottom:20px;">${escapeHtml(slide.title)}</div>
-          ${slide.text.trim() ? `<div style="font-size:${Math.round(26 * scale)}px;line-height:1.4;white-space:pre-wrap;">${escapeHtml(slide.text)}</div>` : ""}
-        </div>
-      `,
-    )
-    .join("");
-}
-
-function ensureDeck(sermon) {
-  if (!sermon.slideDeck.slides.length) {
-    sermon.slideDeck = buildSlideDeck(sermon);
-    saveState();
-  }
-  return sermon.slideDeck;
-}
 
 // ---- Passage Map workspace ----
 // Map the passage before you shape the sermon: the pastor's own marks,
@@ -4954,60 +4893,6 @@ function pmApplySelection() {
   ui.pm.selected = id;
   pmSerializeVerses();
   render();
-}
-
-function renderSlideBuilder(active) {
-  if (!active) return renderNeedSermon("Slide Builder creates slides from your current sermon - start one first.");
-  const deck = ensureDeck(active);
-  return `
-    <div class="pf-page pf-page-wide pf-fade">
-      <div class="pf-page-head" style="display:block;margin-bottom:18px;">
-        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Slide Builder</span>
-        <h1 class="pf-h1">Create clean sermon slides from the message you already prepared</h1>
-        <p class="pf-page-sub">Everything you marked while writing - points, Scripture blocks, slide cues, the big idea - becomes a deck. Edit, reorder, and export; slides serve the preaching, not the other way around.</p>
-      </div>
-
-      <div class="pf-deck-controls">
-        <button class="pf-btn pf-btn-primary" data-action="deck-rebuild" title="Rebuild the deck from the sermon (replaces slide edits)">Rebuild from sermon</button>
-        <select class="pf-select" data-action="deck-theme" style="width:auto;" title="Slide theme">
-          ${["dark", "light", "brand"].map((theme) => `<option value="${theme}" ${deck.theme === theme ? "selected" : ""}>${theme[0].toUpperCase()}${theme.slice(1)} theme</option>`).join("")}
-        </select>
-        <div class="pf-practice-font" style="margin-left:0;">
-          <button class="pf-font-btn" data-action="deck-font" data-scale="0" ${deck.fontScale === 0 ? "disabled" : ""}>A−</button>
-          <button class="pf-font-btn" data-action="deck-font" data-scale="2" ${deck.fontScale === 2 ? "disabled" : ""}>A+</button>
-        </div>
-        <span style="flex:1;"></span>
-        <button class="pf-btn" data-action="deck-export-pdf">PDF deck</button>
-        <button class="pf-btn pf-btn-ghost" data-action="open-slides">Send to production</button>
-        <button class="pf-btn pf-btn-ghost" data-action="deck-copy">Copy list of slides</button>
-      </div>
-      <p class="pf-helper" style="margin-bottom:18px;">The slide list exports production-ready text for your presentation software. ${deck.builtAt ? `Deck built ${escapeHtml(fmtDate(deck.builtAt.slice(0, 10)))}.` : ""}</p>
-
-      <div class="pf-deck-grid">
-        ${deck.slides
-          .map(
-            (slide, index) => `
-              <div class="pf-slide-card theme-${attr(deck.theme)}" data-slide-card>
-                <div class="pf-slide-thumb scale-${deck.fontScale}">
-                  <span class="pf-slide-type">${escapeHtml(SLIDE_TYPES[slide.type] || "Slide")}${slideTooHeavy(slide) ? ` <em class="pf-slide-heavy" title="This slide is text-heavy - prefer short, readable lines">Heavy text</em>` : ""}</span>
-                  <input class="pf-slide-title-input" data-action="slide-title" data-index="${index}" value="${attr(slide.title)}" placeholder="Slide title" aria-label="Slide ${index + 1} title" />
-                  <textarea class="pf-slide-text-input" data-action="slide-text" data-index="${index}" rows="3" placeholder="On-screen text" aria-label="Slide ${index + 1} on-screen text">${escapeHtml(slide.text)}</textarea>
-                </div>
-                <input class="pf-input pf-slide-notes" data-action="slide-notes" data-index="${index}" value="${attr(slide.notes)}" placeholder="Notes for production…" aria-label="Slide ${index + 1} production notes" />
-                <div class="pf-slide-tools">
-                  <span class="pf-slide-num">${index + 1}</span>
-                  <button class="pf-outline-btn" data-action="slide-up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move slide up">▲</button>
-                  <button class="pf-outline-btn" data-action="slide-down" data-index="${index}" ${index === deck.slides.length - 1 ? "disabled" : ""} aria-label="Move slide down">▼</button>
-                  <button class="pf-outline-btn" data-action="slide-remove" data-index="${index}" aria-label="Remove slide">✕</button>
-                </div>
-              </div>
-            `,
-          )
-          .join("")}
-        <button class="pf-slide-card pf-slide-add" data-action="slide-add">+ Add slide</button>
-      </div>
-    </div>
-  `;
 }
 
 function renderSlidesModal(active) {
@@ -6771,7 +6656,12 @@ function buildSharePayload(sermon, kind) {
     if (on("outline")) {
       add("Outline", (sermon.outline || []).filter((m) => m.title.trim()).map((m, i) => `${i + 1}. ${m.title}${m.sub ? ` - ${m.sub}` : ""}`).join("\n"));
     }
-    if (on("slides") && sermon.slideDeck.slides.length) add("Slides", deckPlainText(sermon));
+    if (on("slides")) {
+      const template = document.createElement("template");
+      template.innerHTML = sanitizeRichHtml(sermon.slidesDoc || generateSlidesDoc(sermon));
+      const text = [...template.content.querySelectorAll("p, li")].map((node) => node.textContent.trim()).filter(Boolean).join("\n");
+      if (text) add("Slides", text);
+    }
     if (on("scripture")) {
       const template = document.createElement("template");
       template.innerHTML = sanitizeRichHtml(phaseNoteHtml(sermon, manuscriptPhaseDef()));
@@ -8079,87 +7969,6 @@ function renderEmptyJournal() {
   `;
 }
 
-const REVIEW_CHECKS = [
-  ["gospel", "The gospel is clearly present"],
-  ["hero", "Christ is the hero - not the hearer"],
-  ["illustration", "At least one concrete illustration"],
-  ["application", "Application is specific (something for Monday)"],
-  ["invitation", "A clear invitation to respond"],
-  ["walkaway", "One memorable walk-away line"],
-];
-
-function renderReview() {
-  const okCount = REVIEW_CHECKS.filter(([key]) => state.reviewChecks[key]).length;
-  const pct = Math.round((okCount / REVIEW_CHECKS.length) * 100);
-  return `
-    <div class="pf-page pf-page-narrow pf-fade">
-      <div class="pf-page-head" style="display:block;margin-bottom:26px;">
-        <span class="pf-eyebrow pf-eyebrow-brand" style="display:block;margin-bottom:8px;">Readiness check</span>
-        <h1 class="pf-h1">Is it ready to preach?</h1>
-        <p class="pf-page-sub">The non-negotiables before Sunday. Nothing here writes the sermon for you - it just makes sure nothing's missing.</p>
-      </div>
-
-      <section class="pf-score-card">
-        <div class="pf-score-head">
-          <span class="pf-score-label">${okCount} of ${REVIEW_CHECKS.length} ready</span>
-          <div class="pf-score-track"><div class="pf-score-fill" style="width:${pct}%;"></div></div>
-        </div>
-        <div>
-          ${REVIEW_CHECKS.map(([key, label]) => {
-            const ok = Boolean(state.reviewChecks[key]);
-            return `
-              <button class="pf-review-item" style="width:100%;background:none;border-top:1px solid var(--border-subtle);cursor:pointer;text-align:left;" data-action="review-check" data-key="${key}">
-                <span class="pf-review-box ${ok ? "ok" : ""}">${ok ? SVG_CHECK(14, 3.4) : ""}</span>
-                <span class="pf-review-label ${ok ? "ok" : ""}">${escapeHtml(label)}</span>
-              </button>
-            `;
-          }).join("")}
-        </div>
-        <form data-form="review-sermon">
-          <button class="pf-review-btn" type="submit" ${ui.reviewLoading || !state.reviewText.trim() ? "disabled" : ""}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L19 9.5l-4.1 2.4L12 17l-2.9-5.1L5 9.5l5.1-1.9z"/></svg>
-            ${ui.reviewLoading ? "Running review…" : "Review with Sermon Guide"}
-          </button>
-        </form>
-      </section>
-
-      <section class="pf-score-card" style="margin-top:18px;">
-        <div class="pf-modal-head">
-          <span class="pf-eyebrow">Manuscript</span>
-          <h2 class="pf-modal-title" style="font-size:18px;">Bring a finished sermon</h2>
-        </div>
-        <div class="pf-form-grid">
-          <div class="pf-field">
-            <label class="pf-label" for="review-passage">Passage</label>
-            <input id="review-passage" class="pf-input" data-action="review-meta" data-field="passage" value="${attr(state.reviewMeta.passage)}" placeholder="Ephesians 3:1-13" />
-          </div>
-          <div class="pf-field">
-            <label class="pf-label" for="review-title">Title</label>
-            <input id="review-title" class="pf-input" data-action="review-meta" data-field="title" value="${attr(state.reviewMeta.title)}" />
-          </div>
-        </div>
-        <div class="pf-review-upload">
-          <div class="pf-field" style="margin:0;">
-            <label class="pf-label" for="review-file">Upload (.txt, .md, .docx)</label>
-            <input id="review-file" class="pf-input" type="file" data-action="review-file" accept=".txt,.md,.markdown,.docx" />
-          </div>
-          <textarea class="pf-textarea" data-action="review-text" placeholder="Paste the manuscript here.">${escapeHtml(state.reviewText)}</textarea>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="pf-btn pf-btn-ghost" type="button" data-action="clear-review">Clear</button>
-          </div>
-        </div>
-        ${
-          ui.reviewLoading
-            ? `<div class="pf-review-result">${loadingDots()}</div>`
-            : ui.reviewResult
-              ? `<div class="pf-review-result">${escapeHtml(ui.reviewResult)}</div>`
-              : ""
-        }
-      </section>
-    </div>
-  `;
-}
-
 function addSermon(form) {
   const data = Object.fromEntries(new FormData(form));
   const sermon = normalizeSermon({
@@ -8200,6 +8009,62 @@ function saveDetails(form) {
   render();
 }
 
+// The app coaches the preacher along the path. Every completed phase earns a
+// word about why this work matters - the weight and joy of preaching itself.
+const ENCOURAGEMENTS = [
+  { text: "How will they hear without someone preaching? Your study this week is how God plans to reach someone.", ref: "Romans 10:14" },
+  { text: "Preach the word; be ready in season and out of season. Faithfulness in this desk work IS readiness.", ref: "2 Timothy 4:2" },
+  { text: "God's word does not return empty. Every hour in the text is an hour God intends to use.", ref: "Isaiah 55:11" },
+  { text: "It pleased God through the folly of what we preach to save those who believe. Heaven moves through sermons.", ref: "1 Corinthians 1:21" },
+  { text: "They read from the book, clearly, and gave the sense. That is the whole job: make God's meaning plain.", ref: "Nehemiah 8:8" },
+  { text: "What we proclaim is not ourselves, but Jesus Christ as Lord. That is why your own ideas can wait.", ref: "2 Corinthians 4:5" },
+  { text: "Whoever speaks, let it be as one who speaks the oracles of God. No other work in the world carries this weight.", ref: "1 Peter 4:11" },
+  { text: "The word of God is living and active. You are not preparing a talk; you are handling something alive.", ref: "Hebrews 4:12" },
+  { text: "Do not shrink from declaring the whole counsel of God. Slow, honest study is how a preacher earns that claim.", ref: "Acts 20:27" },
+  { text: "Faith comes from hearing, and hearing through the word of Christ. Sunday's hearing starts with this week's studying." , ref: "Romans 10:17" },
+  { text: "A sermon is not a lecture about the Bible. It is God's word, opened and applied, to real people you love." },
+  { text: "The pulpit has outlasted empires. You are stepping into the oldest ongoing work in the church - keep going." },
+  { text: "Nobody drifts into a text-driven sermon. Every deliberate step you just took is what faithfulness looks like." },
+  { text: "Your people will never know most of this work. God sees all of it, and none of it is wasted." },
+  { text: "The best preachers are not the most gifted; they are the most prepared and the most prayed-up. You are doing both." },
+  { text: "Before it is a message for them, it must be bread for you. Study like a man who plans to eat first." },
+];
+
+function showEncouragement(phase, sermon) {
+  const movementDone = PHASES.filter((p) => p.block === phase.block).every((p) => sermon.completed.includes(p.id));
+  const pick = ENCOURAGEMENTS[(sermon.completed.length + phase.block * 3) % ENCOURAGEMENTS.length];
+  ui.encourage = {
+    eyebrow: movementDone
+      ? `Movement ${phase.block + 1} complete · ${BLOCKS[phase.block].label}`
+      : `Phase complete · ${phase.name}`,
+    enc: phase.enc || "",
+    quote: pick.text,
+    ref: pick.ref || "",
+    big: movementDone,
+  };
+  clearTimeout(encourageTimer);
+  encourageTimer = setTimeout(() => {
+    ui.encourage = null;
+    render();
+  }, 16000);
+}
+
+let encourageTimer;
+
+function renderEncourageCard() {
+  const card = ui.encourage;
+  if (!card) return "";
+  return `
+    <div class="pf-encourage ${card.big ? "big" : ""}" role="status">
+      <button class="pf-encourage-x" data-action="encourage-dismiss" aria-label="Dismiss">✕</button>
+      <div class="pf-encourage-head">${COACH_SPARK}<span class="pf-eyebrow pf-eyebrow-brand">${escapeHtml(card.eyebrow)}</span></div>
+      ${card.enc ? `<p class="pf-encourage-enc">${escapeHtml(card.enc)}</p>` : ""}
+      <p class="pf-encourage-quote">${escapeHtml(card.quote)}</p>
+      ${card.ref ? `<p class="pf-encourage-ref">${escapeHtml(card.ref)}</p>` : ""}
+    </div>
+  `;
+}
+
 function showBanner(message) {
   ui.banner = message;
   clearTimeout(bannerTimer);
@@ -8229,7 +8094,7 @@ function toggleComplete(phaseId) {
   if (!done && phase) {
     const index = PHASES.findIndex((item) => item.id === phaseId);
     patch.activePhase = PHASES[Math.min(index + 1, PHASES.length - 1)].id;
-    showBanner(phase.enc);
+    showEncouragement(phase, { ...active, completed });
   }
   updateActive(patch);
   render();
@@ -8418,64 +8283,6 @@ function tapPhaseAction(index) {
       composer.setSelectionRange(composer.value.length, composer.value.length);
     }
   });
-}
-
-async function reviewSermon() {
-  const text = state.reviewText.trim();
-  if (!text || ui.reviewLoading) return;
-  if (!requireOpenAIKey()) {
-    ui.reviewResult = "Add your own OpenAI API key to run the sermon review.";
-    render();
-    return;
-  }
-  ui.reviewLoading = true;
-  ui.reviewResult = "";
-  render();
-  try {
-    const response = await fetch("./api/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...openAIHeaders() },
-      body: JSON.stringify({
-        sermon: text,
-        meta: state.reviewMeta,
-      }),
-    });
-    const data = await response.json();
-    ui.reviewResult = data.text || "No review came back. Try again.";
-  } catch {
-    ui.reviewResult =
-      "I could not reach the review server. Check the deployment, then make sure your OpenAI API key is saved in this browser.";
-  } finally {
-    ui.reviewLoading = false;
-    render();
-  }
-}
-
-async function handleReviewFile(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  if (file.name.toLowerCase().endsWith(".docx")) {
-    try {
-      const buffer = await file.arrayBuffer();
-      const response = await fetch("./api/extract-docx", {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: buffer,
-      });
-      const data = await response.json();
-      state.reviewText = data.text || "";
-      if (!data.text) ui.reviewResult = data.error || "The document did not contain extractable text.";
-      saveState();
-      render();
-    } catch {
-      ui.reviewResult = "I could not extract that .docx. Paste the manuscript text instead.";
-      render();
-    }
-    return;
-  }
-  state.reviewText = await file.text();
-  saveState();
-  render();
 }
 
 // Passage Map export sections - only when the preacher opted in.
@@ -10115,6 +9922,11 @@ document.addEventListener("click", (event) => {
   if (action === "phase-action") {
     tapPhaseAction(Number(target.dataset.actionIndex));
   }
+  if (action === "encourage-dismiss") {
+    ui.encourage = null;
+    clearTimeout(encourageTimer);
+    render();
+  }
   if (action === "coach-cta") {
     ui.showCoach = true;
     tapPhaseAction(0);
@@ -10316,56 +10128,12 @@ document.addEventListener("click", (event) => {
     ui.scripture.attribution = "";
     render();
   }
-  if (action === "deck-rebuild") {
-    const active = getActive();
-    if (!active) return;
-    active.slideDeck = buildSlideDeck(active);
-    active.updatedAt = new Date().toISOString();
-    saveState();
-    showBanner("Deck rebuilt from the sermon.");
+  if (action === "refine-menu") {
+    ui.refineMenu = !ui.refineMenu;
     render();
-  }
-  if (action === "deck-font") {
-    const active = getActive();
-    if (!active) return;
-    active.slideDeck.fontScale = Number(target.dataset.scale);
-    saveState();
-    render();
-  }
-  if (action === "slide-up" || action === "slide-down") {
-    const active = getActive();
-    if (!active) return;
-    const index = Number(target.dataset.index);
-    const swap = action === "slide-up" ? index - 1 : index + 1;
-    const slides = active.slideDeck.slides;
-    if (swap < 0 || swap >= slides.length) return;
-    [slides[index], slides[swap]] = [slides[swap], slides[index]];
-    saveState();
-    render();
-  }
-  if (action === "slide-remove") {
-    const active = getActive();
-    if (!active) return;
-    active.slideDeck.slides.splice(Number(target.dataset.index), 1);
-    saveState();
-    render();
-  }
-  if (action === "slide-add") {
-    const active = getActive();
-    if (!active) return;
-    active.slideDeck.slides.push({ id: genId(), type: "custom", title: "", text: "", notes: "" });
-    saveState();
-    render();
-  }
-  if (action === "deck-export-pdf") {
-    const active = getActive();
-    if (active) exportPdf(`${active.passage || "Sermon"} slides`, deckPrintHtml(active));
-  }
-  if (action === "deck-copy") {
-    const active = getActive();
-    if (active) copyText(deckPlainText(active));
   }
   if (action === "refine") {
+    ui.refineMenu = false;
     closeToolMenus();
     runRefine(target.dataset.kind);
   }
@@ -10380,12 +10148,6 @@ document.addEventListener("click", (event) => {
     if (!ui.refine?.text) return;
     insertIntoEditor(`<div class="pf-b pf-b-note"><p>${escapeHtml(ui.refine.text)}</p></div><p><br></p>`);
     ui.refine = null;
-    render();
-  }
-  if (action === "insert-block") {
-    saveEditorRange();
-    closeToolMenus();
-    insertIntoEditor(editorBlockHtml(target.dataset.kind));
     render();
   }
   if (action === "practice-reset") {
@@ -10815,18 +10577,6 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
-  if (action === "review-check") {
-    const key = target.dataset.key;
-    state.reviewChecks = { ...state.reviewChecks, [key]: !state.reviewChecks[key] };
-    saveState();
-    render();
-  }
-  if (action === "clear-review") {
-    state.reviewText = "";
-    ui.reviewResult = "";
-    saveState();
-    render();
-  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -10836,7 +10586,6 @@ document.addEventListener("submit", (event) => {
   if (form.dataset.form === "new-sermon") addSermon(form);
   if (form.dataset.form === "sermon-details") saveDetails(form);
   if (form.dataset.form === "import-sermon") importSermon(form);
-  if (form.dataset.form === "review-sermon") reviewSermon();
   if (form.dataset.form === "journal-entry") saveJournalEntry();
 });
 
@@ -10896,14 +10645,6 @@ document.addEventListener("input", (event) => {
   }
   if (action === "profile-field") {
     state.preachingProfile[target.dataset.key] = target.value;
-    saveState();
-  }
-  if (action === "slide-title" || action === "slide-text" || action === "slide-notes") {
-    const active = getActive();
-    const slide = active?.slideDeck.slides[Number(target.dataset.index)];
-    if (!slide) return;
-    slide[action === "slide-title" ? "title" : action === "slide-text" ? "text" : "notes"] = target.value;
-    active.updatedAt = new Date().toISOString();
     saveState();
   }
   if (action === "scripture-ref") {
@@ -10974,16 +10715,6 @@ document.addEventListener("input", (event) => {
     saveState();
     render();
   }
-  if (action === "review-text") {
-    state.reviewText = target.value;
-    saveState();
-    const submit = document.querySelector("form[data-form='review-sermon'] button[type='submit']");
-    if (submit) submit.disabled = ui.reviewLoading || !state.reviewText.trim();
-  }
-  if (action === "review-meta") {
-    state.reviewMeta[target.dataset.field] = target.value;
-    saveState();
-  }
   if (action === "lib-gdocs-query") {
     ui.libImport.gdocs.query = target.value;
   }
@@ -11020,9 +10751,6 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
   const target = event.target;
   const action = target.dataset.action;
-  if (action === "review-file") {
-    handleReviewFile(target);
-  }
   if (action === "import-file") {
     handleImportFile(target);
   }
@@ -11096,13 +10824,6 @@ document.addEventListener("change", (event) => {
     saveState();
     render();
   }
-  if (action === "deck-theme") {
-    const active = getActive();
-    if (!active) return;
-    active.slideDeck.theme = target.value;
-    saveState();
-    render();
-  }
   if (action === "scripture-translation") {
     if (target.value === "manual") {
       state.bibleProvider.provider = "manual";
@@ -11156,7 +10877,7 @@ document.addEventListener("change", (event) => {
 
 // Keep the contenteditable's selection when a toolbar button is pressed.
 document.addEventListener("mousedown", (event) => {
-  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"], [data-action="refine"], [data-action="insert-block"], [data-action="open-scripture"]')) {
+  if (event.target.closest('[data-action="format-doc"], [data-action="heading-menu"], [data-action="refine"], [data-action="open-scripture"]')) {
     event.preventDefault();
   }
 });
