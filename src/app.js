@@ -2368,6 +2368,21 @@ async function runRefine(kind) {
   render();
 }
 
+// A visible "Sermon Guide is working" state: a little book flipping pages
+// over a moving progress bar, so drafting never looks frozen.
+function renderDraftingIndicator(note) {
+  return `
+    <div class="pf-drafting" role="status" aria-live="polite">
+      <span class="pf-draftbook" aria-hidden="true"><b></b><i></i><i></i><i></i></span>
+      <span class="pf-drafting-info">
+        <strong>Sermon Guide is drafting…</strong>
+        <em>${escapeHtml(note || "Working from your sermon - suggestions only, your words stay yours.")}</em>
+        <span class="pf-drafting-bar"><i></i></span>
+      </span>
+    </div>
+  `;
+}
+
 function renderRefineCard() {
   const refine = ui.refine;
   if (!refine) return "";
@@ -2382,7 +2397,7 @@ function renderRefineCard() {
       </div>
       ${
         refine.loading
-          ? `<p class="pf-ministry-desc">Weighing your words…</p>`
+          ? renderDraftingIndicator("Reading your manuscript and weighing the suggestion…")
           : `
         <div class="pf-review-result pf-review-rich" style="margin-top:6px;">${formatGuideHtml(refine.text)}</div>
         <div class="pf-modal-actions" style="margin-top:12px;">
@@ -2591,7 +2606,7 @@ function renderEditorPage(active) {
         data-placeholder="Write the sermon here - introduction, points, gospel, conclusion, call."
       >${sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()))}</div>
       <div class="pf-refine-launch">
-        <button class="pf-btn pf-btn-primary pf-btn-big pf-refine-big" data-action="refine-menu">✦ Refine with Sermon Guide${ui.refineMenu ? "" : " ▾"}</button>
+        <button class="pf-btn pf-btn-primary pf-refine-big" data-action="refine-menu">✦ Refine with Sermon Guide${ui.refineMenu ? "" : " ▾"}</button>
         ${
           ui.refineMenu
             ? `<div class="pf-refine-options">
@@ -2797,6 +2812,10 @@ function renderPulpitView(active) {
           <button class="pf-pulpit-btn" data-action="pulpit-prev" ${index === 0 ? "disabled" : ""}>‹ Prev</button>
           <span class="pf-pulpit-count">${index + 1} / ${sections.length}</span>
           <button class="pf-pulpit-btn" data-action="pulpit-next" ${index >= sections.length - 1 ? "disabled" : ""}>Next ›</button>
+          <div class="pf-pulpit-seg" role="group" aria-label="Reading mode">
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "active" : ""}" data-action="pulpit-read-mode" data-mode="sections" title="One section on screen at a time">Sections</button>
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "" : "active"}" data-action="pulpit-read-mode" data-mode="scroll" title="Scroll continuously through the whole manuscript">Scroll</button>
+          </div>
         </div>
         ${
           prefs.showTimer
@@ -2833,7 +2852,10 @@ function renderPulpitSettings(prefs) {
       </div>
       <div class="pf-pulpit-settings-row">
         <span>Reading mode</span>
-        <button class="pf-pulpit-chip" data-action="pulpit-focus">${prefs.focusMode ? "One section at a time" : "Continuous scroll"}</button>
+        <div class="pf-pulpit-seg" role="group" aria-label="Reading mode">
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "active" : ""}" data-action="pulpit-read-mode" data-mode="sections" title="One section on screen at a time">Sections</button>
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "" : "active"}" data-action="pulpit-read-mode" data-mode="scroll" title="Scroll continuously through the whole manuscript">Scroll</button>
+          </div>
       </div>
       <div class="pf-pulpit-settings-row">
         <span>Reading column</span>
@@ -6221,7 +6243,7 @@ function renderMinistryCard(store, card, storeObj) {
         <p class="pf-helper" style="margin-bottom:10px;">${card.fields.length} real questions, one at a time - starting with: "${escapeHtml(ministryQuestion(store, card.key, card.fields[0]) || card.fields[0])}" Each question comes with starters drawn from your sermon, so you never begin from a blank box. Or let Sermon Guide draft the whole section from your sermon.</p>
         <div class="pf-modal-actions" style="margin-top:0;justify-content:flex-start;">
           <button class="pf-btn pf-btn-primary" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}">Start the questions</button>
-          <button class="pf-btn" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === `${store}.${card.key}` ? "Drafting…" : "Draft with Sermon Guide"}</button>
+          ${ui.drafting === `${store}.${card.key}` ? renderDraftingIndicator("Drafting from your sermon…") : `<button class="pf-btn" data-action="guide-draft" data-spec="${attr(`${store}.${card.key}`)}" ${ui.drafting ? "disabled" : ""}>Draft with Sermon Guide</button>`}
         </div>
       </section>
     `;
@@ -6253,7 +6275,7 @@ function renderMinistryCardFilled(store, card, storeObj) {
             : `<button class="pf-btn" data-action="ministry-edit" data-store="${attr(store)}" data-key="${attr(card.key)}">Edit</button>
                <button class="pf-btn" data-action="ministry-copy-formatted" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Copies with formatting - paste into Docs, Word, or email">Copy formatted</button>
                <button class="pf-btn pf-btn-ghost" data-action="ministry-wizard-start" data-store="${attr(store)}" data-key="${attr(card.key)}" title="Walk the questions again, one at a time">Revisit questions</button>
-               <button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${drafting ? "Drafting…" : "Draft with Sermon Guide"}</button>`
+               ${drafting ? renderDraftingIndicator("Drafting from your sermon…") : `<button class="pf-btn pf-btn-ghost" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>Draft with Sermon Guide</button>`}`
         }
       </div>
       ${
@@ -6808,16 +6830,12 @@ function renderSharingCenter(active) {
                 <span class="pf-lib-badge ${status === "ready" || status === "shared" ? "done" : ""}">${deliveryStatusLabel(status)}</span>
               </div>
               <div class="pf-delivery-actions">
-                ${status === "none" && DRAFT_SPECS[specKey] ? `<button class="pf-btn pf-btn-primary" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>${ui.drafting === specKey ? "Drafting…" : "Draft with Sermon Guide"}</button>` : ""}
+                ${status === "none" && DRAFT_SPECS[specKey] ? (ui.drafting === specKey ? renderDraftingIndicator(`Drafting the ${resource.label.toLowerCase()} from your sermon…`) : `<button class="pf-btn pf-btn-primary" data-action="guide-draft" data-spec="${attr(specKey)}" ${ui.drafting ? "disabled" : ""}>Draft with Sermon Guide</button>`) : ""}
                 <button class="pf-btn pf-btn-ghost" data-action="delivery-edit" data-store="${attr(resource.store)}">Edit</button>
                 ${status !== "none" ? `
                   <button class="pf-btn pf-btn-ghost" data-action="delivery-copy" data-key="${attr(resource.key)}">Copy</button>
                   <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="pdf">PDF</button>
-                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="doc">Word</button>
-                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="md">MD</button>
-                  <select class="pf-select pf-delivery-status" data-action="delivery-status" data-key="${attr(resource.key)}" aria-label="${attr(resource.label)} status">
-                    ${DELIVERY_STATUSES.map(([value, label]) => `<option value="${value}" ${status === value ? "selected" : ""}>${label}</option>`).join("")}
-                  </select>` : ""}
+                  <button class="pf-btn pf-btn-ghost" data-action="delivery-export" data-key="${attr(resource.key)}" data-format="doc">Word</button>` : ""}
               </div>
             </div>
           `;
@@ -10083,6 +10101,14 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
+  if (action === "pulpit-read-mode") {
+    const wantSections = target.dataset.mode === "sections";
+    if (state.pulpitPrefs.focusMode !== wantSections) {
+      state.pulpitPrefs.focusMode = wantSections;
+      saveState();
+      render();
+    }
+  }
   if (action === "pulpit-fullscreen") {
     pulpitFullscreen();
   }
@@ -10816,14 +10842,6 @@ document.addEventListener("change", (event) => {
     link.dirty = Boolean(link.token);
     saveState();
   }
-  if (action === "delivery-status") {
-    const active = getActive();
-    if (!active) return;
-    active.delivery = { ...active.delivery, [target.dataset.key]: target.value };
-    active.updatedAt = new Date().toISOString();
-    saveState();
-    render();
-  }
   if (action === "scripture-translation") {
     if (target.value === "manual") {
       state.bibleProvider.provider = "manual";
@@ -11203,6 +11221,10 @@ document.addEventListener(
     if (count) count.textContent = `${current + 1} / ${sections.length}`;
     const bar = document.querySelector(".pf-pulpit-progress i");
     if (bar) bar.style.width = `${Math.round(((current + 1) / sections.length) * 100)}%`;
+    const prevBtn = document.querySelector('.pf-pulpit-nav [data-action="pulpit-prev"]');
+    if (prevBtn) prevBtn.disabled = current === 0;
+    const nextBtn = document.querySelector('.pf-pulpit-nav [data-action="pulpit-next"]');
+    if (nextBtn) nextBtn.disabled = current >= sections.length - 1;
     const pace = document.querySelector("[data-practice-pace]");
     if (pace) pace.dataset.fraction = Math.min(1, (current + 0.5) / sections.length).toFixed(3);
   },

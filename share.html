@@ -6,46 +6,114 @@
     <meta name="robots" content="noindex" />
     <title>Shared from PreachFlow</title>
     <link rel="icon" type="image/svg+xml" href="./assets/preach-flow-mark.svg?v=ofc-4" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet" />
     <style>
-      :root { color-scheme: light dark; }
+      :root {
+        color-scheme: light dark;
+        --brand: #ff953e;
+        --brand-deep: #dc6a12;
+        --bg: #f4fbfe;
+        --card: #ffffff;
+        --ink: #20242a;
+        --muted: #5e6c7a;
+        --border: #e0e5eb;
+        --border-soft: #ecf0f4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16181c;
+          --card: #1e2228;
+          --ink: #ece9e2;
+          --muted: #9aa2ad;
+          --border: #343b44;
+          --border-soft: #2a3038;
+        }
+      }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: -apple-system, "Segoe UI", "Mulish", sans-serif;
-        background: #f4fbfe;
-        color: #20242a;
-        line-height: 1.65;
+        font-family: "Mulish", -apple-system, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        line-height: 1.75;
       }
-      @media (prefers-color-scheme: dark) {
-        body { background: #16181c; color: #ece9e2; }
-        .meta, .foot, .updated { color: #9aa2ad !important; }
-        h2 { color: #ffb35e !important; }
-      }
-      .wrap { max-width: 680px; margin: 0 auto; padding: 44px 22px 80px; }
-      .kind {
-        font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
-        font-size: 11px; color: #dc6a12; margin: 0 0 6px;
-      }
-      h1 { margin: 0 0 4px; font-size: 27px; line-height: 1.2; }
-      .meta { color: #5e6c7a; margin: 0 0 4px; font-size: 14.5px; }
-      .bigidea { font-weight: 700; margin: 12px 0 0; font-size: 17px; }
-      h2 { font-size: 16px; margin: 30px 0 6px; color: #dc6a12; }
-      .block { white-space: pre-wrap; margin: 0; font-size: 16px; }
-      .updated { margin-top: 44px; font-size: 12.5px; color: #5e6c7a; }
-      .foot { font-size: 12.5px; color: #5e6c7a; margin-top: 6px; }
-      .err { margin-top: 40px; padding: 18px; border: 1px solid #e0e5eb; border-radius: 12px; }
       .live {
-        position: sticky; top: 0; background: #ff953e; color: #20242a;
-        font-weight: 800; padding: 10px 22px; font-size: 14px;
+        position: sticky; top: 0; z-index: 5; background: var(--brand); color: #20242a;
+        font-family: "Sora", sans-serif; font-weight: 800; padding: 10px 22px; font-size: 14px;
+      }
+      .topbar {
+        display: flex; align-items: center; gap: 10px;
+        max-width: 860px; margin: 0 auto; padding: 22px 22px 0;
+      }
+      .topbar img { width: 34px; height: 34px; }
+      .topbar span {
+        font-family: "Sora", sans-serif; font-weight: 800; font-size: 17px;
+      }
+      .topbar b { color: var(--brand-deep); font-weight: 800; }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 20px 22px 70px; }
+      .paper {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 14px 40px rgba(32, 36, 42, 0.07);
+        padding: 48px 54px 56px;
+      }
+      @media (max-width: 640px) {
+        .paper { padding: 28px 22px 36px; border-radius: 14px; }
+      }
+      .kind {
+        font-family: "Sora", sans-serif; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+        font-size: 11px; color: var(--brand-deep); margin: 0 0 10px;
+      }
+      h1 {
+        font-family: "Sora", sans-serif; font-weight: 800;
+        margin: 0 0 6px; font-size: 30px; line-height: 1.2;
+      }
+      .meta { color: var(--muted); margin: 0; font-size: 15px; }
+      .bigidea {
+        font-weight: 700; margin: 18px 0 0; font-size: 17.5px; line-height: 1.55;
+        padding: 14px 18px; border-left: 3px solid var(--brand); background: rgba(255, 149, 62, 0.08);
+        border-radius: 0 10px 10px 0;
+      }
+      .section { margin-top: 34px; }
+      .section + .section { border-top: 1px dashed var(--border); padding-top: 30px; }
+      h2 {
+        font-family: "Sora", sans-serif; font-weight: 800;
+        font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+        margin: 0 0 12px; color: var(--brand-deep);
+      }
+      .block { font-size: 16.5px; }
+      .block p { margin: 0 0 12px; }
+      .block p:last-child { margin-bottom: 0; }
+      .block ul, .block ol { margin: 4px 0 14px; padding-left: 24px; }
+      .block li { margin: 5px 0; }
+      .block strong { font-weight: 800; }
+      .updated { margin-top: 40px; font-size: 12.5px; color: var(--muted); }
+      .updated a { color: var(--brand-deep); }
+      .foot {
+        max-width: 860px; margin: 14px auto 0; padding: 0 22px;
+        font-size: 12.5px; color: var(--muted); text-align: center;
+      }
+      .err {
+        margin-top: 10px; padding: 20px; border: 1px solid var(--border);
+        border-radius: 12px; background: var(--card);
       }
     </style>
   </head>
   <body>
     <div id="live" class="live" hidden></div>
+    <div class="topbar">
+      <img src="./assets/preach-flow-mark.svg?v=ofc-4" alt="" />
+      <span>Preach<b>Flow</b></span>
+    </div>
     <div class="wrap" id="root"><p class="meta">Loading…</p></div>
+    <p class="foot" id="foot" hidden>Read-only. Shared from PreachFlow - sermon prep that keeps the text in charge.</p>
     <script>
       const root = document.getElementById("root");
       const liveBar = document.getElementById("live");
+      const foot = document.getElementById("foot");
       const token = new URLSearchParams(window.location.search).get("t") || "";
       let client = null;
 
@@ -53,6 +121,49 @@
         const div = document.createElement("div");
         div.textContent = String(value || "");
         return div.innerHTML;
+      }
+
+      // Blocks arrive as plain text. Give them the sermon's formatting:
+      // paragraphs, bold labels, bulleted and numbered lists.
+      function formatBlock(text) {
+        const inline = (line) => esc(line).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        const lines = String(text || "").replace(/\r/g, "").split("\n");
+        const out = [];
+        let list = null;
+        let para = [];
+        const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+        const flushPara = () => {
+          if (para.length) { out.push(`<p>${para.map(inline).join("<br>")}</p>`); para = []; }
+        };
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line) { flushPara(); closeList(); continue; }
+          const bullet = line.match(/^[-•*]\s+(.*)$/);
+          if (bullet) {
+            flushPara();
+            if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; }
+            out.push(`<li>${inline(bullet[1])}</li>`);
+            continue;
+          }
+          const numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+          if (numbered) {
+            flushPara();
+            if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; }
+            out.push(`<li>${inline(numbered[2])}</li>`);
+            continue;
+          }
+          const lead = line.match(/^([A-Z][A-Za-z''\s]{2,40}):\s+(.+)$/);
+          if (lead && !line.includes("**")) {
+            flushPara();
+            closeList();
+            out.push(`<p><strong>${inline(lead[1])}:</strong> ${inline(lead[2])}</p>`);
+            continue;
+          }
+          para.push(line);
+        }
+        flushPara();
+        closeList();
+        return out.join("");
       }
 
       function fail(message) {
@@ -63,14 +174,16 @@
         const header = payload.header || {};
         const metaLine = [header.passage, header.series, header.date].filter(Boolean).join(" · ");
         root.innerHTML = `
-          <p class="kind">${esc(payload.label || "Shared resource")}</p>
-          <h1>${esc(header.title || header.passage || "Sermon")}</h1>
-          ${metaLine ? `<p class="meta">${esc(metaLine)}</p>` : ""}
-          ${header.bigIdea ? `<p class="bigidea">${esc(header.bigIdea)}</p>` : ""}
-          ${(payload.blocks || []).map((block) => `<h2>${esc(block.label)}</h2><p class="block">${esc(block.text)}</p>`).join("")}
-          <p class="updated">Last updated ${payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : "-"} · <a href="#" onclick="location.reload();return false;">Refresh</a></p>
-          <p class="foot">Read-only. Shared from PreachFlow - sermon prep that keeps the text in charge.</p>
+          <div class="paper">
+            <p class="kind">${esc(payload.label || "Shared resource")}</p>
+            <h1>${esc(header.title || header.passage || "Sermon")}</h1>
+            ${metaLine ? `<p class="meta">${esc(metaLine)}</p>` : ""}
+            ${header.bigIdea ? `<p class="bigidea">${esc(header.bigIdea)}</p>` : ""}
+            ${(payload.blocks || []).map((block) => `<div class="section"><h2>${esc(block.label)}</h2><div class="block">${formatBlock(block.text)}</div></div>`).join("")}
+            <p class="updated">Last updated ${payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : "-"} · <a href="#" onclick="location.reload();return false;">Refresh</a></p>
+          </div>
         `;
+        foot.hidden = false;
         if (payload.kind === "production" && payload.follow && payload.currentSection) {
           liveBar.hidden = false;
           liveBar.textContent = `Now: ${payload.currentSection}`;
