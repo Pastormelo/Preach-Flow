@@ -4682,3 +4682,34 @@ p {
 @media (max-width: 700px) {
   .pf-encourage { right: 16px; left: 16px; width: auto; bottom: 16px; }
 }
+
+/* --- Preach It reading-mode toggle (Sections / Scroll) --- */
+.pf-pulpit-seg {
+  display: inline-flex;
+  margin-left: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pf-pulpit.theme-light .pf-pulpit-seg { border-color: rgba(0, 0, 0, 0.22); }
+.pf-pulpit-seg-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 13px;
+  cursor: pointer;
+}
+.pf-pulpit-seg-btn.active {
+  background: var(--brand);
+  color: #1c1206;
+  opacity: 1;
+}
+.pf-pulpit-settings .pf-pulpit-seg { margin-left: 0; }
+@media (max-width: 700px) {
+  .pf-pulpit-seg { margin-left: 8px; }
+  .pf-pulpit-seg-btn { padding: 7px 10px; font-size: 12px; }
+}

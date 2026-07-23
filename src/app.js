@@ -2797,6 +2797,10 @@ function renderPulpitView(active) {
           <button class="pf-pulpit-btn" data-action="pulpit-prev" ${index === 0 ? "disabled" : ""}>‹ Prev</button>
           <span class="pf-pulpit-count">${index + 1} / ${sections.length}</span>
           <button class="pf-pulpit-btn" data-action="pulpit-next" ${index >= sections.length - 1 ? "disabled" : ""}>Next ›</button>
+          <div class="pf-pulpit-seg" role="group" aria-label="Reading mode">
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "active" : ""}" data-action="pulpit-read-mode" data-mode="sections" title="One section on screen at a time">Sections</button>
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "" : "active"}" data-action="pulpit-read-mode" data-mode="scroll" title="Scroll continuously through the whole manuscript">Scroll</button>
+          </div>
         </div>
         ${
           prefs.showTimer
@@ -2833,7 +2837,10 @@ function renderPulpitSettings(prefs) {
       </div>
       <div class="pf-pulpit-settings-row">
         <span>Reading mode</span>
-        <button class="pf-pulpit-chip" data-action="pulpit-focus">${prefs.focusMode ? "One section at a time" : "Continuous scroll"}</button>
+        <div class="pf-pulpit-seg" role="group" aria-label="Reading mode">
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "active" : ""}" data-action="pulpit-read-mode" data-mode="sections" title="One section on screen at a time">Sections</button>
+            <button class="pf-pulpit-seg-btn ${prefs.focusMode ? "" : "active"}" data-action="pulpit-read-mode" data-mode="scroll" title="Scroll continuously through the whole manuscript">Scroll</button>
+          </div>
       </div>
       <div class="pf-pulpit-settings-row">
         <span>Reading column</span>
@@ -10083,6 +10090,14 @@ document.addEventListener("click", (event) => {
     saveState();
     render();
   }
+  if (action === "pulpit-read-mode") {
+    const wantSections = target.dataset.mode === "sections";
+    if (state.pulpitPrefs.focusMode !== wantSections) {
+      state.pulpitPrefs.focusMode = wantSections;
+      saveState();
+      render();
+    }
+  }
   if (action === "pulpit-fullscreen") {
     pulpitFullscreen();
   }
@@ -11203,6 +11218,10 @@ document.addEventListener(
     if (count) count.textContent = `${current + 1} / ${sections.length}`;
     const bar = document.querySelector(".pf-pulpit-progress i");
     if (bar) bar.style.width = `${Math.round(((current + 1) / sections.length) * 100)}%`;
+    const prevBtn = document.querySelector('.pf-pulpit-nav [data-action="pulpit-prev"]');
+    if (prevBtn) prevBtn.disabled = current === 0;
+    const nextBtn = document.querySelector('.pf-pulpit-nav [data-action="pulpit-next"]');
+    if (nextBtn) nextBtn.disabled = current >= sections.length - 1;
     const pace = document.querySelector("[data-practice-pace]");
     if (pace) pace.dataset.fraction = Math.min(1, (current + 0.5) / sections.length).toFixed(3);
   },
