@@ -6778,16 +6778,53 @@ function openSharePreview(sermon, kind) {
   const payload = buildSharePayload(sermon, kind);
   const win = window.open("", "_blank");
   if (!win) return;
+  const metaLine = [payload.header.passage, payload.header.series, payload.header.date].filter(Boolean).join(" · ");
+  // Match share.html exactly, so the preview shows what the link will show.
   win.document.write(`
     <title>${escapeHtml(payload.label)} - preview</title>
-    <body style="margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#f4fbfe;color:#20242a;">
-      <div style="max-width:680px;margin:0 auto;padding:40px 22px;">
-        <p style="font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#dc6a12;">${escapeHtml(payload.label)} · preview</p>
-        <h1 style="margin:6px 0 4px;font-size:26px;">${escapeHtml(payload.header.title || payload.header.passage || "Sermon")}</h1>
-        <p style="color:#5e6c7a;margin:0 0 6px;">${escapeHtml([payload.header.passage, payload.header.series, payload.header.date].filter(Boolean).join(" · "))}</p>
-        ${payload.header.bigIdea ? `<p style="font-weight:700;margin:10px 0 0;">${escapeHtml(payload.header.bigIdea)}</p>` : ""}
-        ${payload.blocks.map((block) => `<h2 style="font-size:16px;margin:26px 0 6px;">${escapeHtml(block.label)}</h2><p style="white-space:pre-wrap;line-height:1.65;margin:0;">${escapeHtml(block.text)}</p>`).join("") || `<p style="margin-top:26px;color:#5e6c7a;">Nothing to show yet - draft the underlying resources first.</p>`}
-        <p style="margin-top:40px;font-size:12px;color:#5e6c7a;">Read-only preview. The live link shows the same content.</p>
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: "Mulish", -apple-system, "Segoe UI", sans-serif; background: #f4fbfe; color: #20242a; line-height: 1.75; }
+      .topbar { display: flex; align-items: center; gap: 10px; max-width: 860px; margin: 0 auto; padding: 22px 22px 0; font-weight: 800; font-size: 17px; }
+      .topbar img { width: 34px; height: 34px; }
+      .topbar b { color: #dc6a12; }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 20px 22px 70px; }
+      .paper { background: #ffffff; border: 1px solid #e0e5eb; border-radius: 18px; box-shadow: 0 14px 40px rgba(32,36,42,0.07); padding: 48px 54px 56px; }
+      .kind { font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; color: #dc6a12; margin: 0 0 10px; }
+      h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.2; }
+      .meta { color: #5e6c7a; margin: 0; font-size: 15px; }
+      .bigidea { font-weight: 700; margin: 18px 0 0; font-size: 17.5px; line-height: 1.55; padding: 14px 18px; border-left: 3px solid #ff953e; background: rgba(255,149,62,0.08); border-radius: 0 10px 10px 0; }
+      .section { margin-top: 34px; }
+      .section + .section { border-top: 1px dashed #e0e5eb; padding-top: 30px; }
+      h2 { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 12px; color: #dc6a12; }
+      .pf-guide-doc { font-size: 16.5px; }
+      .pf-guide-doc p { margin: 0 0 12px; }
+      .pf-guide-doc p:last-child { margin-bottom: 0; }
+      .pf-guide-doc ul, .pf-guide-doc ol { margin: 4px 0 14px; padding-left: 24px; }
+      .pf-guide-doc li { margin: 5px 0; }
+      .pf-guide-doc strong { font-weight: 800; }
+      .pf-guide-doc h3, .pf-guide-doc h4, .pf-guide-doc h5 { margin: 14px 0 6px; font-size: 15px; }
+      .note { margin-top: 40px; font-size: 12.5px; color: #5e6c7a; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #16181c; color: #ece9e2; }
+        .paper { background: #1e2228; border-color: #343b44; }
+        .meta, .note { color: #9aa2ad; }
+        .section + .section { border-top-color: #343b44; }
+      }
+      @media (max-width: 640px) { .paper { padding: 28px 22px 36px; border-radius: 14px; } }
+    </style>
+    <body>
+      <div class="topbar"><img src="./assets/preach-flow-mark.svg?v=ofc-4" alt="" /><span>Preach<b>Flow</b></span></div>
+      <div class="wrap">
+        <div class="paper">
+          <p class="kind">${escapeHtml(payload.label)} · preview</p>
+          <h1>${escapeHtml(payload.header.title || payload.header.passage || "Sermon")}</h1>
+          ${metaLine ? `<p class="meta">${escapeHtml(metaLine)}</p>` : ""}
+          ${payload.header.bigIdea ? `<p class="bigidea">${escapeHtml(payload.header.bigIdea)}</p>` : ""}
+          ${payload.blocks.map((block) => `<div class="section"><h2>${escapeHtml(block.label)}</h2>${formatGuideHtml(block.text)}</div>`).join("") || `<p class="note" style="margin-top:26px;">Nothing to show yet - draft the underlying resources first.</p>`}
+          <p class="note">Read-only preview. The live link shows the same content.</p>
+        </div>
       </div>
     </body>`);
   win.document.close();
