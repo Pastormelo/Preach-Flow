@@ -1,4 +1,5 @@
 const STORE_KEY = "pulpitos:web:v1";
+const PF_BUILD = document.querySelector('meta[name="pf-build"]')?.content || "dev";
 const OPENAI_KEY_STORE = "preach-flow:openai-api-key:v1";
 const THEME_STORE = "preach-flow:theme:v1";
 const SUPABASE_SCRIPT = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
@@ -1772,7 +1773,7 @@ function renderProfile(active) {
       </div>
       <div class="pf-subtabs" style="margin-bottom:22px;">
         ${PROFILE_TABS.map(([key, label]) => `<button class="pf-chip ${tab === key ? "active" : ""}" data-action="profile-tab" data-tab="${key}">${label}</button>`).join("")}
-        ${ui.auth.user ? `<button class="pf-chip pf-chip-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>` : ""}
+        <button class="pf-chip pf-chip-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
       </div>
       ${tab === "profile" ? renderProfileTab() : ""}
       ${tab === "guide" ? renderProfileGuideTab() : ""}
@@ -1967,9 +1968,10 @@ function renderProfileAccountTab(active) {
         </div>
         <button class="pf-btn" data-action="toggle-theme">Toggle</button>
       </div>
-      ${ui.auth.user ? `<div class="pf-account-actions">
+      <div class="pf-account-actions">
         <button class="pf-btn pf-btn-danger" data-action="sign-out" ${ui.auth.loading ? "disabled" : ""}>Sign out</button>
-      </div>` : ""}
+        <span class="pf-helper" style="margin-left:auto;align-self:center;">App build ${escapeHtml(PF_BUILD)}</span>
+      </div>
     `)}
   `;
 }
@@ -9416,17 +9418,31 @@ async function signInWithGoogle() {
 }
 
 async function signOut() {
-  if (!ui.auth.client) return;
+  const signedIn = Boolean(ui.auth.client && ui.auth.user);
+  // Signing out clears this device. That is safe when the work is already
+  // synced to an account; when it is not, say so plainly before wiping.
+  if (!signedIn) {
+    const message = state.sermons.length
+      ? "You are not signed in on this device, so this work is not backed up to an account. Clear PreachFlow from this device anyway?"
+      : "Clear PreachFlow from this device and return to the sign-in screen?";
+    if (!confirm(message)) return;
+  }
   ui.auth.loading = true;
   render();
   // Push the latest work to the account first, then clear this device so
   // an open laptop can't hand a signed-out session to the next person.
-  try {
-    await saveCloudState({ background: true });
-  } catch {
-    /* the cloud copy is already current or unreachable; sign out anyway */
+  if (signedIn) {
+    try {
+      await saveCloudState({ background: true });
+    } catch {
+      /* the cloud copy is already current or unreachable; sign out anyway */
+    }
   }
-  await ui.auth.client.auth.signOut();
+  try {
+    await ui.auth.client?.auth.signOut();
+  } catch {
+    /* already signed out locally */
+  }
   localWipeInProgress = true;
   localStorage.removeItem(STORE_KEY);
   window.location.hash = "#signin";
@@ -11478,7 +11494,7 @@ document.addEventListener("keydown", (event) => {
 
 // Deep links from the marketing homepage: /app#signin opens sign-in,
 // Test/debug handle: lets browser drives inspect and nudge app state.
-window.__pf = { ui, state, render };
+window.__pf = { ui, state, render, build: PF_BUILD };
 
 // /app#ahead opens the Stay Ahead page. Without a hash, never boot into a
 // stale persisted sign-in view.
