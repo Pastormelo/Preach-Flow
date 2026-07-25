@@ -94,6 +94,8 @@ BIBLE_API_KEY = ...       # scripture.api.bible (American Bible Society) - enabl
 
 Add either one in Vercel under Project Settings -> Environment Variables and redeploy. Translations your keys cover appear in the reader's dropdown immediately; the rest stay listed under "Needs a publisher key" so it is obvious what is available and what is not. Nothing copyrighted is bundled with the app or read from anywhere but the publisher.
 
+The reader loads on its own: choosing a translation, a book, a chapter, or a verse range reads it right away, and typing a reference reads it on Enter. Chapter navigation follows the real canon (from `api/_books.js`), so it rolls from Malachi into Matthew and simply stops at Genesis 1 and Revelation 22 rather than asking a provider for a chapter that does not exist.
+
 A note on the NIV: Zondervan and Biblica do not license it through a self-serve developer API, so it cannot be switched on the way ESV, NASB, and CSB can. It stays in the list, and it will work the moment a key that covers it exists.
 
 ### Share links (Sharing and Delivery Center)
