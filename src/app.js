@@ -585,6 +585,7 @@ const ui = {
   encourage: null,
   calImport: { show: false, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   reader: { show: false, reference: "", translation: "", verses: [], attribution: "", loading: false, error: "", translations: [], target: "" },
+  newPassage: "",
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, selectedSection: "" },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
@@ -2251,7 +2252,8 @@ function renderNewSermon() {
         <div class="pf-form-grid">
           <div class="pf-field full">
             <label class="pf-label" for="new-passage">Passage</label>
-            <input id="new-passage" class="pf-input" name="passage" placeholder="Ephesians 3:1-13" required />
+            <input id="new-passage" class="pf-input" name="passage" data-action="new-passage" value="${attr(ui.newPassage || "")}" placeholder="Ephesians 3:1-13" required />
+            ${bibleBooks.length ? `<p class="pf-helper" style="margin:10px 0 6px;">Type it, or choose it here.</p>${renderPassagePicker("new", ui.newPassage || "")}` : ""}
           </div>
           <div class="pf-field full">
             <label class="pf-label" for="new-title">Working title</label>
@@ -2476,6 +2478,66 @@ async function fetchScripturePassage(reference, translation) {
 
 const READER_STORE_KEY = "preach-flow:reader-translation:v1";
 
+// The canonical book list (with chapter counts) comes from the API so the
+// picker and chapter navigation always agree with what can be fetched.
+let bibleBooks = [];
+async function loadBibleBooks() {
+  if (bibleBooks.length) return bibleBooks;
+  try {
+    const response = await fetch("./api/bible?books=1");
+    const data = await response.json();
+    if (Array.isArray(data.books) && data.books.length) bibleBooks = data.books;
+  } catch {
+    /* picker stays hidden; typing a reference still works */
+  }
+  return bibleBooks;
+}
+
+function bookByName(name) {
+  const wanted = String(name || "").trim().toLowerCase();
+  const aliases = { psalm: "psalms", "song of songs": "song of solomon" };
+  const target = aliases[wanted] || wanted;
+  return bibleBooks.find((book) => book.name.toLowerCase() === target) || null;
+}
+
+// How many verses a chapter holds. Asked once per chapter, then remembered,
+// so the verse dropdowns only ever offer verses that exist.
+const verseCounts = new Map();
+
+function verseCountFor(bookName, chapter) {
+  return verseCounts.get(`${bookName} ${chapter}`) || 0;
+}
+
+async function loadVerseCount(bookName, chapter) {
+  const key = `${bookName} ${chapter}`;
+  if (!bookName || !chapter || verseCounts.has(key)) return verseCountFor(bookName, chapter);
+  try {
+    const response = await fetch(`./api/bible?verses=1&reference=${encodeURIComponent(key)}`);
+    const data = await response.json();
+    if (data.verses) verseCounts.set(key, data.verses);
+  } catch {
+    /* the dropdown stays closed; typing a reference still works */
+  }
+  return verseCountFor(bookName, chapter);
+}
+
+// Split a reference into picker values without guessing.
+function readerParts() {
+  const parsed = parseBibleRef(ui.reader.reference || "");
+  const book = parsed ? bookByName(parsed.book) : null;
+  return {
+    book,
+    chapter: parsed?.chapter || 1,
+    verseStart: parsed?.verseStart || null,
+    verseEnd: parsed?.verseEnd || null,
+  };
+}
+
+function readerSetReference(reference) {
+  ui.reader.reference = reference;
+  loadReaderPassage();
+}
+
 function readerTranslation() {
   return localStorage.getItem(READER_STORE_KEY) || state.preachingProfile?.translation?.toUpperCase?.() || "KJV";
 }
@@ -2486,6 +2548,7 @@ async function openReader(reference, target = "") {
   ui.reader.reference = (reference || ui.reader.reference || getActive()?.passage || "").trim();
   ui.reader.translation = ui.reader.translation || readerTranslation();
   render();
+  await loadBibleBooks();
   if (ui.reader.reference) await loadReaderPassage();
   else {
     await loadReaderTranslations();
@@ -2521,6 +2584,10 @@ async function loadReaderPassage() {
     } else {
       ui.reader.reference = data.reference || reference;
       ui.reader.verses = data.verses || [];
+      if (Array.isArray(data.books) && data.books.length) bibleBooks = data.books;
+      // Remember the chapter's length so the verse picker can offer it.
+      const asked = parseBibleRef(reference);
+      if (asked && data.verseCount) verseCounts.set(`${asked.book} ${asked.chapter}`, data.verseCount);
       ui.reader.attribution = data.attribution || "";
       ui.reader.error = "";
     }
@@ -2530,6 +2597,14 @@ async function loadReaderPassage() {
   }
   ui.reader.loading = false;
   render();
+  // Fill in the chapter's length in the background if we still do not know it,
+  // so the verse dropdowns wake up without holding the text hostage.
+  const parts = readerParts();
+  if (parts.book && !verseCountFor(parts.book.name, parts.chapter)) {
+    loadVerseCount(parts.book.name, parts.chapter).then((count) => {
+      if (count && ui.reader.show) render();
+    });
+  }
 }
 
 function readerPlainText() {
@@ -2541,13 +2616,118 @@ function readerPlainText() {
   return `${ui.reader.reference} (${ui.reader.translation})\n\n${body}`;
 }
 
-// Step a chapter at a time without making the pastor retype a reference.
+// Step a chapter at a time. At the end of a book this rolls into the next
+// one the way a printed Bible does, and it simply stops at Genesis 1 and
+// Revelation 22 instead of asking for chapters that do not exist.
 function readerStepChapter(delta) {
   const parsed = parseBibleRef(ui.reader.reference);
   if (!parsed) return;
-  const chapter = Math.max(1, parsed.chapter + delta);
-  ui.reader.reference = `${parsed.book} ${chapter}`;
-  loadReaderPassage();
+  const index = bibleBooks.findIndex((book) => book.name.toLowerCase() === parsed.book.toLowerCase());
+  if (index < 0) return;
+  const book = bibleBooks[index];
+  let chapter = parsed.chapter + delta;
+  let target = book;
+
+  if (chapter > book.chapters) {
+    const next = bibleBooks[index + 1];
+    if (!next) {
+      showBanner("That is the end of Revelation.");
+      return;
+    }
+    target = next;
+    chapter = 1;
+  } else if (chapter < 1) {
+    const previous = bibleBooks[index - 1];
+    if (!previous) {
+      showBanner("That is the beginning of Genesis.");
+      return;
+    }
+    target = previous;
+    chapter = previous.chapters;
+  }
+
+  readerSetReference(`${target.name} ${chapter}`);
+}
+
+function readerAtStart() {
+  const { book, chapter } = readerParts();
+  return Boolean(book) && bibleBooks[0]?.name === book.name && chapter <= 1;
+}
+
+function readerAtEnd() {
+  const { book, chapter } = readerParts();
+  return Boolean(book) && bibleBooks[bibleBooks.length - 1]?.name === book.name && chapter >= book.chapters;
+}
+
+// Book / chapter / verse selects, so a passage can be chosen as well as typed.
+// The same picker serves the reader and the new-sermon form; the scope tells
+// the change handler where the chosen reference should land.
+function renderPassagePicker(scope, reference) {
+  if (!bibleBooks.length) return "";
+  const parsed = parseBibleRef(reference || "");
+  const book = parsed ? bookByName(parsed.book) : null;
+  const chapter = parsed?.chapter || 0;
+  const verseStart = parsed?.verseStart || null;
+  const verseEnd = parsed?.verseEnd || null;
+  const chapters = book ? book.chapters : 0;
+  const verseCount = book && chapter ? verseCountFor(book.name, chapter) : 0;
+  const verseOptions = (selected, prefix, min = 1) => {
+    const items = [];
+    for (let verse = min; verse <= verseCount; verse++) {
+      items.push(`<option value="${verse}" ${selected === verse ? "selected" : ""}>${prefix} ${verse}</option>`);
+    }
+    return items.join("");
+  };
+  return `
+    <div class="pf-picker" data-scope="${attr(scope)}">
+      <select class="pf-select" data-action="pick-book" aria-label="Book">
+        <option value="">Choose a book</option>
+        ${bibleBooks
+          .map((item) => `<option value="${attr(item.name)}" ${book?.name === item.name ? "selected" : ""}>${escapeHtml(item.name)}</option>`)
+          .join("")}
+      </select>
+      <select class="pf-select" data-action="pick-chapter" aria-label="Chapter" ${chapters ? "" : "disabled"}>
+        ${chapter ? "" : `<option value="">Ch</option>`}
+        ${Array.from({ length: chapters }, (_, index) => index + 1)
+          .map((number) => `<option value="${number}" ${chapter === number ? "selected" : ""}>Ch ${number}</option>`)
+          .join("")}
+      </select>
+      <select class="pf-select" data-action="pick-verse-start" aria-label="First verse" ${verseCount ? "" : "disabled"}>
+        <option value="">Whole chapter</option>
+        ${verseOptions(verseStart, "v")}
+      </select>
+      <select class="pf-select" data-action="pick-verse-end" aria-label="Last verse" ${verseCount && verseStart ? "" : "disabled"}>
+        <option value="">${verseStart ? "that verse only" : "to verse"}</option>
+        ${verseStart ? verseOptions(verseEnd, "to", verseStart + 1) : ""}
+      </select>
+    </div>
+  `;
+}
+
+// Read the four selects back out as one reference string.
+function pickerReference(container) {
+  const value = (name) => container?.querySelector(`[data-action="pick-${name}"]`)?.value || "";
+  const book = value("book");
+  if (!book) return "";
+  const chapter = value("chapter") || "1";
+  const start = value("verse-start");
+  if (!start) return `${book} ${chapter}`;
+  const end = value("verse-end");
+  return `${book} ${chapter}:${start}${end && Number(end) > Number(start) ? `-${end}` : ""}`;
+}
+
+// A picker change becomes a reference, then that reference is put to work:
+// the reader loads it, the new-sermon form fills its Passage field.
+async function applyPickedPassage(scope, reference) {
+  if (!reference) return;
+  const parsed = parseBibleRef(reference);
+  if (parsed) await loadVerseCount(parsed.book, parsed.chapter);
+  if (scope === "new") {
+    ui.newPassage = reference;
+    render();
+    return;
+  }
+  readerSetReference(reference);
 }
 
 function renderReaderPanel() {
@@ -2563,14 +2743,15 @@ function renderReaderPanel() {
             ${ready.map((item) => `<option value="${attr(item.code)}" ${reader.translation === item.code ? "selected" : ""}>${escapeHtml(item.code)}</option>`).join("")}
             ${pending.length ? `<optgroup label="Needs a publisher key">${pending.map((item) => `<option value="${attr(item.code)}" ${reader.translation === item.code ? "selected" : ""}>${escapeHtml(item.code)}</option>`).join("")}</optgroup>` : ""}
           </select>
-          <button class="pf-btn pf-btn-primary" data-action="reader-load" ${reader.loading ? "disabled" : ""}>${reader.loading ? "Reading…" : "Read"}</button>
           <button class="pf-icon-btn" data-action="reader-close" aria-label="Close the reader">✕</button>
         </div>
 
+        ${renderPassagePicker("reader", reader.reference)}
+
         <div class="pf-reader-nav">
-          <button class="pf-btn pf-btn-ghost" data-action="reader-prev" ${parseBibleRef(reader.reference) ? "" : "disabled"}>‹ Chapter</button>
-          <span class="pf-reader-where">${escapeHtml(reader.reference || "Type a passage")}${reader.translation ? ` · ${escapeHtml(reader.translation)}` : ""}</span>
-          <button class="pf-btn pf-btn-ghost" data-action="reader-next" ${parseBibleRef(reader.reference) ? "" : "disabled"}>Chapter ›</button>
+          <button class="pf-btn pf-btn-ghost" data-action="reader-prev" ${parseBibleRef(reader.reference) && !readerAtStart() ? "" : "disabled"}>‹ Chapter</button>
+          <span class="pf-reader-where">${escapeHtml(reader.reference || "Choose or type a passage")}${reader.translation ? ` · ${escapeHtml(reader.translation)}` : ""}</span>
+          <button class="pf-btn pf-btn-ghost" data-action="reader-next" ${parseBibleRef(reader.reference) && !readerAtEnd() ? "" : "disabled"}>Chapter ›</button>
         </div>
 
         <div class="pf-reader-body pf-scroll" data-scroll-keep="reader-body">
@@ -2590,7 +2771,7 @@ function renderReaderPanel() {
                           `<p class="pf-reader-verse">${verse.verse ? `<sup>${escapeHtml(String(verse.verse))}</sup>` : ""}${escapeHtml(verse.text)}</p>`,
                       )
                       .join("")
-                  : `<p class="pf-helper">Type a passage above and press Read.</p>`
+                  : `<p class="pf-helper">Pick a book and chapter above, or type a passage. It loads on its own.</p>`
           }
         </div>
 
@@ -10196,11 +10377,17 @@ document.addEventListener("click", (event) => {
   if (action === "new-sermon") {
     ui.showNew = true;
     ui.showSwitcher = false;
+    ui.newPassage = "";
     state.view = "workspace";
     render();
+    // The book list feeds the form's passage picker.
+    loadBibleBooks().then((books) => {
+      if (books.length && ui.showNew) render();
+    });
   }
   if (action === "cancel-new") {
     ui.showNew = false;
+    ui.newPassage = "";
     render();
   }
   if (action === "set-phase") {
@@ -10532,9 +10719,6 @@ document.addEventListener("click", (event) => {
   if (action === "reader-close") {
     ui.reader.show = false;
     render();
-  }
-  if (action === "reader-load") {
-    loadReaderPassage();
   }
   if (action === "reader-prev") {
     readerStepChapter(-1);
@@ -11460,6 +11644,9 @@ document.addEventListener("input", (event) => {
   if (action === "reader-ref") {
     ui.reader.reference = target.value;
   }
+  if (action === "new-passage") {
+    ui.newPassage = target.value;
+  }
   if (action === "cal-paste-text") {
     ui.calImport.text = target.value;
     const parse = document.querySelector('[data-action="cal-parse"]');
@@ -11518,6 +11705,25 @@ document.addEventListener("change", (event) => {
     ui.reader.translation = target.value;
     localStorage.setItem(READER_STORE_KEY, target.value);
     loadReaderPassage();
+  }
+  // Leaving the reference field with something new in it reads it. No Read
+  // button to hunt for.
+  if (action === "reader-ref") {
+    ui.reader.reference = target.value;
+    if (target.value.trim()) loadReaderPassage();
+  }
+  if (action && action.startsWith("pick-")) {
+    const container = target.closest(".pf-picker");
+    const scope = container?.dataset.scope || "reader";
+    // Choosing a book starts it at chapter 1; choosing a chapter drops any
+    // verse range, since verse 9 of one chapter is not verse 9 of the next.
+    let reference = "";
+    if (action === "pick-book") reference = target.value ? `${target.value} 1` : "";
+    else if (action === "pick-chapter") {
+      const book = container?.querySelector('[data-action="pick-book"]')?.value || "";
+      reference = book && target.value ? `${book} ${target.value}` : "";
+    } else reference = pickerReference(container);
+    applyPickedPassage(scope, reference);
   }
   if (action === "cal-import-files") {
     handleCalImportFiles(target);
@@ -11744,6 +11950,12 @@ document.addEventListener("keydown", (event) => {
   if (event.target.dataset?.action === "coach-input" && event.key === "Enter") {
     event.preventDefault();
     send();
+    return;
+  }
+  if (event.target.dataset?.action === "reader-ref" && event.key === "Enter") {
+    event.preventDefault();
+    ui.reader.reference = event.target.value;
+    if (ui.reader.reference.trim()) loadReaderPassage();
     return;
   }
   const card = event.target.closest("[data-sermon-card]");
@@ -12052,3 +12264,7 @@ window.addEventListener("beforeunload", () => flushWorkSeconds());
 render();
 checkServerStatus();
 loadGoogleConfig();
+// The 66 books (with chapter counts) power every passage picker.
+loadBibleBooks().then((books) => {
+  if (books.length) render();
+});

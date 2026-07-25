@@ -5022,8 +5022,27 @@ p {
   background: var(--brand-soft);
   font-size: 14px;
 }
+/* Book / chapter / verse picker, used by the reader and the new-sermon form. */
+.pf-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+.pf-picker .pf-select {
+  width: 100%;
+  min-width: 0;
+  font-size: 14px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.pf-picker .pf-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pf-reader .pf-picker { margin-bottom: 4px; }
 @media (max-width: 700px) {
   .pf-reader-bar { flex-wrap: wrap; }
   .pf-reader-ref { min-width: 100%; order: -1; }
   .pf-reader-body { max-height: 46vh; font-size: 16.5px; }
+  .pf-picker { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }

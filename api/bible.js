@@ -9,6 +9,8 @@
 // Copyrighted translations are only ever served through their publisher's
 // own API with the deployment's key. Nothing is bundled or scraped.
 
+const { BOOKS, findBook } = require("./_books.js");
+
 const PUBLIC_DOMAIN = {
   KJV: { query: "kjv", label: "King James Version" },
   WEB: { query: "web", label: "World English Bible" },
@@ -24,6 +26,9 @@ const API_BIBLE_IDS = {
   NLT: "71c6eab17ae5b667-01",
   NKJV: "de4e12af7f28f599-02",
 };
+
+// Verse counts per chapter, learned once and kept for the life of the process.
+const VERSE_COUNTS = new Map();
 
 const ESV_KEY = () => (process.env.ESV_API_KEY || "").trim();
 const API_BIBLE_KEY = () => (process.env.BIBLE_API_KEY || process.env.API_BIBLE_KEY || "").trim();
@@ -89,25 +94,56 @@ async function fetchEsv(reference) {
   };
 }
 
+// Break "1 John 2:3-11" into its parts so a real passage id can be built.
+function parseReference(reference) {
+  const text = String(reference || "").trim().replace(/\s+/g, " ");
+  const match = text.match(/^((?:[1-3]\s?)?[A-Za-z][A-Za-z\s]*?)\s*(\d{1,3})(?::(\d{1,3})(?:\s*-\s*(\d{1,3}))?)?$/);
+  if (!match) return null;
+  const book = findBook(match[1]);
+  if (!book) return null;
+  const chapter = Math.min(Math.max(1, Number(match[2])), book.chapters);
+  return {
+    book,
+    chapter,
+    verseStart: match[3] ? Number(match[3]) : null,
+    verseEnd: match[4] ? Number(match[4]) : null,
+    reference: `${book.name} ${chapter}${match[3] ? `:${match[3]}${match[4] ? `-${match[4]}` : ""}` : ""}`,
+  };
+}
+
+// API.Bible serves whole passages from its passages endpoint. The search
+// endpoint (used before) returns only a snippet, which is why anything
+// beyond the first verse went missing.
 async function fetchApiBible(reference, code) {
   const id = API_BIBLE_IDS[code];
-  const search = new URLSearchParams({ query: reference, limit: "1" });
-  const response = await fetch(`https://api.scripture.api.bible/v1/bibles/${id}/search?${search.toString()}`, {
+  const parsed = parseReference(reference);
+  if (!parsed) throw new Error("That reference could not be read. Try a form like John 15:1-11.");
+  const { book, chapter, verseStart, verseEnd } = parsed;
+  const passageId = verseStart
+    ? `${book.usfm}.${chapter}.${verseStart}${verseEnd && verseEnd > verseStart ? `-${book.usfm}.${chapter}.${verseEnd}` : ""}`
+    : `${book.usfm}.${chapter}`;
+  const params = new URLSearchParams({
+    "content-type": "text",
+    "include-verse-numbers": "true",
+    "include-verse-spans": "false",
+    "include-notes": "false",
+    "include-titles": "false",
+    "include-chapter-numbers": "false",
+  });
+  const response = await fetch(`https://api.scripture.api.bible/v1/bibles/${id}/passages/${passageId}?${params.toString()}`, {
     headers: { "api-key": API_BIBLE_KEY() },
   });
   if (response.status === 401 || response.status === 403) {
     throw new Error(`${code} is not available on this key. Check BIBLE_API_KEY and the translations it covers.`);
   }
+  if (response.status === 404) throw new Error("That passage could not be found.");
   if (!response.ok) throw new Error(`Scripture service returned ${response.status}`);
   const data = await response.json();
-  const passage = data.data?.passages?.[0];
-  if (!passage?.content) throw new Error("That passage could not be found.");
-  const text = String(passage.content)
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const content = data.data?.content;
+  if (!content) throw new Error("That passage could not be found.");
+  const text = String(content).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return {
-    reference: passage.reference || reference,
+    reference: data.data?.reference || parsed.reference,
     translation: code,
     attribution: `${code} - ${data.data?.copyright || "publisher licensed"}`,
     verses: splitNumberedText(text),
@@ -140,28 +176,81 @@ module.exports = async function handler(req, res) {
   const reference = (url.searchParams.get("reference") || "").trim();
   const code = (url.searchParams.get("translation") || "KJV").trim().toUpperCase();
 
+  if (url.searchParams.get("books") === "1") {
+    res.status(200).json({ books: BOOKS });
+    return;
+  }
+
+  // How many verses a chapter holds, so a verse picker never offers a verse
+  // that is not there. Counted from a public-domain text, so it needs no key
+  // and the answer is the same whatever translation the pastor is reading.
+  if (url.searchParams.get("verses") === "1") {
+    const asked = parseReference(reference);
+    if (!asked) {
+      res.status(200).json({ verses: 0 });
+      return;
+    }
+    const key = `${asked.book.name} ${asked.chapter}`;
+    if (VERSE_COUNTS.has(key)) {
+      res.status(200).json({ book: asked.book.name, chapter: asked.chapter, verses: VERSE_COUNTS.get(key) });
+      return;
+    }
+    try {
+      const passage = await fetchPublicDomain(key, "KJV");
+      const count = Math.max(...passage.verses.map((verse) => Number(verse.verse) || 0), 0);
+      if (count) VERSE_COUNTS.set(key, count);
+      res.status(200).json({ book: asked.book.name, chapter: asked.chapter, verses: count });
+    } catch {
+      res.status(200).json({ book: asked.book.name, chapter: asked.chapter, verses: 0 });
+    }
+    return;
+  }
+
   if (url.searchParams.get("list") === "1" || !reference) {
-    res.status(200).json({ translations: availableTranslations() });
+    res.status(200).json({ translations: availableTranslations(), books: BOOKS });
+    return;
+  }
+
+  // Reject impossible references here rather than letting a provider
+  // answer with a raw 400.
+  const parsed = parseReference(reference);
+  if (!parsed) {
+    res.status(200).json({
+      error: "That reference could not be read. Try a form like John 15:1-11.",
+      translations: availableTranslations(),
+      books: BOOKS,
+    });
     return;
   }
 
   try {
     let passage;
-    if (PUBLIC_DOMAIN[code]) passage = await fetchPublicDomain(reference, code);
+    if (PUBLIC_DOMAIN[code]) passage = await fetchPublicDomain(parsed.reference, code);
     else if (code === "ESV") {
       if (!ESV_KEY()) throw new Error("ESV needs a free key from api.esv.org saved as ESV_API_KEY.");
-      passage = await fetchEsv(reference);
+      passage = await fetchEsv(parsed.reference);
     } else if (API_BIBLE_IDS[code]) {
       if (!API_BIBLE_KEY()) throw new Error(`${code} needs a free key from scripture.api.bible saved as BIBLE_API_KEY.`);
       passage = await fetchApiBible(reference, code);
     } else {
       throw new Error(`${code} is not a translation this app can read.`);
     }
-    res.status(200).json({ ...passage, translations: availableTranslations() });
+    // A whole chapter tells us its verse count for free.
+    if (!parsed.verseStart) {
+      const count = Math.max(...passage.verses.map((verse) => Number(verse.verse) || 0), 0);
+      if (count) VERSE_COUNTS.set(`${parsed.book.name} ${parsed.chapter}`, count);
+    }
+    res.status(200).json({
+      ...passage,
+      verseCount: VERSE_COUNTS.get(`${parsed.book.name} ${parsed.chapter}`) || 0,
+      translations: availableTranslations(),
+      books: BOOKS,
+    });
   } catch (error) {
     res.status(200).json({
       error: error.message || "Could not load that passage.",
       translations: availableTranslations(),
+      books: BOOKS,
     });
   }
 };
