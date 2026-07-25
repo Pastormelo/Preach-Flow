@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { callEngine, engineConfig } = require("./api/_engine.js");
+const bibleHandler = require("./api/bible.js");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 4173);
@@ -115,6 +116,15 @@ async function handleApi(req, res, pathname) {
       auth: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
       database: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
     });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bible") {
+    // Mirror the Vercel function shape so dev and production behave alike.
+    await bibleHandler(
+      { url: req.url, method: req.method },
+      { status: (code) => ({ json: (payload) => sendJson(res, code, payload) }) },
+    );
     return;
   }
 

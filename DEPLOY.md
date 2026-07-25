@@ -81,6 +81,21 @@ Notes:
 3. **Overrides:** a user who adds their own OpenAI key in the app always uses their own quota instead.
 4. **Switching providers later:** change `AI_PROVIDER` + `AI_API_KEY` (e.g. `gemini` with a free key from aistudio.google.com, or `groq` from console.groq.com) and redeploy - no code changes.
 
+### Bible reader translations
+
+The in-app Bible reader works with **no setup**: KJV, WEB, and ASV are public domain and always available.
+
+Copyrighted translations are served only through their publisher's own API, using a key you add. Each is free for ministry use and takes a couple of minutes to request:
+
+```txt
+ESV_API_KEY  = ...        # api.esv.org (Crossway) - enables ESV
+BIBLE_API_KEY = ...       # scripture.api.bible (American Bible Society) - enables NASB, CSB and others
+```
+
+Add either one in Vercel under Project Settings -> Environment Variables and redeploy. Translations your keys cover appear in the reader's dropdown immediately; the rest stay listed under "Needs a publisher key" so it is obvious what is available and what is not. Nothing copyrighted is bundled with the app or read from anywhere but the publisher.
+
+A note on the NIV: Zondervan and Biblica do not license it through a self-serve developer API, so it cannot be switched on the way ESV, NASB, and CSB can. It stays in the list, and it will work the moment a key that covers it exists.
+
 ### Share links (Sharing and Delivery Center)
 
 Share links need the updated Supabase schema: run `supabase/schema.sql` in the Supabase SQL editor (it now also creates `preach_flow_shared_views` and the token-gated `preach_flow_get_shared_view` function). Links are unguessable tokens, read-only, revocable, and served by `share.html`.
