@@ -5425,11 +5425,30 @@ function applyCalImport() {
   render();
 }
 
+// After a surgical row removal, bring the apply buttons back in step
+// without re-rendering (which would reset the dialog's scroll).
+function syncCalApplyButton() {
+  const includable = ui.calImport.rows.filter((row) => !row.skip && (row.date || row.passage)).length;
+  const button = document.querySelector('[data-action="cal-apply"]');
+  if (!button) return;
+  button.disabled = !includable;
+  button.textContent = `Add ${includable || ""} sermon${includable === 1 ? "" : "s"} to the pipeline`;
+}
+
+function syncLibApplyButton() {
+  const ready = ui.libImport.queue.filter((item) => item.status === "ready").length;
+  const reading = ui.libImport.queue.some((item) => item.status === "reading");
+  const button = document.querySelector('[data-action="lib-import-apply"]');
+  if (!button) return;
+  button.disabled = !ready || reading;
+  button.textContent = ready ? `Add ${ready} to the Library` : "Add to the Library";
+}
+
 function renderCalImportModal() {
   const cal = ui.calImport;
   const includable = cal.rows.filter((row) => !row.skip && (row.date || row.passage)).length;
   return `
-    <div class="pf-overlay">
+    <div class="pf-overlay" data-scroll-keep="cal-overlay">
       <div class="pf-modal wide" data-stop data-scroll-keep="cal-modal">
         <div class="pf-modal-head">
           <span class="pf-eyebrow">Preaching calendar</span>
@@ -5487,7 +5506,7 @@ function renderCalImportModal() {
                 ${cal.rows
                   .map(
                     (row, rowIndex) => `${row.source && row.source !== cal.rows[rowIndex - 1]?.source ? `<div class="pf-cal-src">From ${escapeHtml(row.source)}</div>` : ""}
-                      <div class="pf-cal-row ${row.skip ? "skipped" : ""}">
+                      <div class="pf-cal-row ${row.skip ? "skipped" : ""}" data-cal-row="${attr(row.id)}">
                         <input class="pf-input" type="date" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="date" value="${attr(row.date)}" />
                         <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="passage" value="${attr(row.passage)}" placeholder="Psalm 100" />
                         <input class="pf-input" data-action="cal-row-field" data-id="${attr(row.id)}" data-field="title" value="${attr(row.title)}" placeholder="Title (optional)" />
@@ -5673,7 +5692,7 @@ function renderLibImportModal() {
   const ready = queue.filter((item) => item.status === "ready").length;
   const reading = queue.some((item) => item.status === "reading");
   return `
-    <div class="pf-overlay">
+    <div class="pf-overlay" data-scroll-keep="lib-overlay">
       <div class="pf-modal wide" data-stop data-scroll-keep="lib-modal">
         <div class="pf-modal-head">
           <span class="pf-eyebrow pf-eyebrow-brand">Sermon Library</span>
@@ -5689,7 +5708,7 @@ function renderLibImportModal() {
         ${queue
           .map(
             (item) => `
-              <div class="pf-lib-qrow ${item.status}">
+              <div class="pf-lib-qrow ${item.status}" data-lib-row="${attr(item.id)}">
                 <div class="pf-lib-qhead">
                   <strong>${escapeHtml(item.fileName)}</strong>
                   <span class="pf-helper">${escapeHtml(item.note)}</span>
@@ -10349,7 +10368,19 @@ document.addEventListener("click", (event) => {
   }
   if (action === "cal-row-remove") {
     ui.calImport.rows = ui.calImport.rows.filter((row) => row.id !== target.dataset.id);
-    render();
+    // Removing a row is a surgical DOM edit, never a re-render: the dialog
+    // cannot scroll, and the X stays under the cursor for the next click.
+    const node = target.closest("[data-cal-row]");
+    if (!ui.calImport.rows.length || !node) {
+      render();
+      return;
+    }
+    const divider = node.previousElementSibling?.classList.contains("pf-cal-src") ? node.previousElementSibling : null;
+    const nextRow = node.nextElementSibling;
+    node.remove();
+    // A source heading with nothing left under it should go too.
+    if (divider && (!nextRow || nextRow.classList.contains("pf-cal-src"))) divider.remove();
+    syncCalApplyButton();
   }
   if (action === "cal-row-include") {
     const row = ui.calImport.rows.find((entry) => entry.id === target.dataset.id);
@@ -10372,7 +10403,13 @@ document.addEventListener("click", (event) => {
   }
   if (action === "lib-import-remove") {
     ui.libImport.queue = ui.libImport.queue.filter((item) => item.id !== target.dataset.id);
-    render();
+    const node = target.closest("[data-lib-row]");
+    if (!ui.libImport.queue.length || !node) {
+      render();
+      return;
+    }
+    node.remove();
+    syncLibApplyButton();
   }
   if (action === "lib-import-apply") {
     applyLibImport();
