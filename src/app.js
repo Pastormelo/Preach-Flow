@@ -584,6 +584,7 @@ const ui = {
   refineMenu: false,
   encourage: null,
   calImport: { show: false, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
+  reader: { show: false, reference: "", translation: "", verses: [], attribution: "", loading: false, error: "", translations: [], target: "" },
   pm: { pen: "", selected: "", tool: "mark", paste: false, pasteText: "", pasteTranslation: "", bridge: false, selectedSection: "" },
   libImport: { show: false, queue: [], gdocs: { open: false, loading: false, files: [], query: "", picked: {} } },
   ministryWizard: null,
@@ -1248,6 +1249,7 @@ function render() {
     ${ui.showImport ? renderImportModal() : ""}
     ${ui.libImport.show ? renderLibImportModal() : ""}
     ${ui.calImport.show ? renderCalImportModal() : ""}
+    ${ui.reader.show ? renderReaderPanel() : ""}
     ${ui.confirmDeleteId ? renderConfirmDeleteModal() : ""}
     ${ui.scripture.show ? renderScriptureModal() : ""}
     ${renderOnboarding()}
@@ -1903,7 +1905,7 @@ function renderProfileDefaultsTab() {
         ${profileSelect("seriesBehavior", "Default series behavior", PROFILE_OPTIONS.seriesBehavior)}
       </div>
     `)}
-    ${profileSection("Bible provider", "How Insert Scripture gets passage text. No scraping, no bundled copyrighted translations.", `
+    ${profileSection("Bible text", "Which translation the reader and Insert Scripture open with.", `
       <div class="pf-account-row" style="border:0;padding:0 0 10px;">
         <div style="flex:1;">
           <div class="pf-account-label">Provider</div>
@@ -1914,7 +1916,13 @@ function renderProfileDefaultsTab() {
         <input type="checkbox" data-action="bible-attribution" ${state.bibleProvider.attribution ? "checked" : ""} />
         <span><strong>Show attribution on Scripture blocks</strong> - translation credit stays with the text</span>
       </label>
-      <p class="pf-helper" style="margin-top:8px;">Built-in fetching covers public-domain texts (WEB, KJV). For licensed translations, use manual paste inside Insert Scripture - support for licensed API providers can plug into this setting later.</p>
+      <div class="pf-account-row">
+        <div style="flex:1;">
+          <div class="pf-account-label">Read Scripture in the app</div>
+          <div class="pf-account-meta">Open any passage in any available translation, then copy it or drop it straight into your work.</div>
+        </div>
+        <button class="pf-btn pf-btn-primary" data-action="reader-open" data-target="work">Open the reader</button>
+      </div>
     `)}
     ${profileSection("Output defaults", "What you usually produce from a sermon and who it's for.", `
       <div class="pf-form-grid" style="margin-bottom:14px;">
@@ -2460,6 +2468,143 @@ async function fetchScripturePassage(reference, translation) {
   };
 }
 
+// ---- In-app Bible reader ----
+// Read Scripture inside PreachFlow instead of leaving for a browser tab.
+// Translations come from /api/bible: the public-domain texts always work,
+// and licensed ones (ESV, NASB, CSB and friends) light up when the
+// deployment has the publisher key.
+
+const READER_STORE_KEY = "preach-flow:reader-translation:v1";
+
+function readerTranslation() {
+  return localStorage.getItem(READER_STORE_KEY) || state.preachingProfile?.translation?.toUpperCase?.() || "KJV";
+}
+
+async function openReader(reference, target = "") {
+  ui.reader.show = true;
+  ui.reader.target = target;
+  ui.reader.reference = (reference || ui.reader.reference || getActive()?.passage || "").trim();
+  ui.reader.translation = ui.reader.translation || readerTranslation();
+  render();
+  if (ui.reader.reference) await loadReaderPassage();
+  else {
+    await loadReaderTranslations();
+    render();
+  }
+}
+
+async function loadReaderTranslations() {
+  if (ui.reader.translations.length) return;
+  try {
+    const response = await fetch("./api/bible?list=1");
+    const data = await response.json();
+    ui.reader.translations = data.translations || [];
+  } catch {
+    ui.reader.translations = [{ code: "KJV", label: "King James Version", ready: true }];
+  }
+}
+
+async function loadReaderPassage() {
+  const reference = ui.reader.reference.trim();
+  if (!reference) return;
+  ui.reader.loading = true;
+  ui.reader.error = "";
+  render();
+  try {
+    const params = new URLSearchParams({ reference, translation: ui.reader.translation });
+    const response = await fetch(`./api/bible?${params.toString()}`);
+    const data = await response.json();
+    if (data.translations?.length) ui.reader.translations = data.translations;
+    if (data.error) {
+      ui.reader.error = data.error;
+      ui.reader.verses = [];
+    } else {
+      ui.reader.reference = data.reference || reference;
+      ui.reader.verses = data.verses || [];
+      ui.reader.attribution = data.attribution || "";
+      ui.reader.error = "";
+    }
+  } catch {
+    ui.reader.error = "Could not reach the Scripture service. Check the connection and try again.";
+    ui.reader.verses = [];
+  }
+  ui.reader.loading = false;
+  render();
+}
+
+function readerPlainText() {
+  const body = ui.reader.verses
+    .map((verse) => (verse.verse ? `${verse.verse} ${verse.text}` : verse.text))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${ui.reader.reference} (${ui.reader.translation})\n\n${body}`;
+}
+
+// Step a chapter at a time without making the pastor retype a reference.
+function readerStepChapter(delta) {
+  const parsed = parseBibleRef(ui.reader.reference);
+  if (!parsed) return;
+  const chapter = Math.max(1, parsed.chapter + delta);
+  ui.reader.reference = `${parsed.book} ${chapter}`;
+  loadReaderPassage();
+}
+
+function renderReaderPanel() {
+  const reader = ui.reader;
+  const ready = reader.translations.filter((item) => item.ready);
+  const pending = reader.translations.filter((item) => !item.ready);
+  return `
+    <div class="pf-overlay pf-reader-overlay" data-scroll-keep="reader-overlay">
+      <div class="pf-modal wide pf-reader" data-stop data-scroll-keep="reader-modal">
+        <div class="pf-reader-bar">
+          <input class="pf-input pf-reader-ref" data-action="reader-ref" value="${attr(reader.reference)}" placeholder="John 15:1-11" aria-label="Passage" />
+          <select class="pf-select pf-reader-select" data-action="reader-translation" aria-label="Translation">
+            ${ready.map((item) => `<option value="${attr(item.code)}" ${reader.translation === item.code ? "selected" : ""}>${escapeHtml(item.code)}</option>`).join("")}
+            ${pending.length ? `<optgroup label="Needs a publisher key">${pending.map((item) => `<option value="${attr(item.code)}" ${reader.translation === item.code ? "selected" : ""}>${escapeHtml(item.code)}</option>`).join("")}</optgroup>` : ""}
+          </select>
+          <button class="pf-btn pf-btn-primary" data-action="reader-load" ${reader.loading ? "disabled" : ""}>${reader.loading ? "Reading…" : "Read"}</button>
+          <button class="pf-icon-btn" data-action="reader-close" aria-label="Close the reader">✕</button>
+        </div>
+
+        <div class="pf-reader-nav">
+          <button class="pf-btn pf-btn-ghost" data-action="reader-prev" ${parseBibleRef(reader.reference) ? "" : "disabled"}>‹ Chapter</button>
+          <span class="pf-reader-where">${escapeHtml(reader.reference || "Type a passage")}${reader.translation ? ` · ${escapeHtml(reader.translation)}` : ""}</span>
+          <button class="pf-btn pf-btn-ghost" data-action="reader-next" ${parseBibleRef(reader.reference) ? "" : "disabled"}>Chapter ›</button>
+        </div>
+
+        <div class="pf-reader-body pf-scroll" data-scroll-keep="reader-body">
+          ${
+            reader.loading
+              ? `<p class="pf-helper">Loading ${escapeHtml(reader.reference)}…</p>`
+              : reader.error
+                ? `<div class="pf-reader-note"><strong>${escapeHtml(reader.error)}</strong>${
+                    /key/i.test(reader.error)
+                      ? `<p class="pf-helper" style="margin:6px 0 0;">Pick another translation above to keep reading now.</p>`
+                      : ""
+                  }</div>`
+                : reader.verses.length
+                  ? reader.verses
+                      .map(
+                        (verse) =>
+                          `<p class="pf-reader-verse">${verse.verse ? `<sup>${escapeHtml(String(verse.verse))}</sup>` : ""}${escapeHtml(verse.text)}</p>`,
+                      )
+                      .join("")
+                  : `<p class="pf-helper">Type a passage above and press Read.</p>`
+          }
+        </div>
+
+        <div class="pf-modal-actions">
+          <button class="pf-btn pf-btn-primary" data-action="reader-copy" ${reader.verses.length ? "" : "disabled"}>Copy passage</button>
+          ${reader.target === "pm" ? `<button class="pf-btn" data-action="reader-to-map" ${reader.verses.length ? "" : "disabled"}>Load into the Passage Map</button>` : ""}
+          ${reader.target === "work" ? `<button class="pf-btn" data-action="reader-insert" ${reader.verses.length ? "" : "disabled"}>Insert into my work</button>` : ""}
+          <button class="pf-btn pf-btn-ghost" data-action="reader-close">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function scriptureBlockHtml({ reference, translation, text, attribution, slide, pulpit, production }) {
   return (
     `<div class="pf-b pf-b-scripture" data-ref="${attr(reference)}" data-translation="${attr(translation)}"` +
@@ -2555,7 +2700,7 @@ function renderScriptureModal() {
           <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="pulpit" ${modal.pulpit ? "checked" : ""} /> <span>Show in Pulpit View</span></label>
           <label class="pf-toggle-row" style="margin-top:0;"><input type="checkbox" data-action="scripture-flag" data-key="production" ${modal.production ? "checked" : ""} /> <span>Include in Production Link</span></label>
         </div>
-        <p class="pf-helper" style="margin:8px 0 0;">Built-in fetching serves public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use - attribution is kept with the block.</p>
+
         <div class="pf-modal-actions">
           <button class="pf-btn" data-action="scripture-close">Cancel</button>
           <button class="pf-btn pf-btn-primary" data-action="scripture-insert" ${modal.text.trim() ? "" : "disabled"}>Insert Scripture block</button>
@@ -2603,6 +2748,7 @@ function renderEditorPage(active) {
         </div>
         <div class="pf-editor-actions">
           <button class="pf-btn pf-btn-ghost" data-action="editor-gdoc-export" ${ui.google.loading ? "disabled" : ""}>${ui.google.loading ? "Sending…" : "Send to Google Docs"}</button>
+          <button class="pf-btn" data-action="reader-open" data-target="work" data-reference="${attr(active.passage || "")}">📖 Bible</button>
           <button class="pf-btn" data-view="pulpit">Preach It ▸</button>
           <button class="pf-btn pf-btn-ghost" data-action="open-slides">Send to production</button>
           <button class="pf-btn pf-btn-ghost" data-action="editor-export-pdf">PDF</button>
@@ -3413,6 +3559,7 @@ function renderRail(active, phase) {
           })
           .join("")}
       </div>
+      <button class="pf-rail-bible" data-action="reader-open" data-target="work" data-reference="${attr(active.passage || "")}">📖 Open the Bible</button>
       ${renderRailGuide(active, phase)}
       <div class="pf-rail-nav">
         <button class="pf-rail-nav-btn" data-action="prev-phase" ${curIdx <= 0 ? "disabled" : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Prev</button>
@@ -4384,6 +4531,43 @@ function pmPlainText(map) {
 }
 
 // Split pasted text into verses on leading verse numbers; fall back to one block.
+// Put fetched verses into the Passage Map, keeping the pastor's own marks
+// out of the way (a fresh passage starts with a clean slate).
+function loadPassageIntoMap(verses, reference, translation, attribution) {
+  const map = pmActiveMap();
+  if (!map || !verses?.length) return false;
+  map.verses = verses.map((verse) => ({ ref: verse.verse ? String(verse.verse) : "", html: escapeHtml(verse.text) }));
+  map.highlights = [];
+  map.hiddenCategories = [];
+  map.translation = translation || "";
+  map.attribution = attribution || "";
+  ui.pm.selected = "";
+  pmSave();
+  return true;
+}
+
+// Opening the Map for a sermon should already show the passage being
+// worked on, with no loading step for the pastor to remember.
+let pmAutoLoadTried = "";
+async function pmAutoLoadPassage(active) {
+  const map = active?.passageMap;
+  if (!map || map.verses.length) return;
+  const reference = (active.passage || "").trim();
+  if (!reference || !parseBibleRef(reference)) return;
+  const key = `${active.id}:${reference}`;
+  if (pmAutoLoadTried === key) return;
+  pmAutoLoadTried = key;
+  try {
+    const params = new URLSearchParams({ reference, translation: readerTranslation() });
+    const response = await fetch(`./api/bible?${params.toString()}`);
+    const data = await response.json();
+    if (data.error || !data.verses?.length) return;
+    if (loadPassageIntoMap(data.verses, data.reference, data.translation, data.attribution)) render();
+  } catch {
+    /* offline or unavailable: the reader and paste both still work */
+  }
+}
+
 function parsePastedPassage(text) {
   const clean = String(text || "").replace(/\r/g, "").trim();
   if (!clean) return [];
@@ -4410,29 +4594,20 @@ async function pmFetchPassage() {
   const active = getActive();
   const parsed = parseBibleRef(active?.passage || "");
   if (!parsed) {
-    showBanner("Couldn't parse the passage reference - paste the text instead.");
+    showBanner("That reference didn't parse - open the reader and type the passage.");
     return;
   }
-  const translation = state.bibleProvider.translation;
-  showBanner("Fetching the passage…");
+  showBanner("Loading the passage…");
   try {
-    const response = await fetch(
-      `https://bible-api.com/${encodeURIComponent(parsed.reference)}?translation=${translation === "KJV" ? "kjv" : "web"}`,
-    );
-    if (!response.ok) throw new Error(`Provider returned ${response.status}`);
+    const params = new URLSearchParams({ reference: parsed.reference, translation: readerTranslation() });
+    const response = await fetch(`./api/bible?${params.toString()}`);
     const data = await response.json();
-    const verses = (data.verses || []).map((verse) => ({
-      ref: String(verse.verse || ""),
-      html: escapeHtml(String(verse.text || "").replace(/\s+/g, " ").trim()),
-    }));
-    if (!verses.length) throw new Error("No verses came back");
-    active.passageMap.verses = verses;
-    active.passageMap.translation = translation;
-    active.passageMap.attribution = translation === "KJV" ? "KJV · Public domain" : "World English Bible · Public domain";
-    pmSave();
+    if (data.error) throw new Error(data.error);
+    if (!data.verses?.length) throw new Error("No verses came back");
+    loadPassageIntoMap(data.verses, data.reference, data.translation, data.attribution);
     showBanner("Passage loaded - pick a pen and start marking.");
   } catch (error) {
-    showBanner(`Could not fetch (${error.message || "network error"}) - paste the text instead.`);
+    showBanner(error.message || "Could not load that passage.");
   }
   render();
 }
@@ -4591,6 +4766,8 @@ function pmRecomputeSectionRanges(map) {
 function renderPassageMap(active) {
   if (!active) return renderNeedSermon("The Passage Map works on your current sermon - start one first.");
   const map = active.passageMap;
+  // The sermon's own passage should already be here, ready to mark.
+  if (!map.verses.length) pmAutoLoadPassage(active);
   if (!map.verses.length) return renderPassageMapSetup(active);
   const hiddenClasses = map.hiddenCategories.map((key) => `hide-${key}`).join(" ");
   const pen = PM_CATEGORIES.find(([key]) => key === ui.pm.pen);
@@ -4637,7 +4814,8 @@ function renderPassageMap(active) {
           </div>
           <p class="pf-helper" style="margin-top:10px;">
             ${map.attribution ? `${escapeHtml(map.attribution)} · ` : map.translation ? `${escapeHtml(map.translation)} · ` : ""}
-            <button class="pf-inline-link" data-action="pm-paste-open">Replace passage text</button>
+            <button class="pf-inline-link" data-action="reader-open" data-target="pm" data-reference="${attr(active.passage || "")}">Open the Bible reader</button>
+            · <button class="pf-inline-link" data-action="pm-paste-open">Replace passage text</button>
             · <label style="cursor:pointer;"><input type="checkbox" data-action="pm-include-exports" ${map.includeInExports ? "checked" : ""} style="vertical-align:-2px;" /> Include this map in sermon exports</label>
           </p>
         </section>
@@ -4670,10 +4848,10 @@ function renderPassageMapSetup(active) {
       ${renderPmHowTo(true)}
       <section class="pf-card-box pf-checklist-card">
         <div class="pf-modal-actions" style="margin-top:0;">
-          ${canFetch ? `<button class="pf-btn pf-btn-primary" data-action="pm-fetch">Load ${escapeHtml(active.passage)} (${escapeHtml(state.bibleProvider.translation)})</button>` : ""}
-          <button class="pf-btn ${canFetch ? "" : "pf-btn-primary"}" data-action="pm-paste-open">Paste Passage Text</button>
+          ${canFetch ? `<button class="pf-btn pf-btn-primary" data-action="pm-fetch">Load ${escapeHtml(active.passage)}</button>` : ""}
+          <button class="pf-btn" data-action="reader-open" data-target="pm" data-reference="${attr(active.passage || "")}">Open the Bible reader</button>
+          <button class="pf-btn pf-btn-ghost" data-action="pm-paste-open">Paste it instead</button>
         </div>
-        <p class="pf-helper" style="margin-top:12px;">Built-in loading uses public-domain texts (WEB, KJV). For other translations, paste from a copy you're licensed to use - attribution stays with the map. Nothing is scraped, and no copyrighted text is bundled.</p>
       </section>
       ${ui.pm.paste ? renderPmPasteModal() : ""}
     </div>
@@ -10348,6 +10526,47 @@ document.addEventListener("click", (event) => {
       }
     });
   }
+  if (action === "reader-open") {
+    openReader(target.dataset.reference || "", target.dataset.target || "");
+  }
+  if (action === "reader-close") {
+    ui.reader.show = false;
+    render();
+  }
+  if (action === "reader-load") {
+    loadReaderPassage();
+  }
+  if (action === "reader-prev") {
+    readerStepChapter(-1);
+  }
+  if (action === "reader-next") {
+    readerStepChapter(1);
+  }
+  if (action === "reader-copy") {
+    copyText(readerPlainText());
+  }
+  if (action === "reader-insert") {
+    insertIntoEditor(
+      scriptureBlockHtml({
+        reference: ui.reader.reference,
+        translation: ui.reader.translation,
+        text: ui.reader.verses.map((verse) => (verse.verse ? `${verse.verse} ${verse.text}` : verse.text)).join(" "),
+        attribution: ui.reader.attribution,
+        slide: false,
+        pulpit: true,
+        production: false,
+      }),
+    );
+    ui.reader.show = false;
+    showBanner("Passage placed in your work.");
+    render();
+  }
+  if (action === "reader-to-map") {
+    loadPassageIntoMap(ui.reader.verses, ui.reader.reference, ui.reader.translation, ui.reader.attribution);
+    ui.reader.show = false;
+    showBanner("Passage loaded - pick a pen and start marking.");
+    render();
+  }
   if (action === "cal-import-open") {
     ui.calImport = { show: true, text: "", rows: [], busy: false, gdocs: { open: false, loading: false, files: [], query: "", picked: {} } };
     render();
@@ -11238,6 +11457,9 @@ document.addEventListener("input", (event) => {
     saveState();
     render();
   }
+  if (action === "reader-ref") {
+    ui.reader.reference = target.value;
+  }
   if (action === "cal-paste-text") {
     ui.calImport.text = target.value;
     const parse = document.querySelector('[data-action="cal-parse"]');
@@ -11291,6 +11513,11 @@ document.addEventListener("change", (event) => {
   const action = target.dataset.action;
   if (action === "import-file") {
     handleImportFile(target);
+  }
+  if (action === "reader-translation") {
+    ui.reader.translation = target.value;
+    localStorage.setItem(READER_STORE_KEY, target.value);
+    loadReaderPassage();
   }
   if (action === "cal-import-files") {
     handleCalImportFiles(target);

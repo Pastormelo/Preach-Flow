@@ -4955,3 +4955,75 @@ p {
   border-color: rgba(179, 38, 30, 0.4);
 }
 .pf-chip-danger:hover { background: rgba(179, 38, 30, 0.08); border-color: #b3261e; }
+
+/* --- In-app Bible reader --- */
+.pf-rail-bible {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-rail-bible:hover { border-color: var(--brand); background: var(--brand-soft); }
+.pf-reader-overlay { align-items: flex-start; }
+.pf-reader { max-width: 720px; display: flex; flex-direction: column; }
+.pf-reader-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pf-reader-ref { flex: 1; min-width: 120px; }
+.pf-reader-select { width: auto; flex: none; }
+.pf-reader-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+.pf-reader-where {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.pf-reader-body {
+  max-height: 52vh;
+  overflow: auto;
+  font-size: 17px;
+  line-height: 1.75;
+  padding-right: 6px;
+  user-select: text;
+}
+.pf-reader-verse { margin: 0 0 10px; }
+.pf-reader-verse sup {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--brand-strong, #b45309);
+  margin-right: 5px;
+}
+.pf-reader-note {
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--brand);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 14px;
+  background: var(--brand-soft);
+  font-size: 14px;
+}
+@media (max-width: 700px) {
+  .pf-reader-bar { flex-wrap: wrap; }
+  .pf-reader-ref { min-width: 100%; order: -1; }
+  .pf-reader-body { max-height: 46vh; font-size: 16.5px; }
+}
