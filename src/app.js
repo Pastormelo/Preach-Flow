@@ -1292,9 +1292,33 @@ function render() {
   `;
   restoreFocus(focus);
   restoreScrolls();
+  applyPendingCaret();
   requestAnimationFrame(() => {
     const thread = document.querySelector("[data-thread]");
     if (thread) thread.scrollTop = thread.scrollHeight;
+  });
+}
+
+// A modal insert redraws the page, which throws the cursor away. Remember
+// which block the cursor belongs in and put it back once the editor exists
+// again, so the next thing typed continues where the insert left off.
+let pendingCaretBlock = -1;
+
+function applyPendingCaret() {
+  if (pendingCaretBlock < 0) return;
+  const index = pendingCaretBlock;
+  pendingCaretBlock = -1;
+  requestAnimationFrame(() => {
+    const editor = document.querySelector('[data-action="phase-editor"]');
+    const block = editor?.children[index];
+    if (!block) return;
+    editor.focus({ preventScroll: true });
+    const caret = document.createRange();
+    caret.setStart(block, 0);
+    caret.collapse(true);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(caret);
   });
 }
 
@@ -2607,13 +2631,16 @@ async function loadReaderPassage() {
   }
 }
 
-function readerPlainText() {
-  const body = ui.reader.verses
+function readerVerseText() {
+  return ui.reader.verses
     .map((verse) => (verse.verse ? `${verse.verse} ${verse.text}` : verse.text))
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
-  return `${ui.reader.reference} (${ui.reader.translation})\n\n${body}`;
+}
+
+function readerPlainText() {
+  return `${ui.reader.reference} (${ui.reader.translation})\n\n${readerVerseText()}`;
 }
 
 // Step a chapter at a time. At the end of a book this rolls into the next
@@ -2797,6 +2824,18 @@ function scriptureBlockHtml({ reference, translation, text, attribution, slide, 
   );
 }
 
+// Scripture from the reader lands as ordinary paragraphs: a reference line,
+// the text, and an empty line waiting for the next sentence. No quote box to
+// get stuck inside, and every word stays editable like anything else typed.
+function scripturePlainHtml(reference, translation, text) {
+  const heading = [reference, translation].filter(Boolean).join(" · ");
+  return (
+    (heading ? `<p>${escapeHtml(heading)}</p>` : "") +
+    `<p>${escapeHtml(text)}</p>` +
+    `<p><br></p>`
+  );
+}
+
 // Block palette: structured, styled blocks inserted into the manuscript.
 // Points/subpoints are real headings so Pulpit View and slides see them.
 
@@ -2835,10 +2874,16 @@ function insertIntoEditor(html) {
   if (lastNode) {
     const selection = window.getSelection();
     const caret = document.createRange();
-    caret.setStartAfter(lastNode);
+    // Inserted markup ends in an empty paragraph. Put the cursor inside it, so
+    // typing carries on as plain prose instead of continuing the block above.
+    const landing = lastNode.nodeName === "P" && !lastNode.textContent.trim() ? lastNode : null;
+    if (landing) caret.setStart(landing, 0);
+    else caret.setStartAfter(lastNode);
     caret.collapse(true);
     selection.removeAllRanges();
     selection.addRange(caret);
+    // Survive the re-render that closes the modal behind this insert.
+    pendingCaretBlock = [...editor.children].indexOf(landing || lastNode);
   }
   savedEditorRange = null;
   persistPhaseEditor(editor);
@@ -10730,17 +10775,7 @@ document.addEventListener("click", (event) => {
     copyText(readerPlainText());
   }
   if (action === "reader-insert") {
-    insertIntoEditor(
-      scriptureBlockHtml({
-        reference: ui.reader.reference,
-        translation: ui.reader.translation,
-        text: ui.reader.verses.map((verse) => (verse.verse ? `${verse.verse} ${verse.text}` : verse.text)).join(" "),
-        attribution: ui.reader.attribution,
-        slide: false,
-        pulpit: true,
-        production: false,
-      }),
-    );
+    insertIntoEditor(scripturePlainHtml(ui.reader.reference, ui.reader.translation, readerVerseText()));
     ui.reader.show = false;
     showBanner("Passage placed in your work.");
     render();
