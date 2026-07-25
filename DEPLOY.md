@@ -77,9 +77,9 @@ AI_MODEL    = gpt-5.2      # any model your provider offers
 Notes:
 
 1. **Cost:** a typical Sermon Guide call costs a fraction of a cent; a pastor preparing weekly lands in the low dollars per month. Set a spending limit in your OpenAI dashboard for peace of mind.
-2. **Protection:** when Supabase auth is configured, the app-provided engine only answers **signed-in users** — anonymous visitors are asked to sign in, so strangers can't consume your quota.
+2. **Protection:** when Supabase auth is configured, the app-provided engine only answers **signed-in users** - anonymous visitors are asked to sign in, so strangers can't consume your quota.
 3. **Overrides:** a user who adds their own OpenAI key in the app always uses their own quota instead.
-4. **Switching providers later:** change `AI_PROVIDER` + `AI_API_KEY` (e.g. `gemini` with a free key from aistudio.google.com, or `groq` from console.groq.com) and redeploy — no code changes.
+4. **Switching providers later:** change `AI_PROVIDER` + `AI_API_KEY` (e.g. `gemini` with a free key from aistudio.google.com, or `groq` from console.groq.com) and redeploy - no code changes.
 
 ### Share links (Sharing and Delivery Center)
 
@@ -100,7 +100,11 @@ package.json
 vercel.json
 ```
 
-Vercel runs `npm run build`, which assembles the static site into `dist/` from the root sources (`index.html`, `app.html`, `src/`, `assets/`). There is only one copy of the site code — no directories to keep in sync.
+Vercel runs `npm run build` (`scripts/build.mjs`), which assembles the static site into `dist/` from the root sources (`index.html`, `app.html`, `src/`, `assets/`). There is only one copy of the site code - no directories to keep in sync.
+
+**Cache busting is automatic.** The build writes the app bundle under a content-hashed name (`src/app.<hash>.js`, `src/styles.<hash>.css`) and rewrites the HTML to match, so every code change produces a brand new URL that no browser or CDN can serve stale. `vercel.json` pairs this with `must-revalidate` on the HTML and a long immutable cache on the hashed assets. Nothing needs to be bumped by hand.
+
+To confirm which build is live, open **Your account -> Account**; the build hash is shown at the bottom next to Sign out (it also appears as `<meta name="pf-build">` in the page source). If that hash changes after a deploy, the new code is being served.
 
 ## Option 2: Vercel CLI
 
