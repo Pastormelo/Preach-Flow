@@ -2,7 +2,7 @@
 
 Preach Flow is a focused sermon-prep web app converted from `pulpitos.jsx`.
 
-The marketing homepage lives at `/` (`index.html`); the app itself lives at `/app` (`app.html`). PreachFlow is positioned as a guided sermon-prep workflow — not an AI sermon generator. The in-app AI feature is called **Sermon Guide**: it helps pastors study the passage, clarify the sermon burden, shape the message, and review their work without replacing the preacher.
+The marketing homepage lives at `/` (`index.html`); the app itself lives at `/app` (`app.html`). PreachFlow is positioned as a guided sermon-prep workflow - not an AI sermon generator. The in-app AI feature is called **Sermon Guide**: it helps pastors study the passage, clarify the sermon burden, shape the message, and review their work without replacing the preacher.
 
 Key app features: the 15-phase workflow with per-phase writing canvas and checklists; structured worksheets (big idea, Christ connection, application audiences) and a movement outline builder; a Notes bank with cross-sermon word search and tags; sermon import (.docx/.pdf/.txt/.md) into the pipeline or as a preached sermon; direct PDF and Word export plus a pre-filled production slides doc; Google Docs sync; and a Stay Ahead page teaching the four-weeks-ahead prep rhythm.
 
@@ -28,7 +28,27 @@ Preach Flow uses a bring-your-own-key model for the AI coach. Do not add your pe
 
 ## Design
 
-Preach Flow uses the **One Family Church** design system — orange on ink with cool slate grays, an off-white paper background, Montserrat display type and Mulish body type. The UI supports a **light/dark theme toggle** (persisted per browser), a movement "journey" progress path, and a distraction-free writing canvas. All styling lives in `src/styles.css` as CSS custom properties scoped to `[data-theme="light|dark"]`.
+The app runs on the **v2 visual language**: technical editorial. Stark surfaces, hairline
+rules instead of cards, square corners everywhere, no shadows, oversized uppercase
+Montserrat 900 for display type, Mulish for prose, and IBM Plex Mono for every label and
+control. One accent colour, the brand orange `#FF953E`.
+
+The rules that hold it together:
+
+- Nothing is rounded and nothing casts a shadow. Depth comes from rules and inverted blocks.
+- Hairline dividers are `1px solid var(--pf-line)`; structural dividers are `2px solid var(--pf-fg)`.
+- Active nav items, tabs, and filters are solid inverted blocks, never underlines or pills.
+- Anything that is not prose is monospace uppercase.
+- Hover is a background swap to `var(--pf-sunk)`. No lift, no scale, no glow.
+
+All of it lives in `src/styles.css`. The tokens (`--pf-bg`, `--pf-fg`, `--pf-line`,
+`--pf-sunk`, `--pf-inv-bg`, `--pf-acc`, and friends) are declared once per theme on
+`:root` / `[data-theme="dark"]`, with the older semantic names kept as aliases so every
+component inherits the palette. The **light/dark toggle** is persisted per browser and
+stamped on `<html>`, `<body>`, and `.pf-root` so the page behind the app matches too.
+
+The public pages (`index.html`, `philosophy.html`, `share.html`) carry their own inline
+styles and are deliberately untouched by this language.
 
 ## Accounts and Database
 
@@ -70,7 +90,7 @@ The app still runs and saves sermons locally without a user OpenAI key. Coach an
 
 ## Project Layout
 
-The site has a single source of truth — there are no duplicated copies to keep in sync:
+The site has a single source of truth, with no duplicated copies to keep in sync:
 
 ```txt
 index.html    Marketing homepage (served at /)
@@ -91,6 +111,20 @@ npm test
 ```
 
 Runs the smoke suite in `test/`: syntax-checks every JS file, boots the local server, and verifies the homepage, app shell, API status/config endpoints, 404 handling, and the path-traversal guard.
+
+For the browser drive, start a server and run it against that:
+
+```sh
+PORT=4173 node server.mjs &
+npm run drive
+```
+
+`test/visual.drive.mjs` walks the app in Chromium and checks the visual language holds
+(no rounded corners, no shadows, monospace controls, a 58px sticky header), that the
+interactions it touches still work (new sermon, phase rail, checklist, pipeline rows),
+that every screen paints in light and dark, and that a 390px phone gets one column with
+no sideways scrolling. Set `PF_SHOTS=/some/dir` to save screenshots. It skips itself
+with exit 0 when Playwright is not installed.
 
 ## Features
 
