@@ -128,6 +128,27 @@ await page.locator(".pf-row[data-sermon-card]").first().click();
 await page.waitForTimeout(500);
 check("clicking a row still opens the sermon", (await page.locator(".pf-ws-grid").count()) === 1);
 
+// ---------- 3b. one writing document across every phase ----------
+await go("workspace");
+check("the work box says it is one document", /one document/i.test(await page.locator(".pf-writer-note").innerText()));
+await page.click('[data-action="phase-editor"]');
+await page.keyboard.type("Carried across the phases.");
+await page.waitForTimeout(600);
+await page.locator(".pf-phase-row").nth(2).click();
+await page.waitForTimeout(500);
+check("the writing carries into another phase", (await page.locator('[data-action="phase-editor"]').innerText()).includes("Carried across the phases"));
+await go("editor");
+check("the Sermon Editor holds the same document", (await page.locator(".pf-doc-canvas").innerText()).includes("Carried across the phases"));
+const stored = await page.evaluate(() => {
+  const sermon = window.__pf.state.sermons[0];
+  return {
+    docs: Object.keys(sermon.notes).filter((key) => !key.includes("::")).length,
+    logged: Object.keys(sermon.workLog || {}).length,
+  };
+});
+check("only one document is stored", stored.docs === 1, `${stored.docs} documents`);
+check("writing is attributed to the phase it happened in", stored.logged >= 1, `${stored.logged} phases logged`);
+
 // ---------- 4. every screen renders in both themes ----------
 const views = ["home", "pipeline", "library", "editor", "journal", "sharing", "impact", "map", "series", "diet", "profile", "ahead", "lens", "debrief", "workspace"];
 for (const theme of ["light", "dark"]) {
