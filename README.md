@@ -4,7 +4,7 @@ Preach Flow is a focused sermon-prep web app converted from `pulpitos.jsx`.
 
 The marketing homepage lives at `/` (`index.html`); the app itself lives at `/app` (`app.html`). PreachFlow is positioned as a guided sermon-prep workflow - not an AI sermon generator. The in-app AI feature is called **Sermon Guide**: it helps pastors study the passage, clarify the sermon burden, shape the message, and review their work without replacing the preacher.
 
-Key app features: the 15-phase workflow with per-phase writing canvas and checklists; structured worksheets (big idea, Christ connection, application audiences) and a movement outline builder; a Notes bank with cross-sermon word search and tags; sermon import (.docx/.pdf/.txt/.md) into the pipeline or as a preached sermon; direct PDF and Word export plus a pre-filled production slides doc; Google Docs sync; and a Stay Ahead page teaching the four-weeks-ahead prep rhythm.
+Key app features: the phase workflow with one writing document that carries across every phase, plus per-phase checklists; structured worksheets (big idea, Christ connection, application audiences) and a movement outline builder; a Notes bank with cross-sermon word search and tags; sermon import (.docx/.pdf/.txt/.md) into the pipeline or as a preached sermon; direct PDF and Word export plus a pre-filled production slides doc; Google Docs sync; and a Stay Ahead page teaching the four-weeks-ahead prep rhythm.
 
 ## Hosted Deployment
 
@@ -121,7 +121,8 @@ npm run drive
 
 `test/visual.drive.mjs` walks the app in Chromium and checks the visual language holds
 (no rounded corners, no shadows, monospace controls, a 58px sticky header), that the
-interactions it touches still work (new sermon, phase rail, checklist, pipeline rows),
+interactions it touches still work (new sermon, phase rail, checklist, pipeline rows,
+the one writing document carrying across phases),
 that every screen paints in light and dark, and that a 390px phone gets one column with
 no sideways scrolling. Set `PF_SHOTS=/some/dir` to save screenshots. It skips itself
 with exit 0 when Playwright is not installed.
@@ -131,7 +132,7 @@ with exit 0 when Playwright is not installed.
 - Guided sermon workflow from exegesis through delivery.
 - Pipeline search and filtering.
 - Editable sermon details.
-- Per-phase notes.
+- One writing document per sermon, carried through every phase and shared with the Sermon Editor.
 - Account login and cloud progress sync through Supabase.
 - Markdown export.
 - Finished-sermon review.

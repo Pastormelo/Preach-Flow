@@ -796,7 +796,10 @@ function normalizeSermon(sermon) {
     imported: Boolean(sermon.imported),
     activePhase: sermon.activePhase || "plan",
     thread: Array.isArray(sermon.thread) ? sermon.thread : [],
-    notes: migratePhaseNotes(sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {}),
+    notes: migrateWorkIntoOneDoc(migratePhaseNotes(sermon.notes && typeof sermon.notes === "object" ? sermon.notes : {})),
+    // How much was written while each phase was open. The work itself is one
+    // document; this is only so a phase's checklist can tell it was worked in.
+    workLog: sermon.workLog && typeof sermon.workLog === "object" ? sermon.workLog : {},
     checklist: sermon.checklist && typeof sermon.checklist === "object" ? sermon.checklist : {},
     worksheet: sermon.worksheet && typeof sermon.worksheet === "object" ? sermon.worksheet : {},
     outline: Array.isArray(sermon.outline)
@@ -909,6 +912,26 @@ function migratePhaseNotes(notes) {
       });
     if (pieces.length) next[phase.id] = pieces.join("<br>");
   }
+  return next;
+}
+
+// The writing used to be a separate box per phase, which fragmented one
+// sermon into sixteen documents. It is one document now: fold whatever was
+// written per phase into it, each piece under a heading naming the phase it
+// came from, and keep the Manuscript work at the end where it belongs.
+function migrateWorkIntoOneDoc(notes) {
+  const next = { ...notes };
+  const pieces = [];
+  for (const phase of PHASES) {
+    if (phase.id === "manuscript") continue;
+    const html = typeof next[phase.id] === "string" ? next[phase.id] : "";
+    if (!html.trim()) continue;
+    pieces.push(`<h3>${escapeHtml(phase.name)}</h3>${html}`);
+    delete next[phase.id];
+  }
+  if (!pieces.length) return next;
+  const existing = typeof next.manuscript === "string" ? next.manuscript : "";
+  next.manuscript = existing.trim() ? `${pieces.join("")}<h3>Manuscript</h3>${existing}` : pieces.join("");
   return next;
 }
 
@@ -3730,7 +3753,8 @@ function maybeAutoCompletePhase(sermon, phaseId) {
 
 function phaseTextLength(sermon, phaseId) {
   const phase = PHASES.find((item) => item.id === phaseId);
-  return phase ? phaseNoteText(sermon, phase).length : 0;
+  const legacy = phase ? phaseNoteText(sermon, phase).length : 0;
+  return Math.max(Number(sermon?.workLog?.[phaseId]) || 0, legacy);
 }
 
 function autoCheckFor(phaseId, index) {
@@ -4187,7 +4211,7 @@ function renderCanvas(active, phase) {
       ${renderWorksheetCard(active, phase)}
       ${renderOutlineCard(active, phase)}
       ${renderApplicationCard(active, phase)}
-      ${["structure", "application", "aim", "introtitle", "readiness", "heart"].includes(phase.id) && !phaseNoteText(active, phase).trim() ? "" : renderWriterCard(active, phase)}
+      ${renderWriterCard(active, phase)}
       ${["meditation", "gospel", "readiness", "delivery", "heart"].includes(phase.id) ? "" : renderResourcesCard(active, phase)}
       <div class="pf-complete-row">
         <button class="pf-btn ${complete ? "" : checklistReady ? "pf-btn-primary" : "pf-btn-locked"}" data-action="toggle-complete" data-phase="${attr(phase.id)}" ${complete || checklistReady ? "" : `title="Every item in this phase's checklist must be checked first"`}>
@@ -4381,11 +4405,15 @@ function renderFormatToolbar(options = {}) {
 }
 
 function renderWriterCard(active, phase) {
+  // One document for the whole sermon. Every phase opens the same page, so
+  // the work carries instead of restarting sixteen times.
+  noteWorkBaseline(active, phase.id);
   return `
     <section class="pf-card-box pf-writer-card">
       <div class="pf-writer-head">
         <span class="pf-writer-eyebrow">Your work</span>
-        ${phase.id === "manuscript" ? `<button class="pf-btn pf-btn-ghost" data-view="editor" style="padding:5px 12px;font-size:12.5px;">Open full editor →</button>` : ""}
+        <span class="pf-writer-note">One document, every phase</span>
+        <button class="pf-btn pf-btn-ghost" data-view="editor">Open full editor →</button>
       </div>
       ${renderFormatToolbar()}
       <div
@@ -4393,11 +4421,39 @@ function renderWriterCard(active, phase) {
         contenteditable="true"
         spellcheck="false"
         data-action="phase-editor"
-        data-phase="${attr(phase.id)}"
-        data-placeholder="Start writing your work for this phase…"
-      >${sanitizeRichHtml(phaseNoteHtml(active, phase))}</div>
+        data-phase="manuscript"
+        data-work-phase="${attr(phase.id)}"
+        data-placeholder="Start writing. This page stays with you through every phase."
+      >${sanitizeRichHtml(phaseNoteHtml(active, manuscriptPhaseDef()))}</div>
     </section>
   `;
+}
+
+// Writing is attributed to the phase it happened in, so a checklist item like
+// "observations are written in this phase" can still tell honestly. The
+// baseline is the document's length when the phase was opened.
+let workBaseline = { sermonId: "", phaseId: "", length: 0 };
+
+function noteWorkBaseline(sermon, phaseId) {
+  if (!sermon) return;
+  if (workBaseline.sermonId === sermon.id && workBaseline.phaseId === phaseId) return;
+  workBaseline = {
+    sermonId: sermon.id,
+    phaseId,
+    length: phaseNoteText(sermon, manuscriptPhaseDef()).length,
+  };
+}
+
+function logWorkForPhase(sermon, phaseId, text) {
+  if (!sermon || !phaseId) return;
+  if (workBaseline.sermonId !== sermon.id || workBaseline.phaseId !== phaseId) {
+    workBaseline = { sermonId: sermon.id, phaseId, length: text.length };
+    return;
+  }
+  const added = Math.max(0, text.length - workBaseline.length);
+  const logged = Number(sermon.workLog?.[phaseId]) || 0;
+  if (added <= logged) return;
+  sermon.workLog = { ...(sermon.workLog || {}), [phaseId]: added };
 }
 
 const COACH_SPARK = `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m12 3 1.9 4.6L19 9.5l-4.1 2.4L12 17l-2.9-5.1L5 9.5l5.1-1.9z"/></svg>`;
@@ -8429,9 +8485,19 @@ function kindLabel(kind) {
 function collectActiveNoteGroups(active) {
   if (!active) return [];
   const groups = [];
+  // The writing is one document now, so it appears here once, at the top,
+  // rather than repeating under every phase. Edit it in the Workspace or the
+  // Sermon Editor; this is the reading copy.
+  const work = phaseNoteHtml(active, manuscriptPhaseDef());
+  if (richHtmlToText(work).trim()) {
+    groups.push({
+      phase: "Your work",
+      when: "one document",
+      entries: [{ kind: "note", html: work, phaseId: "manuscript", editable: true }],
+    });
+  }
   for (const phase of PHASES) {
-    // The manuscript is a document, not a note: it lives in the Editor and
-    // the Library, so the Notes view keeps to actual working notes.
+    // Already shown above as the sermon's one working document.
     if (phase.id === "manuscript") continue;
     const entries = [];
     if (phaseNoteText(active, phase).trim()) {
@@ -10243,7 +10309,9 @@ function persistPhaseEditor(editor) {
     : getActive();
   if (!active || !editor.dataset.phase) return;
   const clean = sanitizeRichHtml(editor.innerHTML);
-  active.notes[editor.dataset.phase] = richHtmlToText(clean) ? clean : "";
+  const text = richHtmlToText(clean);
+  active.notes[editor.dataset.phase] = text ? clean : "";
+  if (editor.dataset.workPhase) logWorkForPhase(active, editor.dataset.workPhase, text);
   active.updatedAt = new Date().toISOString();
   saveState();
 }
