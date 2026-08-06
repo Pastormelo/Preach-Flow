@@ -2248,9 +2248,9 @@ function renderAhead() {
           .map(
             ([when, movement, body], index) => `
               <div style="display:flex;gap:14px;padding:13px 0;${index ? "border-top:1px solid var(--border-subtle);" : ""}">
-                <span class="wf-num" style="flex-shrink:0;width:34px;height:34px;border-radius:999px;background:var(--brand);color:var(--on-brand);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:13px;">${index + 1}</span>
+                <span class="wf-num" style="flex-shrink:0;width:34px;height:34px;background:var(--pf-acc);color:#14171b;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:13px;">${index + 1}</span>
                 <div>
-                  <div style="font-family:var(--font-display);font-weight:800;font-size:14.5px;">${escapeHtml(when)} - <span style="color:var(--text-brand);">${escapeHtml(movement)}</span></div>
+                  <div style="font-family:var(--font-display);font-weight:800;font-size:14.5px;">${escapeHtml(when)} - <span style="color:var(--pf-acc-text);">${escapeHtml(movement)}</span></div>
                   <p style="font-size:14px;line-height:1.6;color:var(--text-secondary);margin-top:3px;">${escapeHtml(body)}</p>
                 </div>
               </div>
