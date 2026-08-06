@@ -38,8 +38,13 @@ The rules that hold it together:
 - Nothing is rounded and nothing casts a shadow. Depth comes from rules and inverted blocks.
 - Hairline dividers are `1px solid var(--pf-line)`; structural dividers are `2px solid var(--pf-fg)`.
 - Active nav items, tabs, and filters are solid inverted blocks, never underlines or pills.
-- Anything that is not prose is monospace uppercase.
+- Anything that is not prose is monospace uppercase, and never below 10.5px.
 - Hover is a background swap to `var(--pf-sunk)`. No lift, no scale, no glow.
+- Every piece of text clears WCAG AA against whatever it is painted on. The brand
+  orange `#FF953E` is a **fill** colour: at label sizes on a light surface it only
+  reaches 2.2:1, so accent *text* uses `--pf-acc-text`, large bold accents use
+  `--pf-acc-display`, and accents sitting on an inverted block use `--pf-acc-on-inv`.
+  All three flip with the theme. The browser drive fails if anything slips below AA.
 
 All of it lives in `src/styles.css`. The tokens (`--pf-bg`, `--pf-fg`, `--pf-line`,
 `--pf-sunk`, `--pf-inv-bg`, `--pf-acc`, and friends) are declared once per theme on
@@ -123,7 +128,8 @@ npm run drive
 (no rounded corners, no shadows, monospace controls, a 58px sticky header), that the
 interactions it touches still work (new sermon, phase rail, checklist, pipeline rows,
 the one writing document carrying across phases),
-that every screen paints in light and dark, and that a 390px phone gets one column with
+that every screen paints in light and dark, that every piece of text on every screen
+clears WCAG AA contrast in both themes, and that a 390px phone gets one column with
 no sideways scrolling. Set `PF_SHOTS=/some/dir` to save screenshots. It skips itself
 with exit 0 when Playwright is not installed.
 

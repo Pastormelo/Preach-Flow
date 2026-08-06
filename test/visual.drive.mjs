@@ -44,6 +44,67 @@ const go = async (view) => {
   await page.waitForTimeout(320);
 };
 
+// WCAG contrast of every piece of text against its own painted background.
+// Returns only what falls short of AA (4.5:1, or 3:1 for large bold text).
+const CONTRAST_AUDIT = `(() => {
+  const parse = (value) => {
+    const m = String(value).match(/rgba?\\(([^)]+)\\)/);
+    if (!m) return null;
+    const p = m[1].split(",").map((n) => parseFloat(n));
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  };
+  const over = (fg, bg) => ({
+    r: fg.r * fg.a + bg.r * (1 - fg.a),
+    g: fg.g * fg.a + bg.g * (1 - fg.a),
+    b: fg.b * fg.a + bg.b * (1 - fg.a),
+    a: 1,
+  });
+  const lum = (c) =>
+    [c.r, c.g, c.b]
+      .map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      })
+      .reduce((acc, v, i) => acc + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => {
+    const l1 = lum(a);
+    const l2 = lum(b);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  };
+  const bgOf = (el) => {
+    let node = el;
+    let acc = null;
+    while (node && node !== document.documentElement) {
+      const c = parse(getComputedStyle(node).backgroundColor);
+      if (c && c.a > 0) {
+        acc = acc ? over(acc, c) : c;
+        if (c.a >= 1) return acc;
+      }
+      node = node.parentElement;
+    }
+    return acc || { r: 255, g: 255, b: 255, a: 1 };
+  };
+  const out = [];
+  for (const el of document.querySelectorAll("*")) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 1)) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) < 0.4) continue;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) continue;
+    const fg = parse(cs.color);
+    if (!fg) continue;
+    const bg = bgOf(el);
+    const flat = fg.a < 1 ? over(fg, bg) : fg;
+    const size = parseFloat(cs.fontSize);
+    const weight = Number(cs.fontWeight) || 400;
+    const need = size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
+    const cr = ratio(flat, bg);
+    if (cr >= need) continue;
+    out.push(\`\${Math.round(cr * 100) / 100}:1 (need \${need}) \${Math.round(size)}px \${(el.className && String(el.className).slice(0, 30)) || el.tagName} "\${el.textContent.trim().slice(0, 24)}"\`);
+  }
+  return [...new Set(out)];
+})()`;
+
 await page.goto(`${BASE}/app`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
 
@@ -166,6 +227,19 @@ for (const theme of ["light", "dark"]) {
   }
   const themedBody = await page.evaluate(() => document.body.dataset.theme);
   check(`the page behind the app follows the ${theme} theme`, themedBody === theme, themedBody);
+
+  // Legibility is a promise, not a preference: every piece of text has to
+  // clear WCAG AA against whatever it is actually painted on.
+  const failures = new Map();
+  for (const view of views) {
+    await go(view);
+    for (const line of await page.evaluate(CONTRAST_AUDIT)) failures.set(line, view);
+  }
+  check(
+    `every piece of text clears AA contrast in ${theme}`,
+    failures.size === 0,
+    [...failures.entries()].slice(0, 4).map(([line, view]) => `${view}: ${line}`).join(" | "),
+  );
 }
 await shot("drive-dark");
 
