@@ -1232,6 +1232,10 @@ function loadingDots() {
 
 function render() {
   const active = getActive();
+  // The theme lives on the root element too, so the page behind the app
+  // (overscroll, scrollbars, the space under short pages) matches it.
+  document.documentElement.dataset.theme = state.theme;
+  document.body.dataset.theme = state.theme;
   syncHistory();
   const focus = captureFocus();
   const keptScrolls = [...document.querySelectorAll("[data-scroll-keep]")].map((el) => [el.getAttribute("data-scroll-keep"), el.scrollTop]);
@@ -1421,26 +1425,50 @@ const SERMON_TABS = [
 ];
 const SERMON_VIEWS = new Set(["workspace", "map", "editor", "impact", "sharing"]);
 
+// The sermon's facts as a row of rule-divided cells, then the section tabs
+// as a second row. Nothing is centered and nothing floats: the strip is part
+// of the page grid.
 function renderSermonStrip(active) {
   const status = sermonStatus(active);
   const days = status.days;
-  const daysLabel = days === null ? "no date" : days < 0 ? `${Math.abs(days)}d ago` : `${days}d to Sunday`;
+  const daysValue = days === null ? "No date" : days < 0 ? `${Math.abs(days)} days` : `${days} days`;
+  const daysLabel = days === null ? "not scheduled" : days < 0 ? "days ago" : "until Sunday";
+  const cell = (label, value, extra = "") =>
+    `<div class="pf-meta-cell">
+      <span class="pf-meta-label">${escapeHtml(label)}</span>
+      <span class="pf-meta-value">${value}</span>
+      ${extra}
+    </div>`;
   return `
     <div class="pf-sermon-strip">
-      <button class="pf-strip-id" data-action="open-switcher" title="Switch sermon" aria-label="Switch sermon">
-        <span class="pf-strip-eyebrow">Working on</span>
-        <span class="pf-strip-passage">${escapeHtml(active.passage || "Untitled sermon")} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
-        <span class="pf-strip-sub">${escapeHtml(active.title || "Untitled")}${active.series ? ` · ${escapeHtml(active.series)}` : ""}</span>
-      </button>
-      <nav class="pf-strip-tabs" aria-label="Sermon sections">
-        ${SERMON_TABS.filter(([view]) => !(active.imported && (view === "workspace" || view === "map")))
-          .map(
-            ([view, label]) =>
-              `<button class="pf-strip-tab ${state.view === view ? "active" : ""}" data-view="${view}">${label}</button>`,
-          )
-          .join("")}
-      </nav>
-      <span class="pf-strip-meta">${escapeHtml(daysLabel)} · ${progressPct(active)}% ready</span>
+      <div class="pf-meta">
+        <button class="pf-meta-cell pf-meta-switch" data-action="open-switcher" title="Switch sermon" aria-label="Switch sermon">
+          <span class="pf-meta-label">Passage</span>
+          <span class="pf-meta-value">${escapeHtml(active.passage || "Untitled sermon")} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+        </button>
+        ${cell("Sermon", escapeHtml(active.title || "Untitled") + (active.series ? `<span class="pf-meta-note">${escapeHtml(active.series)}</span>` : ""))}
+        ${cell(daysLabel, escapeHtml(daysValue))}
+        ${cell("Target length", `${escapeHtml(active.length || "-")} min`)}
+        ${
+          isPreachedSermon(active)
+            ? cell("Total time spent", escapeHtml(fmtDuration(active.timeSpent)))
+            : cell(
+                "On this sermon",
+                `<span class="pf-timer-dot"></span><span data-work-timer>${escapeHtml(fmtDuration(active.timeSpent, true))}</span>`,
+              )
+        }
+      </div>
+      <div class="pf-strip-tabrow">
+        <nav class="pf-strip-tabs" aria-label="Sermon sections">
+          ${SERMON_TABS.filter(([view]) => !(active.imported && (view === "workspace" || view === "map")))
+            .map(
+              ([view, label]) =>
+                `<button class="pf-strip-tab ${state.view === view ? "active" : ""}" data-view="${view}">${label}</button>`,
+            )
+            .join("")}
+        </nav>
+        <span class="pf-strip-meta">${progressPct(active)}% ready</span>
+      </div>
     </div>
   `;
 }
@@ -1487,7 +1515,8 @@ function renderTopbar(active) {
         ${NAV_GROUPS.map(renderNavGroup).join("")}
       </nav>
       <div class="pf-top-right">
-        <button class="pf-icon-btn" data-action="toggle-theme" aria-label="Toggle theme" title="Toggle light / dark">
+        ${ui.auth.status ? `<span class="pf-top-status"><i class="pf-top-dot"></i>${escapeHtml(ui.auth.status)}</span>` : ""}
+        <button class="pf-icon-btn pf-top-cell" data-action="toggle-theme" aria-label="Toggle theme" title="Toggle light / dark">
           ${
             state.theme === "dark"
               ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`
@@ -1553,12 +1582,32 @@ function renderOpenAIKeyPanel() {
 
 const GOOGLE_G_SVG = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>`;
 
+// The dark half of the auth split screen. Everything on it is drawn from
+// what the app already knows: the mark, the phrase this app has always used
+// for its work, and the shape of the process itself.
+function renderSigninSide() {
+  return `
+    <div class="pf-signin-side">
+      <div class="pf-signin-side-top">
+        <span class="pf-brand-mark">${BRAND_MARK_SVG}</span>
+        <span class="pf-brand-text">Preach <span>Flow</span></span>
+      </div>
+      <h2 class="pf-signin-hero">From the text<br>to the <span>pulpit</span>.</h2>
+      <div class="pf-signin-stats">
+        <div><span class="pf-signin-stat-num">${PHASES.length}</span><span class="pf-signin-stat-label">Phases</span></div>
+        <div><span class="pf-signin-stat-num">${BLOCKS.length}</span><span class="pf-signin-stat-label">Movements</span></div>
+        <div><span class="pf-signin-stat-num">1</span><span class="pf-signin-stat-label">Big idea</span></div>
+      </div>
+    </div>
+  `;
+}
+
 function renderPasswordResetScreen() {
   return `
-    <div class="pf-signin-wrap">
+    <div class="pf-signin">
+      ${renderSigninSide()}
       <div class="pf-signin-inner">
         <div class="pf-signin-head">
-          <a class="pf-signin-mark" href="./" aria-label="PreachFlow home" style="text-decoration:none;">${pfMarkSvg(30)}</a>
           <h1 class="pf-signin-title">Set a new password</h1>
           <p class="pf-signin-subtitle">You're verified. Choose a new password for ${escapeHtml(ui.auth.user?.email || "your account")} and you're back in.</p>
         </div>
@@ -1584,14 +1633,15 @@ function renderSignin(active) {
   const creating = ui.signinMode === "signup";
   const disabled = ui.auth.loading || !ui.auth.configured;
   return `
-    <div class="pf-signin-wrap">
+    <div class="pf-signin">
+      ${renderSigninSide()}
       <div class="pf-signin-inner">
-        <div style="margin-bottom:14px;display:flex;gap:8px;">
+        <div class="pf-signin-top">
           ${active || state.sermons.length ? `<button class="pf-btn pf-btn-ghost" data-action="close-signin">&larr; Back to app</button>` : ""}
           <a class="pf-btn pf-btn-ghost" href="./" style="text-decoration:none;">Home</a>
         </div>
         <div class="pf-signin-head">
-          <a class="pf-signin-mark" href="./" aria-label="PreachFlow home" style="text-decoration:none;">${pfMarkSvg(30)}</a>
+          <span class="pf-eyebrow pf-eyebrow-brand">${creating ? "Create account" : "Sign in"}</span>
           <h1 class="pf-signin-title">${creating ? "Create your account" : "Welcome back"}</h1>
           <p class="pf-signin-subtitle">${creating ? "Start moving from the text to the pulpit." : "Pick up your prep right where you left it."}</p>
         </div>
@@ -3545,7 +3595,7 @@ function renderPipelineSermons() {
       ${libraryCount ? `<p class="pf-helper" style="margin:-6px 0 14px;">Preached and imported sermons are filed in the <button class="pf-inline-link" data-view="library">Sermon Library</button> (${libraryCount}).</p>` : ""}
       <div class="pf-tools">
         <div class="pf-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--pf-faint)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input data-action="pipeline-query" value="${attr(state.query)}" placeholder="Search passage, title, or series" />
         </div>
         <div class="pf-filter-chips">
@@ -3553,18 +3603,28 @@ function renderPipelineSermons() {
             ([value, label]) =>
               `<button class="pf-chip ${state.filter === value ? "active" : ""}" data-action="pipeline-filter" data-filter="${value}">${label}</button>`,
           ).join("")}
-          <button class="pf-btn pf-btn-ghost" data-action="open-import">Import</button>
+          <button class="pf-chip" data-action="open-import">Import</button>
         </div>
       </div>
       ${
         sermons.length
-          ? `<div class="pf-cards">${sermons.map(renderSermonCard).join("")}</div>`
+          ? `<div class="pf-table">
+              <div class="pf-row pf-row-head">
+                <span>Passage / Series</span>
+                <span class="pf-row-hide">Sunday</span>
+                <span class="pf-row-hide">Movement</span>
+                <span class="pf-row-hide">Progress</span>
+                <span class="pf-row-status">Status</span>
+              </div>
+              ${sermons.map(renderSermonCard).join("")}
+            </div>`
           : `<div class="pf-empty">No sermons match this view.</div>`
       }
     </div>
   `;
 }
 
+// One sermon as a table row: passage, Sunday, movement, progress, status.
 function renderSermonCard(sermon) {
   const status = cardStatus(sermon);
   const pct = progressPct(sermon);
@@ -3573,30 +3633,30 @@ function renderSermonCard(sermon) {
     status.key === "done"
       ? "Preached"
       : status.days === null
-        ? "No date"
+        ? "-"
         : status.days < 0
           ? `${Math.abs(status.days)} days ago`
           : `${status.days} days out`;
   return `
-    <article class="pf-card" data-sermon-card="${attr(sermon.id)}" tabindex="0">
-      <div class="pf-card-top">
-        <div style="min-width:0;">
-          <h3 class="pf-card-passage">${escapeHtml(sermon.passage || "Untitled sermon")}</h3>
-          <div class="pf-card-sub">${escapeHtml(sermon.title || "Untitled")} · ${escapeHtml(sermon.series || "No series")}</div>
-        </div>
-        <span class="pf-badge ${status.key}">${escapeHtml(status.label)}</span>
+    <div class="pf-row" data-sermon-card="${attr(sermon.id)}" tabindex="0">
+      <div class="pf-row-main">
+        <span class="pf-row-passage">${escapeHtml(sermon.passage || "Untitled sermon")}</span>
+        <span class="pf-row-sub">${escapeHtml(sermon.title || "Untitled")} · ${escapeHtml(sermon.series || "No series")}</span>
       </div>
-      <div class="pf-card-date">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date set"} <span class="sep">·</span> ${escapeHtml(daysLabel)}
+      <div class="pf-row-hide pf-row-date">
+        ${sermon.date ? escapeHtml(fmtDate(sermon.date)) : "No date set"}
+        <span>${escapeHtml(daysLabel)}</span>
       </div>
-      <div class="pf-progress-track"><div class="pf-progress-fill ${fillClass}" style="width:${pct}%;"></div></div>
-      <div class="pf-card-foot">
-        <span>${escapeHtml(sermonMovementLabel(sermon))}</span>
-        <span class="pct">${pct}%</span>
+      <div class="pf-row-hide pf-row-move">${escapeHtml(sermonMovementLabel(sermon))}</div>
+      <div class="pf-row-hide pf-row-progress">
+        <span class="pf-progress-track"><span class="pf-progress-fill ${fillClass}" style="width:${pct}%;"></span></span>
+        <span class="pf-row-pct">${pct}%</span>
       </div>
-      ${status.key === "done" ? `<button class="pf-chip pf-card-debrief" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief this sermon →</button>` : ""}
-    </article>
+      <div class="pf-row-status">
+        <span class="pf-tag ${status.key}">${escapeHtml(status.label)}</span>
+        ${status.key === "done" ? `<button class="pf-chip pf-card-debrief" data-action="open-debrief" data-sermon="${attr(sermon.id)}">Debrief</button>` : ""}
+      </div>
+    </div>
   `;
 }
 
@@ -3712,53 +3772,30 @@ function renderWorkspace(active) {
   `;
 }
 
+// The four movements as tabs: a numbered cell each, the active one an
+// inverted block, and the ready percentage in its own cell on the right.
 function renderContextStrip(active, phase) {
-  const status = sermonStatus(active);
-  const days = status.days;
-  const daysOut = days === null ? "-" : days < 0 ? `${Math.abs(days)}` : `${days}`;
-  const daysLabel = days === null ? "no date set" : days < 0 ? "days ago" : "until Sunday";
-
   const movements = BLOCKS.map((block, bi) => {
     const phasesInBlock = PHASES.filter((p) => p.block === bi);
     const done = phasesInBlock.every((p) => active.completed.includes(p.id));
     const isActive = bi === phase.block;
-    const state = isActive ? "active" : done ? "done" : "upcoming";
-    const labelState = isActive ? "active" : done ? "done" : "upcoming";
-    const connDone = bi <= phase.block && BLOCKS.slice(0, bi).every((_b, k) =>
-      PHASES.filter((p) => p.block === k).every((p) => active.completed.includes(p.id)),
-    );
-    return { block, bi, state, labelState, done: done && !isActive, conn: bi > 0, connDone };
+    return { block, bi, state: isActive ? "active" : done ? "done" : "upcoming" };
   });
 
   return `
-    <div class="pf-context">
-      <div class="pf-context-strip">
-        <div class="pf-stats" style="margin-right:auto;">
-          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(daysOut)} days</div><div class="pf-stat-label">${escapeHtml(daysLabel)}</div></div>
-          <div class="pf-stat-div"></div>
-          <div class="pf-stat"><div class="pf-stat-num">${escapeHtml(active.length || "-")} min</div><div class="pf-stat-label">target length</div></div>
-          <div class="pf-stat-div"></div>
-          ${
-            isPreachedSermon(active)
-              ? `<div class="pf-stat"><div class="pf-stat-num">${escapeHtml(fmtDuration(active.timeSpent))}</div><div class="pf-stat-label">total time spent</div></div>`
-              : `<div class="pf-stat"><div class="pf-stat-num"><span class="pf-timer-dot"></span><span data-work-timer>${escapeHtml(fmtDuration(active.timeSpent, true))}</span></div><div class="pf-stat-label">working on this sermon</div></div>`
-          }
-        </div>
-      </div>
-      <div class="pf-journey">
-        ${movements
-          .map(
-            (m) => `
-              ${m.conn ? `<div class="pf-journey-conn ${m.connDone ? "done" : ""}"></div>` : ""}
-              <button class="pf-journey-node-wrap" data-action="journey-jump" data-block="${m.bi}">
-                <span class="pf-journey-node ${m.state}">${m.done ? SVG_CHECK(15, 3) : m.bi + 1}</span>
-                <span class="pf-journey-label pf-journey-labels ${m.labelState}">${escapeHtml(m.block.label)}</span>
-              </button>
-            `,
-          )
-          .join("")}
-        <span class="pf-journey-ready"><span>${progressPct(active)}%</span> ready</span>
-      </div>
+    <div class="pf-journey">
+      ${movements
+        .map(
+          (m) => `
+            <button class="pf-move-tab ${m.state}" data-action="journey-jump" data-block="${m.bi}">
+              <span class="pf-move-num">${String(m.bi + 1).padStart(2, "0")}</span>
+              <span class="pf-move-label">${escapeHtml(m.block.label)}</span>
+              <span class="pf-move-when">${escapeHtml(m.block.when)}</span>
+            </button>
+          `,
+        )
+        .join("")}
+      <span class="pf-journey-ready"><span>${progressPct(active)}%</span> Ready<br>to preach</span>
     </div>
   `;
 }
@@ -3768,16 +3805,19 @@ function renderRail(active, phase) {
   const curIdx = PHASES.findIndex((p) => p.id === phase.id);
   return `
     <aside class="pf-rail">
-      <div class="pf-rail-eyebrow">Movement ${phase.block + 1} · ${escapeHtml(BLOCKS[phase.block].label)}</div>
+      <div class="pf-rail-head">
+        <span class="pf-rail-eyebrow">Movement ${phase.block + 1}</span>
+        <span class="pf-rail-title">${escapeHtml(BLOCKS[phase.block].label)}</span>
+      </div>
       <div class="pf-rail-list">
         ${phasesInMovement
           .map((p) => {
             const done = active.completed.includes(p.id);
             const current = p.id === phase.id;
-            const dotClass = done ? "done" : current ? "current" : "upcoming";
+            const globalIndex = PHASES.findIndex((x) => x.id === p.id) + 1;
             return `
-              <button class="pf-phase-row ${current ? "active" : ""}" data-action="set-phase" data-phase="${attr(p.id)}">
-                <span class="pf-phase-dot ${dotClass}">${done ? SVG_CHECK(10, 3.5) : ""}</span>
+              <button class="pf-phase-row ${current ? "active" : ""} ${done ? "done" : ""}" data-action="set-phase" data-phase="${attr(p.id)}">
+                <span class="pf-phase-num">${String(globalIndex).padStart(2, "0")}</span>
                 <span class="pf-phase-name">${escapeHtml(p.name)}</span>
                 ${p.devotional ? `<span class="pf-phase-star" title="Devotional">✦</span>` : ""}
               </button>
@@ -4036,29 +4076,34 @@ function readinessAnswered(sermon) {
 function renderReadinessCard(active, phase) {
   if (phase.id !== "readiness") return "";
   const answered = readinessAnswered(active);
+  const pct = Math.round((answered / READINESS_QUESTIONS.length) * 100);
   return `
-    <section class="pf-card-box pf-checklist-card">
-      <div class="pf-checklist-head">
-        <span class="pf-eyebrow">Readiness check</span>
-        <span class="pf-checklist-count">${answered} of ${READINESS_QUESTIONS.length} ready</span>
+    <section class="pf-card-box pf-checklist-card pf-ready-block">
+      <div class="pf-score-row">
+        <span class="pf-score-num">${answered}/${READINESS_QUESTIONS.length}</span>
+        <span class="pf-score-label">Non-negotiables<br>ready</span>
+        <span class="pf-score-bar"><span style="width:${pct}%;"></span></span>
       </div>
-      <div class="pf-modal-actions" style="margin-top:0;margin-bottom:14px;justify-content:flex-start;">
-        <button class="pf-btn pf-btn-primary pf-btn-big" data-action="coach-cta">Run the Readiness Check with Sermon Guide</button>
-      </div>
-      <p class="pf-section-hint">No Sermon Guide? The check still works: walk each question against your manuscript and mark it Ready only when it is honestly true.</p>
       ${READINESS_QUESTIONS.map(
-        ([key, question]) => `
-          <label class="pf-ready-row ${worksheetValue(active, "readiness", key) === "ready" ? "done" : ""}">
-            <input type="checkbox" data-action="readiness-toggle" data-key="${key}" ${worksheetValue(active, "readiness", key) === "ready" ? "checked" : ""} />
-            <span>${escapeHtml(question)}</span>
+        ([key, question]) => {
+          const done = worksheetValue(active, "readiness", key) === "ready";
+          return `
+          <label class="pf-ready-row ${done ? "done" : ""}">
+            <input type="checkbox" data-action="readiness-toggle" data-key="${key}" ${done ? "checked" : ""} />
+            <span class="pf-check-box ${done ? "done" : ""}">${done ? SVG_CHECK(13, 3.6) : ""}</span>
+            <span class="pf-ready-text">${escapeHtml(question)}</span>
           </label>
-        `,
+        `;
+        },
       ).join("")}
+      <div class="pf-ready-foot">
+        <button class="pf-btn pf-btn-ink pf-btn-block" data-action="coach-cta">Run the Readiness Check with Sermon Guide</button>
+        <p class="pf-section-hint">No Sermon Guide? The check still works: walk each question against your manuscript and mark it Ready only when it is honestly true.</p>
+      </div>
     </section>
   `;
 }
 
-// Delivery prep: one card with the two doors that matter.
 function renderDeliveryCard(active, phase) {
   if (phase.id !== "delivery") return "";
   return `
@@ -4124,9 +4169,14 @@ function renderCanvas(active, phase) {
   const checklistReady = checkedCount >= phase.doItems.length;
   return `
     <main class="pf-canvas">
-      <div class="pf-canvas-eyebrow">${escapeHtml(BLOCKS[phase.block].label)} · ${escapeHtml(BLOCKS[phase.block].when)} · Phase ${curIdx + 1} of ${PHASES.length}</div>
-      <h1 class="pf-phase-title">${escapeHtml(phase.name)}</h1>
-      <p class="pf-phase-focus">${escapeHtml(phase.focus)}</p>
+      <div class="pf-canvas-head">
+        <div class="pf-canvas-eyebrow">
+          <span class="pf-kicker">Phase ${String(curIdx + 1).padStart(2, "0")} / ${PHASES.length}</span>
+          <span class="pf-canvas-where">${escapeHtml(BLOCKS[phase.block].label)} · ${escapeHtml(BLOCKS[phase.block].when)}</span>
+        </div>
+        <h1 class="pf-phase-title">${escapeHtml(phase.name)}</h1>
+        <p class="pf-phase-focus">${escapeHtml(phase.focus)}</p>
+      </div>
       ${renderDebriefNudge(active, phase)}
       ${renderLibraryEcho(active, phase)}
       ${phase.id === "passagemap" ? renderPassageMapLaunchCard(active) : ""}
@@ -8550,12 +8600,12 @@ function renderJournal(active) {
         <h1 class="pf-h1">Everything you've captured</h1>
         <p class="pf-page-sub">Pick a sermon, then open just the phase you're after - no more scrolling the whole bank. Search still reaches every note in every sermon.</p>
       </div>
-      <div class="pf-tools" style="margin-bottom:14px;gap:10px;flex-wrap:wrap;">
-        <div class="pf-search" style="max-width:none;flex:2;min-width:220px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <div class="pf-tools">
+        <div class="pf-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--pf-faint)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input data-action="notes-query" value="${attr(ui.notesQuery || "")}" placeholder="Search every note, worksheet, and sermon - try “atonement”" />
         </div>
-        <select class="pf-select" data-action="notes-sermon" style="flex:1;min-width:200px;" aria-label="Choose a sermon">
+        <select class="pf-select pf-tools-select" data-action="notes-sermon" aria-label="Choose a sermon">
           ${state.sermons
             .map((sermon) => {
               const count = collectActiveNoteGroups(sermon).reduce((sum, group) => sum + group.entries.length, 0);
